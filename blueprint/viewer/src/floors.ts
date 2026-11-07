@@ -191,7 +191,10 @@ function treadLines(polygon: number[][], y: number, out: number[]) {
   }
 }
 
+// The floor's own label for the caption bubble: "Floor A" -> A, "Floor 3" -> 3, "Ground floor" -> 1st by order.
 function levelShort(name: string, index: number) {
+  const last = name.trim().split(/\s+/).pop() ?? "";
+  if (/^[A-Z0-9]{1,3}$/i.test(last)) return last.toUpperCase();
   return name.match(/\d+/)?.[0] ?? String(index + 1);
 }
 
@@ -200,6 +203,9 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
   const footprint = new THREE.Box3();
   for (const vertex of doc.navmesh.vertices) footprint.expandByPoint(new THREE.Vector3(vertex[0], 0, vertex[2]));
   for (const wall of doc.walls ?? []) for (const [x, z] of wall.polygon) footprint.expandByPoint(new THREE.Vector3(x, 0, z));
+  // Exit signs sit on or just outside the wall line; keep them (and their labels) inside the fitted view.
+  for (const exit of doc.exits) footprint.expandByPoint(new THREE.Vector3(exit.position[0], 0, exit.position[1]));
+  footprint.expandByVector(new THREE.Vector3(3, 0, 3));
   const shafts = findShafts(doc);
   const layerOn: Record<LayerKey, boolean> = { navmesh: true, rooms: true, doors: true, exits: true };
   let wallMode: WallMode = "cutaway";

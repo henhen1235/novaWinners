@@ -12,7 +12,7 @@ import { startReplay } from "./replay";
 import { startAnalysis } from "./analysis";
 import { startEdit } from "./edit";
 import { startLive } from "./live";
-import { buildingName, scenarioName } from "./names";
+import { buildingName, scenarioName, setResidential } from "./names";
 
 const params = new URLSearchParams(location.search);
 // An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
@@ -139,8 +139,8 @@ function fitPlans() {
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   // Leave room at the bottom for the replay transport so the last row of plans stays visible.
-  size.z *= 1.12;
-  center.z += size.z * 0.05;
+  size.z *= 1.16;
+  center.z += size.z * 0.025;
   const half = Math.max(size.z / 2, size.x / 2 / (width / height)) * 1.06;
   Object.assign(orthographic, { left: (-half * width) / height, right: (half * width) / height, top: half, bottom: -half, zoom: 1 });
   orthographic.updateProjectionMatrix();
@@ -186,6 +186,7 @@ function text(tag: string, content: string) {
 // Title block, as on a drawing sheet, in the words of the person who owns the building's plan.
 // Click the name to fold it so it never covers a floor.
 function drawTitleBlock(data: SceneDoc) {
+  setResidential(/house|dorm|residence|hall_res/i.test(data.meta?.name ?? ""));
   const errors = data.warnings.filter((warning) => warning.severity === "error").length;
   const source = data.meta?.source ?? "";
   const origin = /CMU/.test((data.meta as { source_file?: string } | undefined)?.source_file ?? "")
@@ -244,7 +245,7 @@ async function scenarioPicker(data: SceneDoc) {
     location.href = url.toString();
   });
   document.querySelector<HTMLElement>("#scenario-pick")!.hidden = false;
-  buildingTitle.textContent = `${buildingName(data.meta?.name)}:`;
+  buildingTitle.textContent = buildingName(data.meta?.name);
 }
 
 // Header: building, then what is being shown (the replay's scenario, or the compare names).
@@ -707,6 +708,11 @@ ready.then((data) => {
         return stop && Math.hypot(stop[0] - x, stop[1] - z) < 8;
       });
       return shaft?.letter ?? null;
+    },
+    toScreen: (point) => {
+      const { width, height } = stageSize();
+      const ndc = point.clone().project(camera);
+      return [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height];
     },
     focusOn: (level, x, z) => {
       if (view === "single" && level !== activeLevel) setLevel(level);

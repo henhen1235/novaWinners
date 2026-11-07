@@ -61,7 +61,14 @@ const PERSONAS: Record<string, [string, string]> = {
   fruit_fly: ["Fruit fly", "fruit flies"],
 };
 
+// Regular occupants are residents in a dorm and occupants anywhere else.
+let residential = false;
+export function setResidential(value: boolean) {
+  residential = value;
+}
+
 export function personaName(persona: string, count = 1): string {
+  if (residential && (persona === "regular" || persona === "regular_employee")) return count === 1 ? "Resident" : "residents";
   const [one, many] = PERSONAS[persona] ?? [titleCase(persona), `${titleCase(persona).toLowerCase()}s`];
   return count === 1 ? one : many;
 }

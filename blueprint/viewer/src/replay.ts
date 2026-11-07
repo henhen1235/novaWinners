@@ -172,7 +172,7 @@ function addExitCounts(context: ViewerContext, run: Run) {
       element.append(value, " out");
       run.exitCounts.set(exit.id, value);
     });
-    tag.center.set(0.5, -0.5);
+    tag.center.set(-0.25, 1.2); // up and to the right of the exit sign, clear of the plan below it
     tag.visible = false;
     tag.userData.exit = exit;
     run.labels.add(tag);
@@ -371,11 +371,21 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       const value = String(run.exitOf.filter((id, k) => id === exitId && run.exitTime[k] <= t).length);
       if (element.textContent !== value) element.textContent = value;
     }
-    for (const tag of run.labels.children) {
+    // Exits used by fewer than 3 people stay quiet, and where two counts would overlap on screen
+    // only the busier exit keeps its label (greedy, busiest first).
+    const tags = run.labels.children
+      .filter((tag) => tag.userData.exit)
+      .map((tag) => ({ tag, n: Number(run.exitCounts.get(tag.userData.exit.id)!.textContent) }))
+      .sort((a, b) => b.n - a.n);
+    const taken: number[][] = [];
+    for (const { tag, n } of tags) {
       const exit = tag.userData.exit;
-      if (!exit) continue;
-      const used = run.exitCounts.get(exit.id)!.textContent !== "0";
-      tag.visible = used && (view !== "single" || exit.level === focus);
+      tag.visible = n >= 3 && (view !== "single" || exit.level === focus);
+      if (!tag.visible) continue;
+      const [x, y] = context.toScreen(tag.position);
+      const box = [x - 4, y - 40, x + 64, y - 12]; // the tag sits up and to the right of its anchor
+      if (taken.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) tag.visible = false;
+      else taken.push(box);
     }
     // Per-floor counts are one run's; with two runs side by side they would mislabel the right half.
     if (run === runs[0] && levelIds.length > 1 && runs.length === 1) for (const [id, n] of perFloor) context.setFloorCount(id, n);

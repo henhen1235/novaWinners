@@ -55,6 +55,8 @@ export interface ViewerContext {
   stairNear: (level: string, x: number, z: number) => string | null;
   /** Show `level` (switching floors in single view) and center the camera on (x, z). */
   focusOn: (level: string, x: number, z: number) => void;
+  /** Screen position (CSS px within the stage) of a world point under the current camera. */
+  toScreen: (point: THREE.Vector3) => [number, number];
   /** Live people per floor (null clears the count). */
   setFloorCount: (level: string, people: number | null) => void;
 }
