@@ -81,7 +81,7 @@ tricks.
 ## Lines in 3D and on the plan
 
 - Walls and model: `color-model`, lit by a cool hemisphere light plus one key
-  light. On the plan, walls are solid `plan-ink` poché.
+  light. On the plan, walls are solid `plan-ink` fills (poche).
 - Rooms: 1 px `color-drafting` outlines with a condensed label (name, area).
 - Grid: 1 m minor in `color-line`, 5 m major in `color-line-strong`.
 - Route: 4 px `color-route`, drawn from the start point to the exit in 700 ms.
@@ -109,3 +109,11 @@ or load `tokens.json`.
 Agent states for the replay: calm `color-text`, moving `color-route`,
 deciding `color-warn`, hurt or trapped `color-hazard-bright`, evacuated
 `color-exit-bright` at 40 percent opacity.
+
+## Tools that use it
+
+- Viewer: `blueprint/viewer` imports `tokens.css` from `src/style.css`.
+- Plan: `python -m tools.render_plan out/view/scene.json -o out/view/plan.svg`
+  (light `plan` palette, one panel per level).
+- Exit tagging page: `python -m tools.tag_exits out/<run>` inlines `tokens.css`.
+- iOS: `IOS_NOTES.md`.

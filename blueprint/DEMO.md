@@ -17,5 +17,5 @@ cp out/office/display.glb out/office/scene.json viewer/public/office/
 cd viewer && npm install && npm run dev
 ```
 
-4. Orbit the model, then press Top. Click a room floor. The yellow path runs to an exit and the readout shows meters and seconds at 1.3 m/s.
+4. Orbit the model, then press Top. Click a room floor. The green route draws itself to an exit and the readout shows meters and seconds at 1.3 m/s.
 5. Optional: `python tools/path_probe.py out/office/scene.json --room r_L1_001` prints the same distance without a browser.
