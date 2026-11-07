@@ -11,11 +11,18 @@ drove the output (Turpin et al. 2023), and people do the same thing when asked
 about their own choices (Nisbett and Wilson 1977). So the interview cannot be
 "here is the action, now explain it". Three rules follow:
 
-1. Record state and reasons at decision time, never reconstruct them later.
+1. Record state and stated reasons at decision time, never reconstruct them
+   later (concurrent reports beat retrospective ones for people too: Ericsson
+   and Simon 1980). This alone does NOT make reasons faithful: Turpin's
+   unfaithful explanations were also produced at decision time. Rule 3 is what
+   catches that.
 2. Compute what research has numbers for in code (perception, trust, appraisal,
    emotion, contagion, timing); use the LLM only for judgment under ambiguity.
-3. Test reasons by intervention: re-run the same decision with one piece of
-   evidence removed. A reason is "verified" only if removing it changes the choice.
+3. Test reasons by intervention (erasure / leave-one-out faithfulness tests:
+   ERASER comprehensiveness, DeYoung et al. 2020; redaction checks, Madsen et
+   al. 2024; counterfactual tests, Atanasova et al. 2023; causal concept
+   faithfulness, Matton et al. 2025). Our contribution is applying them to
+   simulated occupants, not the method itself.
 
 ## Pipeline (one decision, one occupant)
 
@@ -127,11 +134,19 @@ flowchart LR
 
 - Retrieval is structured (filter by agent, tick window, entity id), not
   embedding search, so it is deterministic and complete.
-- Reason attribution: for the decision in question, remove each cited evidence
-  item in turn and re-run the recorded prompt three times. Items whose removal
-  flips the majority choice are "verified reasons"; the rest are "stated, not
-  decisive". This turns the model's own stated reasons into a measurable,
-  checkable explanation.
+- Reason attribution (n >= 10 samples per condition, cached):
+  1. Baseline: re-run the unchanged prompt to measure how often the choice
+     varies by chance (a 2-of-3 "flip" happens 22% of the time at a 30%
+     baseline flip rate, so 3 samples are not enough).
+  2. Necessity: remove each cited item; it is "necessary" if the choice rate
+     drops clearly below baseline.
+  3. Sufficiency: keep only the cited items; if the choice holds, the stated
+     reasons are enough. Also remove all cited items jointly, which catches
+     two reasons that would each suffice alone (single removal misses them).
+  4. Caveat: removal can make a prompt incoherent; the ablated prompts are
+     regenerated from the structured state, not by deleting text.
+  Reasons are then labeled "necessary", "jointly sufficient" or "stated, not
+  decisive".
 - Counterfactuals ("would you have gone left if the sign were lit?") are real
   re-runs of the recorded decision with that change, reported as a distribution.
 - Verification: every sentence must cite a record or event; a cheap judge model
@@ -147,9 +162,10 @@ of 3. Earlier, a man told me the main door was locked [m_88 from a_09]."
 
 - Calibration against the literature: pre-movement time distribution, familiar
   exit share, freeze and hide rates per scenario (research/EVAC_PSYCHOLOGY.md).
-- Explanation faithfulness rate: share of stated reasons that are decisive
-  under ablation, per model and persona. Novel, cheap, and a direct answer to
-  "how do you know the agents are not just making things up".
+- Explanation faithfulness rate: share of stated reasons that are necessary or
+  jointly sufficient under ablation, per model and persona. Established method
+  (see rule 3), cheap, and a direct answer to "how do you know the agents are
+  not just making things up".
 - Influence graph: who changed whose beliefs and emotions (rumor spread tree,
   contagion paths), straight from `source` and `emotion_sources` fields.
 - Agreement between computed emotion and self-reported feeling.
@@ -161,9 +177,38 @@ or fallback is rare and logged. Interviews: 1 to 2 calls, plus ablation re-runs
 only for the clicked occupant (about 3 x number of cited items, cached). With
 gemini-2.5-flash-lite this stays within research/LLM_LATENCY.md budgets.
 
+## Corrections from the source check (research/COGNITION_SOURCES.md)
+
+These override the stage table above where they conflict:
+- Perception: arousal reallocates attention (threat, exit and on-route cues
+  kept, peripheral cues dropped) rather than shrinking it, and only under
+  threat. Evacuation evidence for this is indirect.
+- Beliefs: source credibility weights are persona-dependent (expertise,
+  trustworthiness, protection responsibility per Lindell and Perry); there is
+  no published fixed ranking. A warden in person can outrank a PA.
+- Appraisal: social proof is a PADM social cue input, not an appraisal
+  dimension; "responsibility" here means protection responsibility for
+  dependants, not blame; frustration is Scherer goal obstruction, and anger is
+  never labeled without someone to blame.
+- Contagion: ASCRIBE was fitted to one incident (Dam Square, 2010); use only its
+  absorption term (eta = 0). "Fewer cues lower coping" is our modeling
+  assumption, not a published effect.
+- Milling: for building fires cite Kuligowski and Mileti 2009 and NIST TN 1664
+  (information seeking alone did not drive delay).
+- The 34% freeze rate comes from earthquake footage, not an intruder scenario.
+- Risk to test: emotion text in the prompt can push choices away from human
+  patterns (Mozikov et al. 2024); ablate it. Closest prior work: Durupinar,
+  arXiv 2607.25140 (2026), LLM appraisal with emergent contagion whose dynamics
+  depend on the model backend, which supports computing contagion in code.
+
+Formulas (variables in [0,1]; directions from appraisal theory, product form
+from EMA, exact combinations ours and to be calibrated): H = R*S*(1-C);
+fear = H*U; anxiety = R*4S(1-S)*(1-C); hope = R*S*C; relief = max(0, H_prev - H);
+frustration = R*B; decay e = b + (e - b)exp(-dt/tau) with tau 10-30 s;
+contagion q += gamma_R*dt*(q* - q) (ASCRIBE, eta = 0). Full derivations,
+parameters and citations: research/COGNITION_SOURCES.md.
+
 ## Sources
 
-Verified so far are listed in research/EVAC_PSYCHOLOGY.md and
-research/SCENARIOS_AND_MODELS.md. Items marked [verify] above are being checked
-(full citation, what the paper actually shows, usable parameters) and will be
-added here.
+research/COGNITION_SOURCES.md (this design), research/EVAC_PSYCHOLOGY.md and
+research/SCENARIOS_AND_MODELS.md.
