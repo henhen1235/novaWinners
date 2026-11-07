@@ -3,6 +3,7 @@
     python -m sim run --scene out/hall/scene.json --scenario s.json -o out/sim/hall_fire --seed 42 \
         [--decide cognition | --decide pkg.mod:func] [--no-llm]
     python -m sim baseline --scene ... --scenario ... -o out/sim/hall_base --seed 42
+    python -m sim compare out/sim/hall_fire out/sim/hall_base
 """
 
 from __future__ import annotations
@@ -49,7 +50,32 @@ def _resolve_scene(args: argparse.Namespace, scenario: dict) -> Path:
     return p
 
 
+COMPARE_ROWS = [
+    ("evacuated", lambda m: f"{m['evacuated']}/{m['total']}"),
+    ("last exit s", lambda m: m["t_last_exit_s"]),
+    ("median exit s", lambda m: m["exit_time_s"]["median"]),
+    ("pre-move median s", lambda m: m["pre_movement_s"]["median"]),
+    ("stragglers", lambda m: len(m["stragglers"])),
+    ("misled by rumor", lambda m: len(m.get("misled_by_rumor", []))),
+    ("exit usage", lambda m: " ".join(f"{k}:{v}" for k, v in m["exit_usage"].items())),
+]
+
+
+def compare(run_dirs: list[str]) -> int:
+    """Print the metrics of several run directories side by side."""
+    ms = [json.loads((Path(d) / "metrics.json").read_text()) for d in run_dirs]
+    names = [Path(d).name for d in run_dirs]
+    width = max(len(n) for n in names + ["x" * 12]) + 2
+    print(f"{'':20}" + "".join(f"{n:>{width}}" for n in names))
+    for label, fn in COMPARE_ROWS:
+        print(f"{label:20}" + "".join(f"{str(fn(m)):>{width}}" for m in ms))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["compare"]:
+        return compare(argv[1:])
     ap = argparse.ArgumentParser(prog="python -m sim")
     ap.add_argument("mode", choices=["run", "baseline"])
     ap.add_argument("--scene")

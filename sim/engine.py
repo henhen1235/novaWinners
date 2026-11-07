@@ -161,7 +161,7 @@ class Sim:
     def _other_event(self, ev: Event) -> None:
         if ev.type != "alarm_only":
             log.warning("event type %s is not simulated; ignored", ev.type)
-        self.event("rumor" if ev.type == "rumor" else "fire_spread", ref=ev.id, text=f"{ev.type} at t={ev.t_start}")
+        self.event("alarm" if ev.type == "alarm_only" else ev.type, ref=ev.id, text=f"{ev.type} at t={ev.t_start} s")
 
     # ---- beliefs and messages -------------------------------------------------
     def believe(self, a: Agent, key: str, value: bool, conf: float, source: dict) -> bool:
