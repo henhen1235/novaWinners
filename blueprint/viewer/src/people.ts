@@ -12,7 +12,7 @@ export type Lod = "far" | "mid" | "near";
 // Screen pixels per meter where the representation changes (a person is ~0.5 m wide).
 const MID_PX_PER_M = 6;
 const NEAR_PX_PER_M = 22;
-const DOT_PX = 3.2;
+const DOT_PX = 4;
 const CHEVRON_PX = 13;
 const HEAT_CELL_M = 2;
 const HEAT_PERIOD_MS = 250;

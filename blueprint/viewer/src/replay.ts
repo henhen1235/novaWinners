@@ -5,6 +5,7 @@ import type { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { ViewerContext } from "./context";
 import { openInterview, updateInterview, type DecisionRecord } from "./interview";
 import { People, type AgentSample } from "./people";
+import { parseFrames, type ParsedFrames } from "./frames";
 
 export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: string; text?: string };
 export type ReplayDoc = {
@@ -81,6 +82,30 @@ async function fetchJson(url: string) {
   return response.json();
 }
 
+// Fetch and parse in a Web Worker so a large replay never freezes the page; fall back to the main thread.
+function loadReplay(context: ViewerContext, url: string): Promise<{ doc: ReplayDoc; parsed?: ParsedFrames }> {
+  const request = { url: new URL(url, location.href).href, levelIds: context.doc.levels.map((level) => level.id), exits: context.doc.exits };
+  let worker: Worker;
+  try {
+    worker = new Worker(new URL("./replay.worker.ts", import.meta.url), { type: "module" });
+  } catch {
+    return fetchJson(url).then((doc) => ({ doc: doc as ReplayDoc }));
+  }
+  return new Promise((resolve, reject) => {
+    worker.onmessage = ({ data }) => {
+      worker.terminate();
+      if (data.error) reject(new Error(data.error));
+      else resolve({ doc: data.doc as ReplayDoc, parsed: data.parsed as ParsedFrames });
+    };
+    worker.onerror = (event) => {
+      worker.terminate();
+      event.preventDefault();
+      fetchJson(url).then((doc) => resolve({ doc: doc as ReplayDoc }), reject);
+    };
+    worker.postMessage(request);
+  });
+}
+
 // decisions.jsonl sits next to replay.json; it is optional (emotion and reasons come from it).
 async function fetchDecisions(url: string): Promise<DecisionRecord[]> {
   const base = url.slice(0, url.lastIndexOf("/") + 1);
@@ -103,47 +128,12 @@ function readable(context: ViewerContext, text: string | undefined) {
   return out;
 }
 
-export function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisions: DecisionRecord[]): Run {
+export function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisions: DecisionRecord[], given?: ParsedFrames): Run {
   const doc = { ...source, events: source.events.map((event) => ({ ...event, text: readable(context, event.text) })) };
   const index = new Map(doc.agents.map((agent, i) => [agent.id, i]));
   const count = doc.agents.length;
-  const xs: Float32Array[] = [];
-  const zs: Float32Array[] = [];
-  const states: string[][] = [];
-  const levels: Uint8Array[] = [];
-  const levelIndex = new Map(context.doc.levels.map((level, i) => [level.id, i]));
-  const exitOf: (string | null)[] = new Array(count).fill(null);
-  const exitTime: number[] = new Array(count).fill(Infinity);
-  const exits = context.doc.exits;
-  for (const frame of doc.frames) {
-    const x = new Float32Array(count).fill(NaN);
-    const z = new Float32Array(count).fill(NaN);
-    const s: string[] = new Array(count).fill("");
-    const l = new Uint8Array(count);
-    for (const [id, ax, az, state, level] of frame.a) {
-      const i = index.get(id);
-      if (i === undefined) continue;
-      x[i] = ax;
-      z[i] = az;
-      s[i] = state;
-      l[i] = (level && levelIndex.get(level)) || 0;
-      if (state === "exited" && exitOf[i] === null) {
-        exitTime[i] = frame.t;
-        let best = Infinity;
-        for (const exit of exits.filter((item) => item.level === (level ?? item.level))) {
-          const d = Math.hypot(exit.position[0] - ax, exit.position[1] - az);
-          if (d < best) {
-            best = d;
-            exitOf[i] = exit.id;
-          }
-        }
-      }
-    }
-    xs.push(x);
-    zs.push(z);
-    states.push(s);
-    levels.push(l);
-  }
+  const levelIds = context.doc.levels.map((level) => level.id);
+  const { xs, zs, states, levels, exitOf, exitTime } = given ?? parseFrames(doc.frames, doc.agents.map((agent) => agent.id), levelIds, context.doc.exits);
   const fear = doc.agents.map(() => ({ t: [] as number[], v: [] as number[] }));
   for (const record of [...decisions].sort((a, b) => a.t_s - b.t_s)) {
     const k = index.get(record.agent_id);
@@ -199,8 +189,8 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
   try {
     runs = await Promise.all(
       urls.map(async (url) => {
-        const [doc, decisions] = await Promise.all([fetchJson(url), fetchDecisions(url)]);
-        return buildRun(context, url, doc as ReplayDoc, decisions);
+        const [{ doc, parsed }, decisions] = await Promise.all([loadReplay(context, url), fetchDecisions(url)]);
+        return buildRun(context, url, doc, decisions, parsed);
       }),
     );
   } catch (error) {
