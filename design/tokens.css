@@ -1,0 +1,70 @@
+/* Rehearsal design tokens. Source of truth: tokens.json (same names). */
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+:root {
+  --color-ground: #0F2135;
+  --color-surface: #142A40;
+  --color-raised: #1B354F;
+  --color-line: #284460;
+  --color-line-strong: #5A7C9E;
+  --color-text: #EAF0F6;
+  --color-text-muted: #A3B6CA;
+  --color-drafting: #8DB4DC;
+  --color-model: #D5DEE8;
+  --color-walkable: #6F93B8;
+  --color-exit: #007A43;
+  --color-exit-bright: #3DDB8E;
+  --color-route: #3DDB8E;
+  --color-hazard: #C8261E;
+  --color-hazard-bright: #FF7A5C;
+  --color-warn: #F5B83D;
+  --color-on-signal: #FFFFFF;
+
+  --plan-paper: #F5F7FA;
+  --plan-ink: #1B2633;
+  --plan-text-muted: #4F6275;
+  --plan-line: #5D7186;
+  --plan-walkable: #5D7186;
+  --plan-obstacle: #C3CCD6;
+  --plan-room-office: #DFE8F3;
+  --plan-room-corridor: #F2E8D0;
+  --plan-room-stairwell: #E5DFF2;
+  --plan-room-lobby: #F0E2D4;
+  --plan-room-restroom: #D8ECEF;
+  --plan-room-classroom: #DCE3F6;
+  --plan-room-storage: #EAE6DF;
+  --plan-room-mechanical: #DEDFE1;
+  --plan-room-outside: #FFFFFF;
+  --plan-room-unknown: #E9EDF2;
+
+  --font-sans: 'Barlow', 'DIN Alternate', 'Helvetica Neue', Arial, sans-serif;
+  --font-condensed: 'Barlow Condensed', 'DIN Condensed', 'Arial Narrow', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+  --size-xs: 12px;
+  --size-sm: 14px;
+  --size-md: 16px;
+  --size-lg: 18px;
+  --size-xl: 21px;
+  --size-2xl: 24px;
+  --size-3xl: 36px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  --shadow-panel: 0 12px 32px rgba(4, 12, 22, 0.5);
+  --shadow-focus: 0 0 0 2px #0F2135, 0 0 0 4px #F5B83D;
+
+  --motion-fast: 120ms;
+  --motion-draw: 700ms;
+  --motion-pulse: 2400ms;
+  --motion-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
