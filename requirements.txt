@@ -1,0 +1,13 @@
+certifi==2026.10.5
+fast_simplification==0.2.0
+jsonschema==4.26.0
+mapbox_earcut==2.1.0
+networkx==3.6.1
+numpy==2.4.6
+opencv-python-headless==5.0.0.93
+pydantic==2.14.3
+pytest==9.2.0
+scipy==1.17.1
+shapely==2.2.0
+trimesh==5.2.0
+usd-core==26.11

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+data/
+out/
+*.npy
+.DS_Store
+ios/**/xcuserdata/
+ios/**/DerivedData/
+.tycho/

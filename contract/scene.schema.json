@@ -1,0 +1,983 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Assets": {
+      "additionalProperties": false,
+      "properties": {
+        "display_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Display Model"
+        },
+        "floorplan_overlay": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Floorplan Overlay"
+        },
+        "navmesh_debug": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Navmesh Debug"
+        }
+      },
+      "title": "Assets",
+      "type": "object"
+    },
+    "Door": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "segment": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Segment",
+          "type": "array"
+        },
+        "width_m": {
+          "title": "Width M",
+          "type": "number"
+        },
+        "connects": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Connects",
+          "type": "array"
+        },
+        "is_exit": {
+          "title": "Is Exit",
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "swing",
+            "double",
+            "sliding",
+            "opening",
+            "revolving"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "fire_rated": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fire Rated"
+        },
+        "opens_toward": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opens Toward"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "segment",
+        "width_m",
+        "connects",
+        "is_exit",
+        "kind"
+      ],
+      "title": "Door",
+      "type": "object"
+    },
+    "Elevator": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Levels",
+          "type": "array"
+        },
+        "position": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Position",
+          "type": "array"
+        },
+        "usable_in_fire": {
+          "title": "Usable In Fire",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "levels",
+        "position",
+        "usable_in_fire"
+      ],
+      "title": "Elevator",
+      "type": "object"
+    },
+    "Exit": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "door_id": {
+          "title": "Door Id",
+          "type": "string"
+        },
+        "position": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Position",
+          "type": "array"
+        },
+        "width_m": {
+          "title": "Width M",
+          "type": "number"
+        },
+        "leads_to": {
+          "enum": [
+            "outside",
+            "stairwell",
+            "assembly"
+          ],
+          "title": "Leads To",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "assembly_point": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assembly Point"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "door_id",
+        "position",
+        "width_m",
+        "leads_to",
+        "label"
+      ],
+      "title": "Exit",
+      "type": "object"
+    },
+    "Level": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "elevation_m": {
+          "title": "Elevation M",
+          "type": "number"
+        },
+        "ceiling_height_m": {
+          "exclusiveMinimum": 0,
+          "title": "Ceiling Height M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "elevation_m",
+        "ceiling_height_m"
+      ],
+      "title": "Level",
+      "type": "object"
+    },
+    "Link": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "stairs",
+            "door",
+            "ramp"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "from": {
+          "$ref": "#/$defs/LinkEnd"
+        },
+        "to": {
+          "$ref": "#/$defs/LinkEnd"
+        },
+        "cost_multiplier": {
+          "exclusiveMinimum": 0,
+          "title": "Cost Multiplier",
+          "type": "number"
+        },
+        "bidirectional": {
+          "title": "Bidirectional",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "from",
+        "to",
+        "cost_multiplier",
+        "bidirectional"
+      ],
+      "title": "Link",
+      "type": "object"
+    },
+    "LinkEnd": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "position": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Position",
+          "type": "array"
+        }
+      },
+      "required": [
+        "level",
+        "position"
+      ],
+      "title": "LinkEnd",
+      "type": "object"
+    },
+    "Meta": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "blueprint",
+            "lidar",
+            "synthetic"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "source_file": {
+          "title": "Source File",
+          "type": "string"
+        },
+        "units": {
+          "const": "meters",
+          "title": "Units",
+          "type": "string"
+        },
+        "up_axis": {
+          "const": "y",
+          "title": "Up Axis",
+          "type": "string"
+        },
+        "scale_method": {
+          "enum": [
+            "scale_bar",
+            "door_reference",
+            "dimension_text",
+            "manual",
+            "arkit_metric"
+          ],
+          "title": "Scale Method",
+          "type": "string"
+        },
+        "scale_confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Scale Confidence",
+          "type": "number"
+        },
+        "generated_by": {
+          "title": "Generated By",
+          "type": "string"
+        },
+        "generated_at": {
+          "title": "Generated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "source",
+        "source_file",
+        "units",
+        "up_axis",
+        "scale_method",
+        "scale_confidence",
+        "generated_by",
+        "generated_at"
+      ],
+      "title": "Meta",
+      "type": "object"
+    },
+    "Navmesh": {
+      "additionalProperties": false,
+      "properties": {
+        "vertices": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "title": "Vertices",
+          "type": "array"
+        },
+        "triangles": {
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 3,
+            "minItems": 3,
+            "type": "array"
+          },
+          "title": "Triangles",
+          "type": "array"
+        },
+        "triangle_level": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Triangle Level",
+          "type": "array"
+        },
+        "agent_radius_m": {
+          "exclusiveMinimum": 0,
+          "title": "Agent Radius M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "vertices",
+        "triangles",
+        "triangle_level",
+        "agent_radius_m"
+      ],
+      "title": "Navmesh",
+      "type": "object"
+    },
+    "Obstacle": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "polygon": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Polygon",
+          "type": "array"
+        },
+        "height_m": {
+          "minimum": 0,
+          "title": "Height M",
+          "type": "number"
+        },
+        "kind": {
+          "enum": [
+            "furniture",
+            "equipment",
+            "pillar",
+            "unknown"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "passable": {
+          "title": "Passable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "polygon",
+        "height_m",
+        "kind",
+        "passable"
+      ],
+      "title": "Obstacle",
+      "type": "object"
+    },
+    "PointOfInterest": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "position": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Position",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "fire_extinguisher",
+            "alarm_pull",
+            "fire_exit_sign",
+            "assembly_point",
+            "aed",
+            "sprinkler"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "position",
+        "kind"
+      ],
+      "title": "PointOfInterest",
+      "type": "object"
+    },
+    "Room": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "office",
+            "corridor",
+            "stairwell",
+            "lobby",
+            "restroom",
+            "classroom",
+            "storage",
+            "mechanical",
+            "outside",
+            "unknown"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "polygon": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Polygon",
+          "type": "array"
+        },
+        "area_m2": {
+          "minimum": 0,
+          "title": "Area M2",
+          "type": "number"
+        },
+        "centroid": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Centroid",
+          "type": "array"
+        },
+        "has_window": {
+          "default": false,
+          "title": "Has Window",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "name",
+        "type",
+        "polygon",
+        "area_m2",
+        "centroid"
+      ],
+      "title": "Room",
+      "type": "object"
+    },
+    "SceneWarning": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "severity": {
+          "enum": [
+            "warn",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "severity"
+      ],
+      "title": "SceneWarning",
+      "type": "object"
+    },
+    "Stair": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "from_level": {
+          "title": "From Level",
+          "type": "string"
+        },
+        "to_level": {
+          "title": "To Level",
+          "type": "string"
+        },
+        "polygon": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Polygon",
+          "type": "array"
+        },
+        "bottom": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Bottom",
+          "type": "array"
+        },
+        "top": {
+          "items": {
+            "type": "number"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "title": "Top",
+          "type": "array"
+        },
+        "width_m": {
+          "exclusiveMinimum": 0,
+          "title": "Width M",
+          "type": "number"
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "down",
+            "both"
+          ],
+          "title": "Direction",
+          "type": "string"
+        },
+        "is_enclosed": {
+          "title": "Is Enclosed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "from_level",
+        "to_level",
+        "polygon",
+        "bottom",
+        "top",
+        "width_m",
+        "direction",
+        "is_enclosed"
+      ],
+      "title": "Stair",
+      "type": "object"
+    },
+    "WalkableLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "polygons": {
+          "items": {
+            "$ref": "#/$defs/WalkablePolygon"
+          },
+          "title": "Polygons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "polygons"
+      ],
+      "title": "WalkableLevel",
+      "type": "object"
+    },
+    "WalkablePolygon": {
+      "additionalProperties": false,
+      "properties": {
+        "exterior": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Exterior",
+          "type": "array"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
+            },
+            "minItems": 3,
+            "type": "array"
+          },
+          "title": "Holes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "exterior"
+      ],
+      "title": "WalkablePolygon",
+      "type": "object"
+    },
+    "Wall": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "polygon": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
+          },
+          "minItems": 3,
+          "title": "Polygon",
+          "type": "array"
+        },
+        "height_m": {
+          "exclusiveMinimum": 0,
+          "title": "Height M",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "level",
+        "polygon",
+        "height_m"
+      ],
+      "title": "Wall",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "meta": {
+      "$ref": "#/$defs/Meta"
+    },
+    "levels": {
+      "items": {
+        "$ref": "#/$defs/Level"
+      },
+      "minItems": 1,
+      "title": "Levels",
+      "type": "array"
+    },
+    "walls": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Wall"
+      },
+      "title": "Walls",
+      "type": "array"
+    },
+    "rooms": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Room"
+      },
+      "title": "Rooms",
+      "type": "array"
+    },
+    "doors": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Door"
+      },
+      "title": "Doors",
+      "type": "array"
+    },
+    "exits": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Exit"
+      },
+      "title": "Exits",
+      "type": "array"
+    },
+    "stairs": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Stair"
+      },
+      "title": "Stairs",
+      "type": "array"
+    },
+    "elevators": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Elevator"
+      },
+      "title": "Elevators",
+      "type": "array"
+    },
+    "obstacles": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Obstacle"
+      },
+      "title": "Obstacles",
+      "type": "array"
+    },
+    "points_of_interest": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PointOfInterest"
+      },
+      "title": "Points Of Interest",
+      "type": "array"
+    },
+    "walkable": {
+      "additionalProperties": {
+        "$ref": "#/$defs/WalkableLevel"
+      },
+      "title": "Walkable",
+      "type": "object"
+    },
+    "navmesh": {
+      "$ref": "#/$defs/Navmesh"
+    },
+    "links": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Link"
+      },
+      "title": "Links",
+      "type": "array"
+    },
+    "assets": {
+      "$ref": "#/$defs/Assets",
+      "default": {
+        "display_model": null,
+        "floorplan_overlay": null,
+        "navmesh_debug": null
+      }
+    },
+    "warnings": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SceneWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "extensions": {
+      "additionalProperties": true,
+      "default": {},
+      "title": "Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "meta",
+    "levels",
+    "walkable",
+    "navmesh"
+  ],
+  "title": "Scene",
+  "type": "object"
+}
