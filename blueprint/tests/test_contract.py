@@ -7,17 +7,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-from contract.models import Scene
-from contract.validate_scene import validate_path
+from contract.models import SCHEMA_PATH, Scene, json_schema
+from contract.validate_scene import validate
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO = ROOT.parent  # the contract package lives at the repo root
 PYTHON = sys.executable
 
 
 def test_schema_file_matches_models() -> None:
-    generated = Scene.model_json_schema()
-    on_disk = json.loads((ROOT / "contract" / "scene.schema.json").read_text(encoding="utf-8"))
-    assert generated == on_disk
+    assert json_schema() == json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+
+def validate_path(path: Path) -> list:
+    return validate(json.loads(path.read_text(encoding="utf-8")))
 
 
 def test_tiny_office_shape() -> None:
@@ -42,8 +45,8 @@ def test_two_floor_school_shape() -> None:
 def test_validator_cli_accepts_tiny_office() -> None:
     path = ROOT / "fixtures" / "tiny_office.scene.json"
     result = subprocess.run(
-        [PYTHON, "-m", "contract.validate_scene", str(path)],
-        cwd=ROOT,
+        [PYTHON, "-m", "contract.validate_scene", str(path), "--json"],
+        cwd=REPO,
         capture_output=True,
         text=True,
         check=False,
@@ -66,12 +69,12 @@ def test_negative_fixtures() -> None:
     for name, (code, exit_code) in expected.items():
         path = ROOT / "fixtures" / "negative" / f"{name}.scene.json"
         result = subprocess.run(
-            [PYTHON, "-m", "contract.validate_scene", str(path)],
-            cwd=ROOT,
+            [PYTHON, "-m", "contract.validate_scene", str(path), "--json"],
+            cwd=REPO,
             capture_output=True,
             text=True,
             check=False,
         )
         assert result.returncode == exit_code, f"{name}: {result.stdout}"
-        issues = json.loads(result.stdout)
+        issues = json.loads(result.stdout)["issues"]
         assert any(issue["code"] == code for issue in issues), name

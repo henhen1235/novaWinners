@@ -5,42 +5,23 @@
       "additionalProperties": false,
       "properties": {
         "display_model": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Display Model"
+          "title": "Display Model",
+          "type": "string"
         },
         "floorplan_overlay": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Floorplan Overlay"
+          "title": "Floorplan Overlay",
+          "type": "string"
         },
         "navmesh_debug": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Navmesh Debug"
+          "title": "Navmesh Debug",
+          "type": "string"
         }
       },
+      "required": [
+        "display_model",
+        "floorplan_overlay",
+        "navmesh_debug"
+      ],
       "title": "Assets",
       "type": "object"
     },
@@ -867,7 +848,6 @@
       "type": "array"
     },
     "walls": {
-      "default": [],
       "items": {
         "$ref": "#/$defs/Wall"
       },
@@ -875,7 +855,6 @@
       "type": "array"
     },
     "rooms": {
-      "default": [],
       "items": {
         "$ref": "#/$defs/Room"
       },
@@ -883,7 +862,6 @@
       "type": "array"
     },
     "doors": {
-      "default": [],
       "items": {
         "$ref": "#/$defs/Door"
       },
@@ -891,7 +869,6 @@
       "type": "array"
     },
     "exits": {
-      "default": [],
       "items": {
         "$ref": "#/$defs/Exit"
       },
@@ -949,12 +926,7 @@
       "type": "array"
     },
     "assets": {
-      "$ref": "#/$defs/Assets",
-      "default": {
-        "display_model": null,
-        "floorplan_overlay": null,
-        "navmesh_debug": null
-      }
+      "$ref": "#/$defs/Assets"
     },
     "warnings": {
       "default": [],
@@ -975,8 +947,13 @@
     "schema_version",
     "meta",
     "levels",
+    "walls",
+    "rooms",
+    "doors",
+    "exits",
     "walkable",
-    "navmesh"
+    "navmesh",
+    "assets"
   ],
   "title": "Scene",
   "type": "object"

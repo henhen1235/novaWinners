@@ -54,17 +54,28 @@ def test_school_upper_floor_reachable_only_by_stairs() -> None:
     assert unreachable == upper
 
 
-def test_every_error_code_has_a_negative_fixture() -> None:
-    assert {p.name.split(".")[0] for p in NEGATIVES} == {
+WARN_CODES = {
+    "SMALL_ROOM_ARTIFACT", "ORPHAN_STAIR", "SCALE_LOW_CONFIDENCE",
+    "LEAKY_WALL_SUSPECTED", "UNKNOWN_SPACE_NEAR_DOOR",
+}
+
+
+def test_every_code_has_a_negative_fixture() -> None:
+    """Error-code fixtures come from tools.layouts; the warn-code and EXIT_UNREACHABLE ones from blueprint/ (D17)."""
+    assert {p.name.split(".")[0] for p in NEGATIVES} == WARN_CODES | {
         "SCHEMA_INVALID", "DUPLICATE_ID", "BAD_REFERENCE", "INVALID_POLYGON", "EXTENT_OUT_OF_RANGE",
         "DOOR_TOO_NARROW", "NO_EXITS", "ROOM_UNREACHABLE", "NAVMESH_INVALID", "NAVMESH_ISLAND",
+        "EXIT_UNREACHABLE",
     }
 
 
 @pytest.mark.parametrize("path", NEGATIVES, ids=lambda p: p.name.split(".")[0])
 def test_negative_fixture_yields_its_code(path: Path) -> None:
     code = path.name.split(".")[0]
-    assert code in {i["code"] for i in _errors(_load(path))}
+    issues = validate(_load(path))
+    assert code in {i["code"] for i in issues}
+    # Warn-code fixtures carry only warnings; every other fixture must fail validation.
+    assert any(i["severity"] == "error" for i in issues) == (code not in WARN_CODES)
 
 
 def test_cli_exit_codes() -> None:

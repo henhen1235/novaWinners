@@ -278,7 +278,8 @@ def build_scene(spec: dict) -> dict:
         "walkable": {lvl: walkable_to_contract(mp) for lvl, mp in walkable.items()},
         "navmesh": navmesh_from_walkable(walkable, elevations, r),
         "links": [_link(s, f"link_{i:02d}") for i, s in enumerate(stairs, 1)],
-        "assets": {"display_model": None, "floorplan_overlay": None, "navmesh_debug": None},
+        "assets": {"display_model": "display.glb", "floorplan_overlay": "debug/overview.png",
+                   "navmesh_debug": "navmesh_debug.glb"},
         "warnings": [],
         "extensions": {},
     })

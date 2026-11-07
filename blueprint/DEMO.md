@@ -5,10 +5,10 @@
 
 ```bash
 python -m ingest_blueprint samples/blueprints/office_vector/plan.pdf -o out/office --no-llm
-python -m contract.validate_scene out/office/scene.json
+(cd .. && python -m contract.validate_scene blueprint/out/office/scene.json)
 ```
 
-The validator prints `[]`. `out/office/overlay.png` draws the recovered rooms and doors on the page.
+The validator (the shared repo-root `contract` package) prints `OK (0 errors, 0 warnings)`. `out/office/overlay.png` draws the recovered rooms and doors on the page.
 3. Copy the glTF and scene into the viewer and start it:
 
 ```bash

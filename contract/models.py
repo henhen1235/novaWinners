@@ -160,9 +160,10 @@ class Link(_Model):
 
 
 class Assets(_Model):
-    display_model: Optional[str] = None
-    floorplan_overlay: Optional[str] = None
-    navmesh_debug: Optional[str] = None
+    # Paths relative to the scene.json directory. Required strings since D16.
+    display_model: str
+    floorplan_overlay: str
+    navmesh_debug: str
 
 
 class SceneWarning(_Model):
@@ -176,10 +177,10 @@ class Scene(_Model):
     schema_version: Literal["1.0"]
     meta: Meta
     levels: Annotated[list[Level], Field(min_length=1)]
-    walls: list[Wall] = []
-    rooms: list[Room] = []
-    doors: list[Door] = []
-    exits: list[Exit] = []
+    walls: list[Wall]
+    rooms: list[Room]
+    doors: list[Door]
+    exits: list[Exit]
     stairs: list[Stair] = []
     elevators: list[Elevator] = []
     obstacles: list[Obstacle] = []
@@ -187,7 +188,7 @@ class Scene(_Model):
     walkable: dict[str, WalkableLevel]
     navmesh: Navmesh
     links: list[Link] = []
-    assets: Assets = Assets()
+    assets: Assets
     warnings: list[SceneWarning] = []
     extensions: dict[str, Any] = {}
 

@@ -8,7 +8,7 @@
   "up_axis": "y",
   "scale_method": "manual",
   "scale_confidence": 1.0,
-  "generated_by": "tools.layouts 7fbee14",
+  "generated_by": "tools.layouts ff1b745",
   "generated_at": "1970-01-01T00:00:00Z"
  },
  "levels": [
@@ -11328,9 +11328,9 @@
  },
  "links": [],
  "assets": {
-  "display_model": null,
-  "floorplan_overlay": null,
-  "navmesh_debug": null
+  "display_model": "display.glb",
+  "floorplan_overlay": "debug/overview.png",
+  "navmesh_debug": "navmesh_debug.glb"
  },
  "warnings": [],
  "extensions": {}

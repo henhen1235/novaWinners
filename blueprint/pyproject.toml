@@ -11,7 +11,7 @@ addopts = "-m 'not slow'"
 markers = [
     "slow: multi-plan end-to-end scores",
 ]
-pythonpath = ["."]
+pythonpath = [".", ".."]  # ".." holds the shared contract package
 
 [tool.setuptools.packages.find]
-include = ["contract*", "ingest_blueprint*", "geometry*", "nav*", "render*", "export*", "editor*"]
+include = ["ingest_blueprint*", "geometry*", "nav*", "render*", "export*", "editor*"]

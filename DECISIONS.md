@@ -10,7 +10,8 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   data goes under `extensions`. Nullable fields: `doors[].fire_rated`,
   `doors[].opens_toward`, `exits[].assembly_point`, all `assets` fields,
   `warnings[].ref`. List collections default to `[]`; `navmesh`, `walkable`,
-  `meta`, `levels` are required.
+  `meta`, `levels` are required. Amended by D16 (assets strings and the
+  walls/rooms/doors/exits lists are now required).
 - D3. Validator issue codes (severity):
   SCHEMA_INVALID (error, stops further checks), DUPLICATE_ID (error, ids are
   unique across ALL collections), BAD_REFERENCE (error: unknown level / room /
@@ -44,6 +45,47 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   snapped to 1 mm with `shapely.set_precision`. Navmesh = earcut triangulation
   (`trimesh.creation.triangulate_polygon(engine="earcut")`) of exactly those
   polygons, so areas match. Floats in scene.json are rounded to 1 mm.
+
+- D16. One canonical contract at repo root, the union of WS-A's and WS-B's
+  required sets (see CONTRACT_CHANGE_REQUEST.md). JSON keys, types and nesting
+  are unchanged. Now required: `walls`, `rooms`, `doors`, `exits` (no default)
+  and `assets` with non-null `display_model`, `floorplan_overlay`,
+  `navmesh_debug` (paths relative to scene.json). Still required as before:
+  `schema_version`, `meta.units`, `meta.up_axis`, `doors[].is_exit`,
+  `doors[].kind`, `stairs[].direction`, `stairs[].is_enclosed`,
+  `elevators[].usable_in_fire`, `obstacles[].kind`, `obstacles[].passable`,
+  `links[].cost_multiplier`, `links[].bidirectional` (WS-A had defaults for
+  these). Why: ingest_lidar (mesh and RoomPlan), ingest_blueprint and both
+  fixture builders already emit every one of these fields, so requiring them
+  costs nothing and catches truncated scenes. Optional fields stay optional:
+  `stairs`, `elevators`, `obstacles`, `points_of_interest`, `links`,
+  `warnings`, `extensions` default to `[]`/`{}`; `fire_rated`,
+  `opens_toward`, `assembly_point`, `warnings[].ref` stay nullable. Hand-made
+  fixtures (tools/layouts.py) now set assets to `display.glb`,
+  `debug/overview.png`, `navmesh_debug.glb` like the LiDAR pipeline.
+- D17. Validator checks ported from WS-A's validator into
+  `contract/validate_scene.py`:
+  EXIT_UNREACHABLE (error) when an exit's door connects no room (for example
+  `["outside", "outside"]`); the D3 navmesh-distance case stays a warn.
+  UNKNOWN_SPACE_NEAR_DOOR (warn) when a door segment is more than 0.3 m from
+  the boundary of a room it connects. LEAKY_WALL_SUSPECTED (warn) when, on one
+  level, the walkable within 0.30 m of two rooms touches (2 cm tolerance) and
+  no door connects that pair. ORPHAN_STAIR (warn) now also covers a link end
+  that is not within 0.5 m of a room. Root logic was kept for every other code
+  because it is stricter: invalid polygons are reported instead of repaired
+  with buffer(0), navmesh area is compared per level, each exit and each
+  navmesh island is reported separately. WS-A's code names map as
+  POLYGON_INVALID -> INVALID_POLYGON, EXTENT_INVALID -> EXTENT_OUT_OF_RANGE,
+  SCHEMA -> SCHEMA_INVALID, "component does not touch an exit" NAVMESH_INVALID
+  -> NAVMESH_ISLAND.
+- D18. `blueprint/contract/` is deleted; blueprint imports the repo-root
+  `contract` package. pytest gets it through `pythonpath = [".", ".."]` in
+  blueprint/pyproject.toml, the CLI through a sys.path append in
+  `ingest_blueprint/__init__.py`, tools/build_fixtures.py through its own
+  sys.path line. `blueprint/tools/__init__.py` was added so `tools.*` in
+  blueprint still resolves to blueprint/tools and not the root `tools`
+  package. Run the validator from the repo root:
+  `python -m contract.validate_scene blueprint/out/office/scene.json`.
 
 ## Pipeline
 

@@ -9,7 +9,7 @@ The committed demo is an asymmetric office. West Annex sits to the left of the c
 ```bash
 pip install -r requirements.txt
 python -m ingest_blueprint samples/blueprints/office_vector/plan.pdf -o out/office --no-llm
-python -m contract.validate_scene out/office/scene.json
+(cd .. && python -m contract.validate_scene blueprint/out/office/scene.json)
 ```
 
 Viewer, from a second terminal:

@@ -18,9 +18,10 @@ from shapely.ops import unary_union
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.append(str(ROOT.parent))  # repo-root contract package
 
 from contract.models import Scene  # noqa: E402
-from contract.validate_scene import validate_data  # noqa: E402
+from contract.validate_scene import validate as validate_data  # noqa: E402
 from geometry.polygons import geometry_to_rings, ring_coords, round_tree  # noqa: E402
 from geometry.walkable import build_walkable  # noqa: E402
 from nav.navmesh import build_navmesh  # noqa: E402
@@ -455,14 +456,7 @@ def negative_variants(tiny: dict, walk: Polygon) -> dict[str, dict]:
     return variants
 
 
-def write_schema() -> None:
-    schema_path = ROOT / "contract" / "scene.schema.json"
-    schema = Scene.model_json_schema()
-    schema_path.write_text(json.dumps(schema, indent=2) + "\n", encoding="utf-8")
-
-
 def main() -> None:
-    write_schema()
     tiny, parts = tiny_parts()
     write_scene(FIXTURES / "tiny_office.scene.json", tiny)
     school = school_scene()

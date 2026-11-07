@@ -14,7 +14,7 @@ import cv2
 import numpy as np
 from shapely.geometry import Point, Polygon
 
-from contract.validate_scene import validate_data
+from contract.validate_scene import validate
 from export.assemble import assemble_scene
 from geometry.rooms import attach_doors, faces_from_walls, label_faces, room_type_from_name
 from geometry.stairs import align_levels, stair_room_indexes, tread_clusters
@@ -155,11 +155,11 @@ def run(
         generated_by=generated_by(),
         source="blueprint",
     )
-    issues = validate_data(scene)
+    issues = validate(scene)
     scene["warnings"] = [
         {"code": issue["code"], "message": issue["message"], "ref": issue.get("ref"), "severity": issue["severity"]}
         for issue in issues
-        if issue["code"] != "SCHEMA"
+        if issue["code"] != "SCHEMA_INVALID"
     ]
     scene_path = out / "scene.json"
     scene_path.write_text(json.dumps(scene, indent=2, sort_keys=True) + "\n", encoding="utf-8")

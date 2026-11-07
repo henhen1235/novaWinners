@@ -1,6 +1,6 @@
 """Semantic validator for scene.json (contract schema_version 1.0).
 
-Codes, severities and thresholds follow DECISIONS.md D3 to D5. Coordinates are
+Codes, severities and thresholds follow DECISIONS.md D3 to D5 and D17. Coordinates are
 meters, Y up; 2D points are [x, z].
 
     python -m contract.validate_scene scene.json [--json]
@@ -23,7 +23,7 @@ import numpy as np
 import shapely
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from contract.models import SCHEMA_PATH
 
@@ -45,6 +45,9 @@ EXIT_TRIANGLE_TOL_M = 1.0
 DEGENERATE_TRIANGLE_M2 = 1e-6
 NAVMESH_AREA_REL_TOL = 0.02
 SCALE_DOOR_MEDIAN_RANGE_M = (0.7, 1.3)
+DOOR_ROOM_TOL_M = 0.3
+LEAK_REACH_M = 0.30
+LEAK_TOUCH_M = 0.02
 MAX_SCHEMA_ISSUES = 20
 
 Issue = dict
@@ -208,8 +211,63 @@ def check_sizes(scene: dict) -> list[Issue]:
 
 
 def check_exits(scene: dict) -> list[Issue]:
-    """NO_EXITS."""
-    return [] if scene.get("exits") else [_err("NO_EXITS", "scene has no exits")]
+    """NO_EXITS, and EXIT_UNREACHABLE (error) for an exit whose door connects no room (D17)."""
+    if not scene.get("exits"):
+        return [_err("NO_EXITS", "scene has no exits")]
+    rooms = {r["id"] for r in scene.get("rooms", [])}
+    doors = {d["id"]: d for d in scene.get("doors", [])}
+    return [
+        _err("EXIT_UNREACHABLE", f"exit door {ex['door_id']!r} connects no room", ex["id"])
+        for ex in scene["exits"]
+        if ex["door_id"] in doors and not rooms & set(doors[ex["door_id"]]["connects"])
+    ]
+
+
+def check_door_placement(scene: dict) -> list[Issue]:
+    """UNKNOWN_SPACE_NEAR_DOOR: a door segment more than 0.3 m from a room it connects (D17)."""
+    rooms = {r["id"]: _poly(r["polygon"]) for r in scene.get("rooms", [])}
+    issues = []
+    for door in scene.get("doors", []):
+        segment = LineString(door["segment"])
+        for room_id in door["connects"]:
+            poly = rooms.get(room_id)
+            if poly is None or poly.is_empty:
+                continue
+            gap = segment.distance(poly.boundary)
+            if gap > DOOR_ROOM_TOL_M:
+                issues.append(_warn("UNKNOWN_SPACE_NEAR_DOOR", f"door is {gap:.2f} m from room {room_id}", door["id"]))
+    return issues
+
+
+def check_leaks(scene: dict) -> list[Issue]:
+    """LEAKY_WALL_SUSPECTED: walkable joins two rooms of a level that share no door (D17).
+
+    A room's region is the walkable within 0.30 m of its polygon: that reaches
+    through a normal wall gap, while walkable eroded 0.25 m from each side of a
+    solid wall stays apart. Regions closer than 2 cm count as joined.
+    """
+    walk: dict[str, list[Polygon]] = {}
+    for level, _, poly in _walkable_polygons(scene):
+        if poly is not None and poly.is_valid:
+            walk.setdefault(level, []).append(poly)
+    union = {level: shapely.union_all(polys) for level, polys in walk.items()}
+    regions = []
+    for room in scene.get("rooms", []):
+        poly = _poly(room["polygon"])
+        if poly is None or not poly.is_valid or room["level"] not in union:
+            continue
+        region = union[room["level"]].intersection(poly.buffer(LEAK_REACH_M))
+        if not region.is_empty:
+            regions.append((room["id"], room["level"], region))
+    door_pairs = {frozenset(d["connects"]) for d in scene.get("doors", [])}
+    issues = []
+    # ponytail: O(rooms^2) shapely tests, fine below ~100 rooms per scene; STRtree if that grows.
+    for i, (a, level_a, region_a) in enumerate(regions):
+        grown = region_a.buffer(LEAK_TOUCH_M)
+        for b, level_b, region_b in regions[i + 1:]:
+            if level_a == level_b and frozenset((a, b)) not in door_pairs and grown.intersects(region_b):
+                issues.append(_warn("LEAKY_WALL_SUSPECTED", f"walkable joins {a} and {b} without a door", a))
+    return issues
 
 
 # --- 7. room graph (D4) ------------------------------------------------------
@@ -250,6 +308,8 @@ def _room_graph(scene: dict, rooms: list[tuple[str, str, Polygon | None]]) -> tu
         b = _room_at(rooms, link["to"]["level"], link["to"]["position"])
         if a and b:
             graph.add_edges_from([(a, b), (b, a)] if link["bidirectional"] else [(a, b)])
+        else:
+            issues.append(_warn("ORPHAN_STAIR", "link end is not inside a room", link["id"]))
     return graph, issues
 
 
@@ -422,7 +482,7 @@ def check_scale(scene: dict) -> list[Issue]:
 
 CHECKS: tuple[Callable[[dict], list[Issue]], ...] = (
     check_ids, check_references, check_polygons, check_extent, check_sizes,
-    check_exits, check_room_graph, check_navmesh, check_scale,
+    check_exits, check_door_placement, check_leaks, check_room_graph, check_navmesh, check_scale,
 )
 
 
