@@ -5,18 +5,13 @@ import { CSS2DObject, CSS2DRenderer } from "three/addons/renderers/CSS2DRenderer
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
-
-type SceneDoc = {
-  meta?: { name: string; source: string; scale_method: string; generated_at: string };
-  levels: { id: string; name?: string; elevation_m: number }[];
-  rooms: { id: string; level: string; name: string; polygon: number[][]; centroid: number[]; area_m2?: number }[];
-  doors: { id: string; level: string; segment: number[][]; is_exit: boolean }[];
-  exits: { id: string; level: string; position: number[]; label: string }[];
-  warnings: { code: string; message: string; severity: string }[];
-  navmesh: { vertices: number[][]; triangles: number[][]; triangle_level: string[] };
-};
+import type { SceneDoc, ViewerContext } from "./context";
+import { buildNav, locate, nearestExit, onMesh, type Nav, type Vec2 } from "./nav";
+import { startReplay } from "./replay";
+import { startAnalysis } from "./analysis";
 
 const params = new URLSearchParams(location.search);
+// An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
 const glbUrl = params.get("glb") ?? "/office/display.glb";
 const sceneUrl = params.get("scene") ?? "/office/scene.json";
 
@@ -39,7 +34,8 @@ renderer.setSize(stage.clientWidth, stage.clientHeight);
 stage.appendChild(renderer.domElement);
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(stage.clientWidth, stage.clientHeight);
-Object.assign(labelRenderer.domElement.style, { position: "absolute", inset: "0", pointerEvents: "none" });
+// z-index makes a stacking context: CSS2DRenderer sets per-label z-indexes that would otherwise float over panels.
+Object.assign(labelRenderer.domElement.style, { position: "absolute", inset: "0", pointerEvents: "none", zIndex: "1" });
 stage.appendChild(labelRenderer.domElement);
 
 const scene = new THREE.Scene();
@@ -76,9 +72,18 @@ const modelRoot = new THREE.Group();
 scene.add(modelRoot);
 
 let doc: SceneDoc | null = null;
+let nav: Nav | null = null;
 let activeLevel = "";
 // Distance that fits the whole model in view; set when display.glb loads.
 let fitDistance = 20;
+let fitRadius = 0;
+
+// Fit the model's footprint inside both the vertical and horizontal field of view (split halves are narrow).
+function refit() {
+  const halfV = THREE.MathUtils.degToRad(camera.fov / 2);
+  const halfH = Math.atan(Math.tan(halfV) * camera.aspect);
+  fitDistance = (fitRadius / Math.tan(Math.min(halfV, halfH))) * 1.05;
+}
 
 function frame(x: number, z: number, elevation = 0) {
   controls.target.set(x, elevation, z);
@@ -183,6 +188,7 @@ function drawScene(data: SceneDoc) {
     levelSelect.appendChild(option);
   }
   activeLevel = data.levels[0]?.id ?? "";
+  nav = buildNav(data.navmesh);
   rebuildOverlays();
   drawTitleBlock(data);
   warningList.innerHTML = "";
@@ -259,95 +265,22 @@ function rebuildOverlays() {
 levelSelect.addEventListener("change", () => {
   activeLevel = levelSelect.value;
   rebuildOverlays();
+  mirrorLabels();
 });
 
-function pathOnMesh(start: THREE.Vector3) {
-  if (!doc) return;
-  const vertices = doc.navmesh.vertices.map((vertex) => new THREE.Vector3(vertex[0], vertex[1], vertex[2]));
-  const triangles = doc.navmesh.triangles;
-  const levels = doc.navmesh.triangle_level;
-  const centroids = triangles.map((triangle) => {
-    const a = vertices[triangle[0]];
-    const b = vertices[triangle[1]];
-    const c = vertices[triangle[2]];
-    return new THREE.Vector3().add(a).add(b).add(c).multiplyScalar(1 / 3);
-  });
-  const graph = new Map<number, number[]>();
-  const edgeOwner = new Map<string, number>();
-  triangles.forEach((triangle, index) => {
-    graph.set(index, []);
-    for (let corner = 0; corner < 3; corner += 1) {
-      const u = triangle[corner];
-      const v = triangle[(corner + 1) % 3];
-      const key = u < v ? `${u}:${v}` : `${v}:${u}`;
-      const other = edgeOwner.get(key);
-      if (other === undefined) edgeOwner.set(key, index);
-      else {
-        graph.get(index)!.push(other);
-        graph.get(other)!.push(index);
-      }
-    }
-  });
-  let startTri = 0;
-  let best = Infinity;
-  centroids.forEach((centroid, index) => {
-    if (levels[index] !== activeLevel) return;
-    const distance = Math.hypot(centroid.x - start.x, centroid.z - start.z);
-    if (distance < best) {
-      best = distance;
-      startTri = index;
-    }
-  });
-  const exits = doc.exits.filter((exit) => exit.level === activeLevel);
-  let goal = -1;
-  let goalDistance = Infinity;
-  let goalExit = exits[0];
-  exits.forEach((exit) => {
-    centroids.forEach((centroid, index) => {
-      if (levels[index] !== activeLevel) return;
-      const distance = Math.hypot(centroid.x - exit.position[0], centroid.z - exit.position[1]);
-      if (distance < goalDistance) {
-        goalDistance = distance;
-        goal = index;
-        goalExit = exit;
-      }
-    });
-  });
-  if (goal < 0) return;
-  const previous = new Map<number, number>();
-  const distance = new Map<number, number>([[startTri, 0]]);
-  const queue = [startTri];
-  while (queue.length) {
-    queue.sort((a, b) => (distance.get(a) ?? 0) - (distance.get(b) ?? 0));
-    const current = queue.shift()!;
-    if (current === goal) break;
-    for (const next of graph.get(current) ?? []) {
-      const step = centroids[current].distanceTo(centroids[next]);
-      const nextDistance = (distance.get(current) ?? 0) + step;
-      if (nextDistance < (distance.get(next) ?? Infinity)) {
-        distance.set(next, nextDistance);
-        previous.set(next, current);
-        queue.push(next);
-      }
-    }
-  }
-  if (!distance.has(goal)) {
+function routeFrom(start: THREE.Vector3) {
+  if (!doc || !nav) return;
+  let from: Vec2 = [start.x, start.z];
+  // A click on furniture or a wall top starts from the nearest walkable triangle instead.
+  if (!onMesh(nav, from, activeLevel, 0.05)) from = nav.centroids[locate(nav, from, activeLevel)];
+  const best = nearestExit(nav, from, activeLevel, doc.exits);
+  if (!best) {
     readout.textContent = "No walkable route from here to an exit.";
     readout.className = "";
     return;
   }
-  const nodes = [goal];
-  while (nodes[0] !== startTri) {
-    const prior = previous.get(nodes[0]);
-    if (prior === undefined) break;
-    nodes.unshift(prior);
-  }
-  const points = [new THREE.Vector3(start.x, centroids[startTri].y + 0.15, start.z)];
-  for (const node of nodes) points.push(centroids[node].clone().setY(centroids[node].y + 0.15));
-  let meters = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    meters += Math.hypot(points[index].x - points[index - 1].x, points[index].z - points[index - 1].z);
-  }
+  const y = start.y + 0.15;
+  const points = best.points.map(([x, z]) => new THREE.Vector3(x, y, z));
   clear(groups.path);
   const line = new Line2(new LineGeometry().setPositions(points.flatMap((point) => point.toArray())), pathMaterial);
   line.computeLineDistances();
@@ -360,7 +293,7 @@ function pathOnMesh(start: THREE.Vector3) {
   );
   origin.position.copy(points[0]);
   groups.path.add(line, origin);
-  showRoute(meters, goalExit?.label ?? "exit");
+  showRoute(best.meters, best.exit.label);
 }
 
 function figure(value: string, unit: string) {
@@ -379,14 +312,27 @@ function showRoute(meters: number, exitLabel: string) {
 
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+const pickers: ((raycaster: THREE.Raycaster, side: number) => boolean)[] = [];
+const CLICK_SLOP_PX = 5;
+let downAt: { x: number; y: number } | null = null;
 renderer.domElement.addEventListener("pointerdown", (event) => {
+  downAt = { x: event.clientX, y: event.clientY };
+});
+// Only a click without a drag picks; orbiting the camera must not redraw the route.
+renderer.domElement.addEventListener("pointerup", (event) => {
+  if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > CLICK_SLOP_PX) return;
+  downAt = null;
   const rect = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const halves = splitView ? 2 : 1;
+  const width = rect.width / halves;
+  const side = Math.min(halves - 1, Math.floor((event.clientX - rect.left) / width));
+  pointer.x = ((event.clientX - rect.left - side * width) / width) * 2 - 1;
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObjects(modelRoot.children, true);
+  if (pickers.some((pick) => pick(raycaster, side))) return;
+  const hits = raycaster.intersectObjects([...modelRoot.children, groups.navmesh], true);
   if (!hits.length) return;
-  pathOnMesh(hits[0].point);
+  routeFrom(hits[0].point);
 });
 
 // Restyle display.glb as a white card model. Mesh names come from the exporters:
@@ -426,31 +372,133 @@ function addGrid(box: THREE.Box3, center: THREE.Vector3) {
   }
 }
 
-new GLTFLoader().load(glbUrl, (gltf) => {
-  styleModel(gltf.scene);
-  modelRoot.add(gltf.scene);
-  const box = new THREE.Box3().setFromObject(gltf.scene);
+function showModel(root: THREE.Object3D) {
+  modelRoot.add(root);
+  const box = new THREE.Box3().setFromObject(root);
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   addGrid(box, center);
-  const radius = Math.hypot(size.x, size.z) / 2;
-  fitDistance = (radius / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.05;
+  fitRadius = Math.hypot(size.x, size.z) / 2;
+  refit();
   controls.target.copy(center).setY(box.min.y);
   setOrbit();
   readout.textContent = "Click any floor to draw the walking route to the nearest exit.";
+}
+
+// Stand-in model for scenes without display.glb: walls extruded from their footprints plus the floor,
+// cut at 1.2 m like an architect's cutaway model so occupants stay visible in orbit view.
+const CUTAWAY_HEIGHT_M = 1.2;
+function extrudeWalls(data: SceneDoc) {
+  const root = new THREE.Group();
+  for (const wall of data.walls ?? []) {
+    const elevation = data.levels.find((level) => level.id === wall.level)?.elevation_m ?? 0;
+    const shape = new THREE.Shape(wall.polygon.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const geometry = new THREE.ExtrudeGeometry(shape, { depth: Math.min(wall.height_m, CUTAWAY_HEIGHT_M), bevelEnabled: false }).rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geometry.translate(0, elevation, 0));
+    mesh.name = `walls_${wall.id}`;
+    root.add(mesh);
+  }
+  const floor = new THREE.Mesh(new THREE.BufferGeometry().copy((groups.navmesh.children[0] as THREE.Mesh).geometry).translate(0, -0.05, 0));
+  floor.name = "floors";
+  root.add(floor);
+  styleModel(root);
+  return root;
+}
+
+const sceneLoaded = fetch(sceneUrl)
+  .then((response) => {
+    if (!response.ok) throw new Error(`${response.status}`);
+    return response.json();
+  })
+  .then((data: SceneDoc) => {
+    drawScene(data);
+    return data;
+  });
+sceneLoaded.catch(() => {
+  readout.textContent = `Could not load ${sceneUrl}. Pass ?scene=/path/scene.json and check the file is in public/.`;
 });
 
-fetch(sceneUrl)
-  .then((response) => response.json())
-  .then((data: SceneDoc) => drawScene(data))
-  .catch(() => {
-    readout.textContent = `Could not load ${sceneUrl}. Pass ?scene=/path/scene.json and check the file is in public/.`;
-  });
+if (glbUrl) {
+  new GLTFLoader().load(
+    glbUrl,
+    (gltf) => {
+      styleModel(gltf.scene);
+      showModel(gltf.scene);
+    },
+    undefined,
+    () => {
+      readout.textContent = `Could not load ${glbUrl}; showing walls from scene.json.`;
+      sceneLoaded.then((data) => showModel(extrudeWalls(data)));
+    },
+  );
+} else {
+  sceneLoaded.then((data) => showModel(extrudeWalls(data)));
+}
+
+const frameHooks: ((now: number) => void)[] = [];
+// Split view (?compare=): one camera, two viewports; the right half gets its own label layer.
+let splitView: { left: THREE.Object3D; right: THREE.Object3D } | null = null;
+const rightLabelScene = new THREE.Scene();
+const rightLabelRenderer = new CSS2DRenderer();
+const mirrors: { source: THREE.Object3D; copy: THREE.Group }[] = [];
+
+function mirrorLabels() {
+  for (const { source, copy } of mirrors) {
+    clear(copy);
+    source.traverse((object) => {
+      if (!(object instanceof CSS2DObject)) return;
+      const clone = new CSS2DObject(object.element.cloneNode(true) as HTMLElement);
+      clone.position.copy(object.getWorldPosition(new THREE.Vector3()));
+      clone.center.copy(object.center);
+      copy.add(clone);
+    });
+  }
+}
+
+function addLayer(key: string, group: THREE.Group) {
+  groups[key] = group;
+  if (!scene.children.includes(group)) scene.add(group);
+  const copy = new THREE.Group();
+  rightLabelScene.add(copy);
+  mirrors.push({ source: group, copy });
+}
+
+function stageSize() {
+  return { width: stage.clientWidth / (splitView ? 2 : 1), height: Math.max(stage.clientHeight, 1) };
+}
+
+function resize() {
+  const { width, height } = stageSize();
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+  labelRenderer.setSize(width, height);
+  rightLabelRenderer.setSize(width, height);
+  pathMaterial.resolution.set(width, height);
+}
+
+function renderSplit(view: { left: THREE.Object3D; right: THREE.Object3D }) {
+  const { width, height } = stageSize();
+  renderer.setScissorTest(true);
+  for (const side of [0, 1]) {
+    view.left.visible = side === 0;
+    view.right.visible = side === 1;
+    renderer.setViewport(side * width, 0, width, height);
+    renderer.setScissor(side * width, 0, width, height);
+    renderer.render(scene, camera);
+  }
+  renderer.setScissorTest(false);
+  view.left.visible = true;
+  for (const { source, copy } of mirrors) copy.visible = source.visible;
+  labelRenderer.render(scene, camera);
+  rightLabelRenderer.render(rightLabelScene, camera);
+}
 
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
   const now = performance.now();
+  for (const hook of frameHooks) hook(now);
   // The route draws itself from the click point to the exit, one segment at a time.
   const progress = reduceMotion ? 1 : Math.min((now - drawStart) / 700, 1);
   for (const child of groups.path.children) {
@@ -462,15 +510,50 @@ function animate() {
     pulse.scale.setScalar(1 + phase * 1.2);
     (pulse.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - phase);
   }
-  renderer.render(scene, camera);
-  labelRenderer.render(scene, camera);
+  if (splitView) renderSplit(splitView);
+  else {
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+  }
 }
 animate();
 
-window.addEventListener("resize", () => {
-  camera.aspect = stage.clientWidth / Math.max(stage.clientHeight, 1);
-  camera.updateProjectionMatrix();
-  renderer.setSize(stage.clientWidth, stage.clientHeight);
-  labelRenderer.setSize(stage.clientWidth, stage.clientHeight);
-  pathMaterial.resolution.set(stage.clientWidth, stage.clientHeight);
+window.addEventListener("resize", resize);
+
+// Replay (?replay=, ?compare=) and analysis (?analysis=) build on the loaded scene.
+sceneLoaded.then((data) => {
+  const context: ViewerContext = {
+    scene,
+    camera,
+    doc: data,
+    nav: nav!,
+    level: () => activeLevel,
+    elevation: () => data.levels.find((level) => level.id === activeLevel)?.elevation_m ?? 0,
+    token,
+    label,
+    onFrame: (fn) => frameHooks.push(fn),
+    onPick: (fn) => pickers.push(fn),
+    addLayer: (key, group) => {
+      addLayer(key, group);
+      mirrorLabels();
+    },
+    split: (left, right, rightLabels) => {
+      splitView = { left, right };
+      rightLabelScene.add(rightLabels);
+      Object.assign(rightLabelRenderer.domElement.style, { position: "absolute", top: "0", right: "0", pointerEvents: "none", zIndex: "1" });
+      Object.assign(labelRenderer.domElement.style, { inset: "0 auto auto 0" });
+      stage.appendChild(rightLabelRenderer.domElement);
+      stage.classList.add("split");
+      resize();
+      if (fitRadius) {
+        refit();
+        setOrbit();
+      }
+    },
+    focus: (x, z) => frame(x, z, context.elevation()),
+  };
+  for (const key of ["rooms", "exits"]) addLayer(key, groups[key] as THREE.Group);
+  mirrorLabels();
+  startAnalysis(context, params.get("analysis"));
+  startReplay(context, params.get("replay"), params.get("compare"));
 });

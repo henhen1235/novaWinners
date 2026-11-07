@@ -29,8 +29,62 @@
   </header>
   <div id="stage">
     <dl id="title-block" class="title-block" hidden></dl>
+    <div id="split-captions" class="split-captions" hidden><span id="caption-a"></span><span id="caption-b"></span></div>
+    <div id="transport" class="transport" role="group" aria-label="Replay" hidden>
+      <button id="play" type="button" aria-label="Play">
+        <svg class="icon-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" /></svg>
+        <svg class="icon-pause" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" /></svg>
+        <span>Play</span>
+      </button>
+      <div class="views speed" role="group" aria-label="Playback speed">
+        <button type="button" data-speed="1" aria-pressed="true">1x</button>
+        <button type="button" data-speed="4" aria-pressed="false">4x</button>
+        <button type="button" data-speed="16" aria-pressed="false">16x</button>
+      </div>
+      <input id="scrub" type="range" min="0" max="0" step="0.5" value="0" aria-label="Replay time" />
+      <output id="clock">0.0 s</output>
+    </div>
+    <section id="interview" class="interview" aria-labelledby="iv-title" hidden>
+      <div class="iv-head">
+        <div>
+          <h2 id="iv-title">Occupant</h2>
+          <p id="iv-who"></p>
+        </div>
+        <button id="iv-close" type="button" aria-label="Close interview">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+        </button>
+      </div>
+      <dl class="iv-now">
+        <dt>State at <span id="iv-time">0.0 s</span></dt><dd id="iv-state"></dd>
+      </dl>
+      <div id="iv-emotion" class="iv-emotion"></div>
+      <h3>Timeline</h3>
+      <ol id="iv-timeline" class="iv-timeline"></ol>
+      <form id="iv-form" class="iv-form">
+        <label for="iv-question">Ask this occupant</label>
+        <textarea id="iv-question" rows="2" placeholder="Why didn't you take the other exit?"></textarea>
+        <button type="submit">Ask</button>
+      </form>
+      <div id="iv-answer" class="iv-answer" aria-live="polite"></div>
+    </section>
   </div>
   <aside>
+    <section id="run" class="run" hidden>
+      <h2>Run</h2>
+      <div id="counters" class="counters"></div>
+    </section>
+    <section id="agents" hidden>
+      <h2>Occupants</h2>
+      <div class="views color-by" role="group" aria-label="Color occupants by">
+        <button type="button" data-color="state" aria-pressed="true">State</button>
+        <button type="button" data-color="persona" aria-pressed="false">Persona</button>
+      </div>
+      <ul id="legend" class="legend"></ul>
+    </section>
+    <section id="feed-section" hidden>
+      <h2>Events</h2>
+      <ol id="feed" class="feed"></ol>
+    </section>
     <section class="route">
       <h2>Route to nearest exit</h2>
       <p id="readout">Loading display.glb and scene.json</p>
@@ -42,6 +96,7 @@
       <label class="layer"><input id="show-doors" type="checkbox" checked /><i class="swatch swatch-door"></i>Doors</label>
       <label class="layer"><input id="show-exits" type="checkbox" checked /><i class="swatch swatch-exit"></i>Exits</label>
       <label class="layer"><input id="show-warnings" type="checkbox" /><i class="swatch swatch-warn"></i>Warnings</label>
+      <label class="layer" hidden><input id="show-analysis" type="checkbox" checked /><i class="swatch swatch-spof"></i>Failure points, pinch points, smoke</label>
       <p class="layer"><i class="swatch swatch-route"></i>Escape route</p>
     </section>
     <section>

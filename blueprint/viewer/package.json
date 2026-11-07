@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "node src/nav.test.ts",
+    "fake-replay": "node scripts/fake_replay.ts"
   },
   "dependencies": {
     "three": "^0.170.0"
