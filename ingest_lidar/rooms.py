@@ -12,7 +12,7 @@ from shapely.geometry import Polygon
 
 from .geometry import ring
 from .grid import AGENT_RADIUS_M, Grid, Masks, components, vectorize
-from .walls import DOOR_FLOOR_FRAC, DOOR_MAX_M, DOOR_MIN_M, find_gaps, wall_mask
+from .walls import DOOR_FLOOR_FRAC, DOOR_MAX_M, DOOR_MIN_M, find_gaps, skeleton_doors, wall_mask
 
 LEVEL = "L1"
 MIN_ROOM_M2 = 1.0
@@ -158,6 +158,19 @@ def segment_rooms(g: Grid, m: Masks, walls: list[dict]) -> tuple[list[dict], lis
     for q in pieces:
         if q["door"] or q["hi"] - q["lo"] <= DOOR_MAX_M:
             barrier[_door_strip(g, q)] = True
+    # doors on traced (non-axis) walls; the axis-aligned gap logic owns the rest (dedupe 0.5 m)
+    centers = [np.array([(q["lo"] + q["hi"]) / 2, q["c"]] if q["axis"] == "h" else [q["c"], (q["lo"] + q["hi"]) / 2])
+               for q in gaps]
+    sk_doors = [d for d in skeleton_doors(g, m, walls)
+                if all(np.hypot(*(np.mean(d["segment"], axis=0) - c)) > 0.5 for c in centers)]
+    if sk_doors:
+        img = np.zeros(g.shape, np.uint8)
+        for d in sk_doors:
+            p0, p1 = np.asarray(d["segment"], float)
+            u = (p1 - p0) / np.linalg.norm(p1 - p0) * g.res  # one cell into each jamb seals the strip
+            (r0, c0), (r1, c1) = g.rc(np.array([p0 - u, p1 + u]))
+            cv2.line(img, (int(c0), int(r0)), (int(c1), int(r1)), 1, 2)
+        barrier |= img > 0
     near_wall = cv2.dilate(wm.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
     interior = ((m.free | (m.occupied & ~near_wall)) & ~wm) | m.floor_supported
     interior &= ~barrier
@@ -218,6 +231,12 @@ def segment_rooms(g: Grid, m: Masks, walls: list[dict]) -> tuple[list[dict], lis
             seg = [[q["lo"], q["c"]], [q["hi"], q["c"]]] if q["axis"] == "h" else \
                 [[q["c"], q["lo"]], [q["c"], q["hi"]]]
             doors.append((rid[a], rid[b], seg, q["hi"] - q["lo"]))
+    for d in sk_doors:
+        p0, p1 = np.asarray(d["segment"], float)
+        normal = np.array([p0[1] - p1[1], p1[0] - p0[0]]) / np.linalg.norm(p1 - p0)
+        a, b = (_label_at(final, g.rc((p0 + p1) / 2 + s * normal * (0.075 + PROBE_M))[0]) for s in (-1, 1))
+        if a in rid and b in rid and a != b:
+            doors.append((rid[a], rid[b], d["segment"], d["width"]))
     doors += [(rid[p], rid[q], s, w) for p, q, s, w in split_doors if p in rid and q in rid]
     doors.sort(key=lambda d: (round(float(np.mean(d[2], axis=0)[0]), 3), round(float(np.mean(d[2], axis=0)[1]), 3)))
     out = [{"id": f"d_{i + 1:03d}", "level": LEVEL, "segment": _round_seg(seg),

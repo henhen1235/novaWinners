@@ -179,6 +179,24 @@ def curved_wall() -> dict:
     return build_truth("curved_wall", rooms, doors)
 
 
+def round_room() -> dict:
+    """Round room (r 3.5 m, 20 sides) wrapped by a half-annulus corridor (r 3.5..5.5 m),
+    two doors between them, one exit from each."""
+    def arc(r: float, k0: int, k1: int) -> list[tuple[float, float]]:
+        return [(r * math.cos(math.radians(18 * k)), r * math.sin(math.radians(18 * k))) for k in range(k0, k1 + 1)]
+
+    def chord_door(k: int, w: float) -> list:  # door of width w centered on circle edge k..k+1
+        a, b = np.array(arc(3.5, k, k + 1))
+        mid, d = (a + b) / 2, (b - a) / np.linalg.norm(b - a)
+        return [(mid - d * w / 2).tolist(), (mid + d * w / 2).tolist()]
+
+    rooms = [("round", "office", Polygon(arc(3.5, 0, 19))),
+             ("ring", "corridor", Polygon(arc(3.5, 0, 10) + arc(5.5, 0, 10)[::-1]))]
+    doors = [(chord_door(4, 0.9), None), (chord_door(8, 0.9), None), (chord_door(14, 0.9), "South"),
+             ([[4.0, 0.0], [5.0, 0.0]], "East")]
+    return build_truth("round_room", rooms, doors)
+
+
 def closets() -> dict:
     """Six 1.5 m wide closets (0.8 m doors) off a corridor, an office opposite."""
     rooms = [("corridor", "corridor", box(0, 2.5, 9, 4.5)), ("office", "office", box(0, 4.5, 9, 8))]
@@ -245,6 +263,7 @@ CASES = {
     "l_corridor": (l_corridor, {}, None, {}),
     "open_plan": (open_plan, {}, None, {}),
     "curved_wall": (curved_wall, {}, None, {}),
+    "round_room": (round_room, {}, None, {}),
     "closets": (closets, {}, None, {}),
     "double_doors": (double_doors, {}, None, {}),
     "wide_corridor": (wide_corridor, {}, None, {}),

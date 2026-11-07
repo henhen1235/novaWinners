@@ -105,7 +105,7 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   surrounded by occupied cells (furniture interiors). Reason: unfilled holes
   get eroded by another 0.25 m around them and cost far more walkable area
   than they cover. Tunable.
-- D11. Path B is Manhattan-first: orient aligns the dominant wall direction
+- D11 (superseded by D29). Path B is Manhattan-first: orient aligns the dominant wall direction
   with X. Diagonal walls still block walkable space (occupied) but are not
   emitted as clean walls.
 - D12. Mesh-path doors use kind "opening" (a scan sees the opening, not the
@@ -187,3 +187,25 @@ truth scenes pass the validator. The failures were pipeline bugs.
   wall found through a tall cabinet; its opening matches no truth door. A
   thickness-aware junction test needs T_MAX above 0.35 m and a correct
   thickness estimate for walls with one weak face; not done.
+- D29 (supersedes D11). Walls follow the scan's true shape when it is not
+  orthogonal. The wall mask (tall cells, faces <= 0.3 m apart closed, blobs a
+  0.6 m disc fits in dropped as furniture, one-face 1-2 cell lines thickened
+  to 3 cells) is traced with marching squares on the blurred mask, simplified
+  at 3 cm and cut on a 1 m grid into hole-free pieces (ids "w_t..."; the
+  contract Wall is a single ring, and 1 m pieces keep a min-rectangle
+  centerline within 4 cm of an r 3 m arc). The gate is the length share of
+  traced face edges (>= 0.5 m, re-simplified at 5 cm) within 5 deg of X/Z:
+  above 0.85 the D11 run detector runs unchanged (bench scans read
+  0.95-0.99); below it, straight runs >= 1 m that the mask covers >= 80%
+  keep their rectangle and the rest is traced (semicircle scan 0.84, hall
+  0.28, round room 0.05). Doors on traced walls come from the wall-mask
+  skeleton: endpoints (branches >= 0.3 m, so corner spurs are skipped) facing
+  each other within 45 deg, else marching along the end tangent to the next
+  wall; 0.6-2.2 m with floor under it and < 20% occupied is a door. They
+  become 2-cell barriers in segment_rooms and are dropped within 0.5 m of an
+  axis gap door. Stress results (old -> new): non-axis wall centerline error
+  round_room 0.16 -> 0.015 m, curved_wall 0.14 -> 0.019 m, rotated_wing
+  0.35 -> 0.017 m; door recall round_room 0.5 -> 1.0. Known gaps: orient's
+  yaw snap leaves rotated_wing's main block ~3 deg off, so it is traced, not
+  boxed; a few skeleton rays on clutter give doors inside one room (dropped,
+  since a door needs a room on each side).

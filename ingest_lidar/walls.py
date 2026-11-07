@@ -1,15 +1,25 @@
-"""Axis-aligned wall segments and the gaps between them (PLAN.md "walls.py").
+"""Wall polygons and the gaps between them (PLAN.md "walls.py", D11 superseded by D29).
 
-Walls are runs of tall cells (body band occupied, points in the upper band and
+Walls come from tall cells (body band occupied, points in the upper band and
 a max height above 2.15 m, so 1.8-2.0 m cabinets with tops at the band edge do
 not count). Grid rows follow +Z, cols +X; axis "h" walls run along X.
+
+Orthogonal scans (wall-face direction mass within 5 deg of X/Z > 0.85) keep the
+axis-aligned run detector. Other scans keep the straight runs that fit the wall
+mask and trace the rest: smoothed mask contours, simplified to 3 cm, cut into
+<= 1 m hole-free pieces (ids "w_t..."). Doors on traced walls come from
+skeleton endpoints (skeleton_doors).
 """
 
 from __future__ import annotations
 
+from functools import reduce
+
 import cv2
 import numpy as np
+import shapely
 from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 from .grid import Grid, Masks, components
 
@@ -25,6 +35,17 @@ DOOR_MIN_M, DOOR_MAX_M = 0.6, 2.2
 DOOR_FLOOR_FRAC = 0.15  # wall-face bottoms put floor-band points on wall lines; 0.3 lost doorways with floor holes
 DOOR_OCC_FRAC = 0.2
 TALL_MIN_H = 2.15
+ORTHO_DEG = 5.0
+ORTHO_SHARE = 0.85  # above: Manhattan runs only
+ORTHO_MIN_EDGE_M = 0.5
+THICK_CELLS = 12  # 0.6 m
+TRACE_TOL_M = 0.03
+PIECE_M = 1.0  # traced walls are cut on a 1 m grid: hole-free pieces, chord error <= 4 cm at r 3 m
+FIT_MIN_M = 1.0
+FIT_COVER = 0.8  # a straight run "fits" when the wall mask covers this share of its rectangle
+FACING_COS = 0.7  # skeleton end directions within 45 deg of the line joining two jambs
+SPUR_CELLS = 6  # skeleton branches shorter than 0.3 m are corner spurs, not wall ends
+TRACED = "w_t"
 
 
 def tall_mask(g: Grid) -> np.ndarray:
@@ -84,9 +105,11 @@ def _snap(walls: list[dict], fixed: list[dict] = ()) -> list[dict]:
 
 
 def wall_lines(walls: list[dict]) -> list[dict]:
-    """Contract wall dicts -> {axis, c, lo, hi, t} (axis-aligned rectangles)."""
+    """Contract wall dicts -> {axis, c, lo, hi, t} (axis-aligned rectangles); traced walls skipped."""
     out = []
     for w in walls:
+        if w["id"].startswith(TRACED):
+            continue
         x0, z0, x1, z1 = Polygon(w["polygon"]).bounds
         if x1 - x0 >= z1 - z0:
             out.append({"axis": "h", "c": (z0 + z1) / 2, "lo": x0, "hi": x1, "t": z1 - z0})
@@ -112,6 +135,13 @@ def wall_mask(g: Grid, walls: list[dict]) -> np.ndarray:
     mask = np.zeros(g.shape, bool)
     for line in wall_lines(walls):
         mask[_cells(g, line)] = True
+    traced = [w["polygon"] for w in walls if w["id"].startswith(TRACED)]
+    if traced:
+        img = np.zeros(g.shape, np.uint8)
+        # cell (r, c) center sits at index coords (c, r); 4 fractional bits for cv2
+        pts = [np.round(((np.asarray(p) - [g.x0, g.z0]) / g.res - 0.5) * 16).astype(np.int32) for p in traced]
+        cv2.fillPoly(img, pts, 1, lineType=cv2.LINE_8, shift=4)
+        mask |= img > 0
     return mask
 
 
@@ -229,14 +259,195 @@ def _to_contract(lines: list[dict], height: float) -> list[dict]:
             for i, r in enumerate(rects)]
 
 
-def detect_walls(g: Grid, m: Masks, ceiling_height_m: float) -> list[dict]:
-    """Contract Wall dicts. Gaps along a wall that are not doors (< 0.6 m, wall holes
-    without floor, or body-occupied gaps where only the upper band was missing) are
-    bridged with extra wall rectangles so rooms do not leak through them."""
-    tall = tall_mask(g)
-    lines = _snap(_runs(g, tall, "h") + _runs(g, tall, "v"))
-    walls = _to_contract(lines, ceiling_height_m)
+def face_mask(g: Grid, tall: np.ndarray, thin: bool = True) -> np.ndarray:
+    """Wall mask for tracing: both faces closed into one band (<= 0.3 m apart), blobs a
+    0.6 m disc fits in removed (furniture clusters; no wall is that thick), one-face walls
+    (1-2 cells, e.g. the hall's oval) thickened to 3 cells so tracing keeps them, blobs
+    < 0.55 m dropped. thin=False drops 1-2 cell lines instead."""
+    disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CLOSE_CELLS, CLOSE_CELLS))
+    m = cv2.morphologyEx(tall.astype(np.uint8), cv2.MORPH_CLOSE, disc)
+    thick = cv2.morphologyEx(m, cv2.MORPH_OPEN,
+                             cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (THICK_CELLS, THICK_CELLS)))
+    m = m & (1 - thick)
+    core = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    if not thin:
+        m = core  # direction statistics: noisy one-cell fragments only add odd-angle edges
+    else:
+        m = m | cv2.dilate(m & (1 - core), np.ones((3, 3), np.uint8))
+    n, lab, st = components(m, 8)
+    keep = np.r_[False, np.maximum(st[1:, 2], st[1:, 3]) >= OPEN_CELLS]
+    return keep[lab]
+
+
+def trace(g: Grid, mask: np.ndarray):
+    """Mask -> world-XZ (Multi)Polygon: marching squares on the blurred mask (sub-cell, so
+    arcs and diagonals come out smooth, not as cell staircases), even-odd nesting for holes,
+    Douglas-Peucker at TRACE_TOL_M."""
+    from skimage.measure import find_contours
+
+    pad = 2
+    f = cv2.GaussianBlur(np.pad(mask, pad).astype(np.float32), (5, 5), 1.0)
+    rings = [Polygon(c[:, ::-1]).buffer(0) for c in find_contours(f, 0.5) if len(c) >= 4]
+    geom = reduce(lambda a, b: a.symmetric_difference(b), rings, Polygon())
+    geom = shapely.transform(geom, lambda c: (c - pad + 0.5) * g.res + [g.x0, g.z0])
+    return geom.simplify(TRACE_TOL_M)
+
+
+def ortho_share(geom) -> float:
+    """Length share of wall-face edges within ORTHO_DEG of the X or Z axis.
+
+    Edges come from the traced outline re-simplified at 5 cm, counting only edges >= 0.5 m:
+    scan noise roughens straight faces and blur rounds corners into short odd-angle edges,
+    which pulled orthogonal bench scans down to 0.87-0.95; this way they read 0.95-0.99, the
+    semicircle stress scan 0.84 and the hall scan 0.22."""
+    rings = [r for p in getattr(geom.simplify(0.05), "geoms", [geom.simplify(0.05)]) if isinstance(p, Polygon)
+             for r in [p.exterior, *p.interiors]]
+    d = np.concatenate([np.diff(np.asarray(r.coords), axis=0) for r in rings]) if rings else np.zeros((0, 2))
+    w = np.hypot(d[:, 0], d[:, 1])
+    a = np.degrees(np.arctan2(d[:, 1], d[:, 0])) % 90
+    w = np.where(w >= ORTHO_MIN_EDGE_M, w, 0.0)
+    return float(w[np.minimum(a, 90 - a) <= ORTHO_DEG].sum() / w.sum()) if w.sum() else 1.0
+
+
+def _pieces(geom) -> list[Polygon]:
+    """Cut on a PIECE_M grid; holes left inside a 1 m cell are scan noise and get filled."""
+    x0, z0, x1, z1 = geom.bounds
+    xs = np.arange(np.floor(x0 / PIECE_M), np.ceil(x1 / PIECE_M)) * PIECE_M
+    zs = np.arange(np.floor(z0 / PIECE_M), np.ceil(z1 / PIECE_M)) * PIECE_M
+    cells = shapely.box(*np.meshgrid(xs, zs), *np.meshgrid(xs + PIECE_M, zs + PIECE_M))
+    cells = cells.ravel()
+    shapely.prepare(geom)
+    cut = shapely.intersection(cells[shapely.intersects(geom, cells)], geom)
+    out = []
+    for part in cut:
+        for p in getattr(part, "geoms", [part]):
+            if isinstance(p, Polygon) and p.area >= 0.01:
+                q = shapely.set_precision(Polygon(p.exterior), 0.001)
+                out += [r for r in getattr(q, "geoms", [q]) if isinstance(r, Polygon) and r.area >= 0.01]
+    return out
+
+
+def _traced_contract(pieces: list[Polygon], height: float) -> list[dict]:
+    pieces = sorted(pieces, key=lambda p: (round(p.centroid.y, 3), round(p.centroid.x, 3)))
+    return [{"id": f"{TRACED}{i + 1:03d}", "level": LEVEL,
+             "polygon": [[x + 0.0, z + 0.0] for x, z in list(p.exterior.coords)[:-1]],
+             "height_m": round(float(height), 3)} for i, p in enumerate(pieces)]
+
+
+def _bridged(g: Grid, m: Masks, lines: list[dict], height: float, traced: list[dict] = ()) -> list[dict]:
+    """Manhattan walls plus bridges over their non-door gaps (traced walls are march stops)."""
+    walls = _to_contract(lines, height) + list(traced)
     bridges = [q for q in find_gaps(g, m, walls) if not q["door"] and q["hi"] - q["lo"] <= DOOR_MAX_M]
     # re-snap: a bridge can be the perpendicular wall a corner end was missing. Bridges already
     # span wall to wall; snapping them could trim a short one to its neighbour's faces (D27)
-    return _to_contract(_snap(wall_lines(walls), bridges), ceiling_height_m) if bridges else walls
+    if not bridges:
+        return walls
+    return _to_contract(_snap(wall_lines(walls), bridges), height) + list(traced)
+
+
+def detect_walls(g: Grid, m: Masks, ceiling_height_m: float) -> list[dict]:
+    """Contract Wall dicts. Gaps along a wall that are not doors (< 0.6 m, wall holes
+    without floor, or body-occupied gaps where only the upper band was missing) are
+    bridged with extra wall rectangles so rooms do not leak through them.
+
+    Non-orthogonal scans (D29): straight runs >= 1 m that the wall mask covers keep their
+    rectangle; the rest of the mask is traced into polygon pieces."""
+    tall = tall_mask(g)
+    lines = _snap(_runs(g, tall, "h") + _runs(g, tall, "v"))
+    if ortho_share(trace(g, face_mask(g, tall, thin=False))) > ORTHO_SHARE:
+        return _bridged(g, m, lines, ceiling_height_m)
+    face = face_mask(g, tall)
+    geom = trace(g, face)
+    keep = [w for w in lines if w["hi"] - w["lo"] >= FIT_MIN_M and face[_cells(g, w)].mean() >= FIT_COVER]
+    rest = geom.difference(unary_union([Polygon(_rect(w)) for w in keep])) if keep else geom
+    rest = rest.buffer(-0.05, join_style="mitre").buffer(0.05, join_style="mitre")  # side slivers of kept runs
+    traced = _traced_contract([p for p in _pieces(rest) if p.area >= 0.02], ceiling_height_m)
+    return _bridged(g, m, keep, ceiling_height_m, traced)
+
+
+def _skeleton_branch(sk: np.ndarray, e: np.ndarray, n: int) -> np.ndarray | None:
+    """Pixel n steps back from skeleton endpoint e along its branch; None if a junction
+    comes first (a corner spur) or the branch is shorter."""
+    prev, cur = None, tuple(e)
+    for _ in range(n):
+        r, c = cur
+        nb = [(r + dr, c + dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1) if (dr or dc)
+              and 0 <= r + dr < sk.shape[0] and 0 <= c + dc < sk.shape[1] and sk[r + dr, c + dc]]
+        if len(nb) > (1 if prev is None else 2):
+            return None
+        nxt = [p for p in nb if p != prev]
+        if not nxt:
+            return None
+        prev, cur = cur, nxt[0]
+    return np.array(cur)
+
+
+def skeleton_doors(g: Grid, m: Masks, walls: list[dict]) -> list[dict]:
+    """Door openings at traced-wall ends, any direction: {segment [[x, z], [x, z]], width}.
+
+    From each endpoint of the wall-mask skeleton (medial axis) on a traced wall, march
+    along the branch direction across free cells to the next wall cell. A 0.6-2.2 m run
+    with floor under it (>= DOOR_FLOOR_FRAC) and little occupancy (< DOOR_OCC_FRAC) is a
+    door; the two jambs of one door find it twice, so centers within 0.4 m are merged."""
+    tw = [w for w in walls if w["id"].startswith(TRACED)]
+    if not tw:
+        return []
+    from skimage.morphology import skeletonize
+
+    wm = wall_mask(g, walls)
+    near = cv2.dilate(wall_mask(g, tw).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+    sk = skeletonize(wm)
+    nbs = cv2.filter2D(sk.astype(np.uint8), -1, np.ones((3, 3), np.float32), borderType=cv2.BORDER_CONSTANT)
+    ends, dirs = [], []
+    for e in np.argwhere(sk & (nbs == 2) & near):
+        back = _skeleton_branch(sk, e, SPUR_CELLS)
+        if back is not None:
+            ends.append(e.astype(float))
+            dirs.append((e - back) / np.linalg.norm(e - back))
+    out: list[dict] = []
+    for i, (e, d) in enumerate(zip(ends, dirs)):
+        # endpoints facing each other first (a curved wall's end tangent misses the far jamb),
+        # then a straight march for a jamb that faces the side of another wall
+        partners = []
+        for j, (f, df) in enumerate(zip(ends, dirs)):
+            v = f - e
+            dist = float(np.hypot(*v)) * g.res
+            if j != i and DOOR_MIN_M <= dist <= DOOR_MAX_M + 0.4 and d @ v / np.hypot(*v) > FACING_COS \
+                    and -(df @ v) / np.hypot(*v) > FACING_COS:
+                partners.append((dist, v / np.hypot(*v)))
+        for ray in [v for _, v in sorted(partners, key=lambda p: p[0])] + [d]:
+            seg = _ray_gap(g, m, wm, e, ray)
+            if seg is not None:
+                break
+        if seg is None:
+            continue
+        c = np.mean(seg, axis=0)
+        if all(np.hypot(*(c - np.mean(o["segment"], axis=0))) > 0.4 for o in out):
+            out.append({"segment": seg.tolist(), "width": float(np.hypot(*(seg[1] - seg[0])))})
+    return out
+
+
+def _ray_gap(g: Grid, m: Masks, wm: np.ndarray, e: np.ndarray, d: np.ndarray) -> np.ndarray | None:
+    """[[x, z], [x, z]] from the wall face at e (row, col) along d to the next wall, if door-like."""
+    ts = np.arange(0, (MARCH_M + 0.5) / g.res, 0.5)
+    rc = np.round(e + ts[:, None] * d).astype(int)
+    ok = (rc >= 0).all(1) & (rc < g.shape).all(1)
+    rc, ts = rc[ok], ts[ok]
+    hit = wm[rc[:, 0], rc[:, 1]]
+    free = np.flatnonzero(~hit)
+    if not len(free):
+        return None
+    t0 = free[0]
+    after = np.flatnonzero(hit[t0:])
+    if not len(after):
+        return None
+    t1 = t0 + after[0]
+    width = (ts[t1] - ts[t0]) * g.res
+    cells = rc[t0:t1]
+    if not DOOR_MIN_M <= width <= DOOR_MAX_M or not len(cells):
+        return None
+    if m.occupied[cells[:, 0], cells[:, 1]].mean() >= DOOR_OCC_FRAC or \
+            (g.floor[cells[:, 0], cells[:, 1]] >= 1).mean() < DOOR_FLOOR_FRAC:
+        return None
+    ends = e + np.array([ts[t0] - 0.25, ts[t1] - 0.25])[:, None] * d  # half a step back: the faces
+    return g.cell_xz(ends[:, 0], ends[:, 1])
