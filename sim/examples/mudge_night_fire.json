@@ -68,16 +68,6 @@
   },
   {
    "where": {
-    "room": "r_A209A"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_A210"
    },
    "count": 2,
@@ -98,16 +88,6 @@
   },
   {
    "where": {
-    "room": "r_A211A"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_A213"
    },
    "count": 2,
@@ -118,27 +98,7 @@
   },
   {
    "where": {
-    "room": "r_A213A"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_A215"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_A215A"
    },
    "count": 2,
    "personas": {
@@ -396,16 +356,6 @@
   },
   {
    "where": {
-    "room": "r_B111B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B112"
    },
    "count": 2,
@@ -426,16 +376,6 @@
   },
   {
    "where": {
-    "room": "r_B113B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B114"
    },
    "count": 2,
@@ -447,16 +387,6 @@
   {
    "where": {
     "room": "r_B115"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B115B"
    },
    "count": 2,
    "personas": {
@@ -487,16 +417,6 @@
   {
    "where": {
     "room": "r_B118"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B118B"
    },
    "count": 2,
    "personas": {
@@ -626,16 +546,6 @@
   },
   {
    "where": {
-    "room": "r_B211B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B212"
    },
    "count": 2,
@@ -647,16 +557,6 @@
   {
    "where": {
     "room": "r_B213"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B213B"
    },
    "count": 2,
    "personas": {
@@ -686,16 +586,6 @@
   },
   {
    "where": {
-    "room": "r_B215B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B216"
    },
    "count": 2,
@@ -716,27 +606,7 @@
   },
   {
    "where": {
-    "room": "r_B217B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B218"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B2B"
    },
    "count": 2,
    "personas": {
@@ -886,16 +756,6 @@
   },
   {
    "where": {
-    "room": "r_B313B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B314"
    },
    "count": 2,
@@ -907,16 +767,6 @@
   {
    "where": {
     "room": "r_B315"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B315B"
    },
    "count": 2,
    "personas": {
@@ -946,16 +796,6 @@
   },
   {
    "where": {
-    "room": "r_B317B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B318"
    },
    "count": 2,
@@ -966,27 +806,7 @@
   },
   {
    "where": {
-    "room": "r_B3B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B4"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B4B"
    },
    "count": 2,
    "personas": {
@@ -1026,16 +846,6 @@
   },
   {
    "where": {
-    "room": "r_B7B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_B8"
    },
    "count": 2,
@@ -1047,16 +857,6 @@
   {
    "where": {
     "room": "r_B9"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_B9B"
    },
    "count": 2,
    "personas": {
@@ -1196,16 +996,6 @@
   },
   {
    "where": {
-    "room": "r_C111B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C112"
    },
    "count": 2,
@@ -1217,16 +1007,6 @@
   {
    "where": {
     "room": "r_C113"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C113B"
    },
    "count": 2,
    "personas": {
@@ -1256,16 +1036,6 @@
   },
   {
    "where": {
-    "room": "r_C115B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C116"
    },
    "count": 2,
@@ -1286,27 +1056,7 @@
   },
   {
    "where": {
-    "room": "r_C117B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C118"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C11B"
    },
    "count": 2,
    "personas": {
@@ -1336,16 +1086,6 @@
   },
   {
    "where": {
-    "room": "r_C13B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C14"
    },
    "count": 2,
@@ -1366,16 +1106,6 @@
   },
   {
    "where": {
-    "room": "r_C15B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C16"
    },
    "count": 2,
@@ -1387,16 +1117,6 @@
   {
    "where": {
     "room": "r_C17"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C17B"
    },
    "count": 2,
    "personas": {
@@ -1526,16 +1246,6 @@
   },
   {
    "where": {
-    "room": "r_C211B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C212"
    },
    "count": 2,
@@ -1547,16 +1257,6 @@
   {
    "where": {
     "room": "r_C213"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C213B"
    },
    "count": 2,
    "personas": {
@@ -1586,16 +1286,6 @@
   },
   {
    "where": {
-    "room": "r_C215B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C216"
    },
    "count": 2,
@@ -1608,16 +1298,6 @@
    "where": {
     "room": "r_C217"
    },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C217B"
-   },
    "count": 1,
    "personas": {
     "mobility_impaired": 1.0
@@ -1625,7 +1305,7 @@
   },
   {
    "where": {
-    "room": "r_C217B"
+    "room": "r_C217"
    },
    "count": 1,
    "personas": {
@@ -1754,27 +1434,7 @@
   },
   {
    "where": {
-    "room": "r_C313B"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
     "room": "r_C315"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C315B"
    },
    "count": 2,
    "personas": {
@@ -1795,16 +1455,6 @@
   {
    "where": {
     "room": "r_C317"
-   },
-   "count": 2,
-   "personas": {
-    "regular": 0.9,
-    "visitor": 0.1
-   }
-  },
-  {
-   "where": {
-    "room": "r_C317B"
    },
    "count": 2,
    "personas": {
@@ -1912,7 +1562,7 @@
   }
  ],
  "assumptions": [
-  "Night, full occupancy: 2 residents in each of the 184 sleep/study rooms of at least 5 m2 (skipped 40 smaller ones as mislabelled closets), two of them mobility-impaired (one each on L2 and L3), two RAs (staff), and 5 people in the floor 1 lounge (r_A100).",
+  "Night, full occupancy: 2 residents in each of the 149 dorm rooms (sub-rooms with the same number, such as closets and suite parts, count as one room; residents are placed in its largest part; rooms whose largest part is under 5 m2 are skipped), two of them mobility-impaired (rooms A310 and C217), two RAs (staff), and 5 people in the floor 1 lounge (r_A100).",
   "Fire starts in A105, the large first-floor common room by the front entrance, and makes it impassable after 60 s.",
   "Exits are the floor 1 exterior doors only; basement A residents climb to floor 1."
  ]
