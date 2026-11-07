@@ -115,3 +115,37 @@ metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s
 slider, colors agents by state or persona, shows events, and opens an interview panel
 for a clicked agent that calls the local interview API (`python -m cognition.serve`,
 POST /interview {run, agent_id, question} -> {answer, citations, verified}).
+
+## Interventions (loop/ optimizer patches)
+
+The optimizer (`loop/optimizer.py`) may only pick from this menu; `loop/patch.py` checks each
+intervention, applies it as a new (scene, scenario) pair (inputs never mutated), then validates
+the result: `scenario.schema.validate` after checking the sim extras above, and
+`contract.validate_scene` must report no new errors. Rejected patches return the error strings
+to the model for repair. Each round writes `out/loop/<name>/rN/interventions.json`:
+
+```json
+{"round": 1, "interventions": [
+  {"id": "fix1_1", "kind": "unlock_exit", "args": {"exit": "exit_01"}, "why": "21 of 30 used it ..."}]}
+```
+
+| kind | args | patch | limits |
+|---|---|---|---|
+| add_warden | room, count | occupants += {where: {room}, count, personas: {staff: 1.0}} | count 1..2 |
+| add_signage | room, exit | interventions += {type: signage, exit, p: 0.8} | sim applies it building-wide |
+| pa_announcement | t_s, text, exit_open? | events += pa_announcement at t_s, params.claim {exit_open} | t_s within the run |
+| unlock_exit | exit | events += open_exit at (blocked_exit t_start_s + 30 s) | exit must have a blocked_exit with cause locked, chained or obstructed |
+| assign_familiar_exit | room, exit | occupants in room get familiar_exit = exit | |
+| widen_door | door, width_m | scene doors[].width_m (and the exit's width_m) | > current, <= min(1.5x, 2.4 m) |
+
+Adversary injections are plain scenario events with ids `advN_k`: blocked_exit
+(params.cause locked|chained|obstructed), fire/smoke (params.block_after_s), rumor
+(params.text, params.claim.exit_blocked). At least one exit must stay open, each `why` must cite
+a number, at most 3 per round.
+
+Loop runs the sim in-process with one tick hook: a pa_announcement claiming exit_open sets
+`exit_open:<exit>` true (conf 0.9, source pa) for everyone inside, and cognition sees that
+message as percept kind "pa" with the claim. Scoreboard metrics count only the original
+occupants (wardens are excluded): t95_s (time from alarm to 95% out; the run duration when never
+reached), evacuated, stragglers, misled_by_rumor, max_queue (most agents queued in one frame),
+llm_calls, cost_usd, and per-tick LLM latency (slowest call of each tick's batch).
