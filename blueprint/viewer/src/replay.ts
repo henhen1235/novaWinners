@@ -257,7 +257,7 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
     const view = context.view();
     const focus = context.level();
     // Zoomed out over a 150 m building a 0.4 m person is under a pixel; keep each one at least ~9 px wide.
-    scale.setScalar(Math.min(10, Math.max(1, 9 / (0.4 * context.pxPerMeter()))));
+    scale.setScalar(Math.min(6, Math.max(1, 9 / (0.4 * context.pxPerMeter()))));
     if (run === runs[0]) for (const id of levelIds) perFloor.set(id, 0);
     run.doc.agents.forEach((agent, k) => {
       const x0 = run.xs[i][k];
