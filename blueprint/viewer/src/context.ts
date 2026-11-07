@@ -44,6 +44,10 @@ export interface ViewerContext {
   onLayout: (fn: (view: ViewMode) => void) => void;
   /** Screen pixels per meter at the camera target; markers scale up when zoomed out. */
   pxPerMeter: () => number;
+  /** Floor point under the ray on a visible, focused floor, in scene coordinates (undoes the view offset). */
+  pickFloor: (raycaster: THREE.Raycaster) => { level: string; x: number; z: number } | null;
+  /** Turn camera drag/zoom on or off (a drag-box tool needs the left button). */
+  setNavigation: (enabled: boolean) => void;
   /** Live people per floor (null clears the count). */
   setFloorCount: (level: string, people: number | null) => void;
 }

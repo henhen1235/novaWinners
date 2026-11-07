@@ -288,3 +288,27 @@ body.one-level .camera-views { margin-left: auto; }
 /* Zoomed out, exits keep the pictogram and drop the words. */
 body.zoomed-out .exit-label { padding: 2px; }
 body.zoomed-out .exit-label .exit-text { display: none; }
+
+/* Speech bubble: what an occupant said (the LLM's `say`), for 3 s over their head. */
+.speech {
+  position: relative; max-width: 190px; padding: 3px 8px; pointer-events: none;
+  font: 500 var(--size-xs)/1.35 var(--font-sans); color: var(--color-ground); text-wrap: pretty;
+  background: var(--color-text); border-radius: var(--radius-sm); box-shadow: 0 1px 6px rgb(0 0 0 / 0.35);
+}
+.speech::after {
+  content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px;
+  border: 5px solid transparent; border-bottom: 0; border-top-color: var(--color-text);
+}
+
+/* ---- Live run ---- */
+.live-status { margin: 0 0 var(--space-3); color: var(--color-text-muted); font-variant-numeric: tabular-nums; text-wrap: pretty; }
+.live-actions { display: flex; gap: var(--space-2); }
+.live-actions button {
+  padding: 6px 12px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--color-raised); border: 1px solid var(--color-line-strong);
+}
+#live-start { background: var(--color-text); color: var(--color-ground); border-color: var(--color-text); font-weight: 600; }
+.live-actions button:disabled { opacity: 0.45; cursor: default; }
+.live-result { margin: var(--space-3) 0 0; }
+.live-result:empty { display: none; }
+.live-result a { color: var(--color-route); }

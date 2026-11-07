@@ -1,0 +1,50 @@
+/* Editing UI rail section (src/edit.ts). Builds on the rail styles in style.css. */
+.edit h3 { margin: var(--space-4) 0 var(--space-2); font: 600 var(--size-xs)/1.2 var(--font-sans); color: var(--color-text-muted); }
+.edit .views.edit-tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-1); margin: 0; }
+.edit .views.edit-tools button { margin: 0; padding: 6px 4px; font-size: var(--size-xs); }
+.edit .views.edit-tools [data-tool="type"] { grid-column: span 2; }
+
+.edit-field { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-3); font-size: var(--size-xs); color: var(--color-text-muted); }
+.edit-field span { display: flex; align-items: center; gap: var(--space-2); }
+.edit input[type="text"], .edit input[type="number"] {
+  box-sizing: border-box; width: 100%; padding: 6px 8px; font: 400 var(--size-sm) var(--font-sans); color: var(--color-text);
+  background: var(--color-ground); border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm);
+}
+.edit select { width: 100%; }
+.edit-count input { width: 80px !important; }
+.edit-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--color-line-strong); }
+
+.edit details { margin-top: var(--space-3); }
+.edit summary { cursor: pointer; font-size: var(--size-xs); color: var(--color-text-muted); padding: 2px 0; border-radius: var(--radius-sm); }
+.edit-slider { display: grid; grid-template-columns: 1fr 70px 34px; align-items: center; gap: var(--space-2); padding: 2px 0; font-size: var(--size-xs); color: var(--color-text-muted); }
+.edit-slider input { width: 100%; margin: 0; accent-color: var(--color-drafting); }
+.edit-slider output { font: 400 var(--size-xs) var(--font-mono); color: var(--color-text); text-align: right; font-variant-numeric: tabular-nums; }
+
+.edit-hint { margin: var(--space-3) 0 0; font-size: var(--size-xs); color: var(--color-text); text-wrap: pretty; }
+
+.edit-chat { list-style: none; margin: 0; padding: 0; max-height: 140px; overflow: auto; font-size: var(--size-xs); scrollbar-color: var(--color-line-strong) transparent; }
+.edit-chat:empty { display: none; }
+.edit-chat li { margin-bottom: var(--space-1); padding: 4px 8px; border-radius: var(--radius-sm); text-wrap: pretty; }
+.edit-chat li.user { background: var(--color-raised); color: var(--color-text); margin-left: var(--space-5); }
+.edit-chat li.assistant { border-left: 2px solid var(--color-drafting); color: var(--color-text-muted); }
+.edit-chat-form { display: flex; gap: var(--space-1); margin-top: var(--space-1); }
+.edit button[type="submit"], .edit-download, .edit-list button {
+  padding: 6px 10px; font: 600 var(--size-xs) var(--font-sans); color: var(--color-text); cursor: pointer;
+  background: var(--color-raised); border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm);
+}
+.edit button[type="submit"]:hover, .edit-download:hover, .edit-list button:hover { background: var(--color-line); }
+.edit button:disabled { opacity: 0.5; cursor: progress; }
+
+.edit-empty { margin: 0; font-size: var(--size-xs); color: var(--color-text-muted); }
+.edit-list { list-style: none; margin: 0; padding: 0; max-height: 180px; overflow: auto; scrollbar-color: var(--color-line-strong) transparent; }
+.edit-list li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 4px 0 4px 8px; border-left: 2px solid var(--color-line-strong); margin-bottom: var(--space-1); }
+.edit-list li.sent { border-left-color: var(--color-drafting); }
+.edit-list li div { display: flex; flex-direction: column; min-width: 0; font-size: var(--size-xs); }
+.edit-list li span { overflow-wrap: anywhere; }
+.edit-list li small { color: var(--color-text-muted); }
+.edit-list button { padding: 3px 8px; font-weight: 500; }
+.edit-download { width: 100%; margin-top: var(--space-2); }
+
+/* Drag box for spreading people, and a crosshair while a tool is armed. */
+.edit-box { position: absolute; z-index: 2; pointer-events: none; border: 1px dashed var(--color-drafting); background: rgba(141, 180, 220, 0.12); border-radius: var(--radius-sm); }
+canvas.edit-armed { cursor: crosshair; }

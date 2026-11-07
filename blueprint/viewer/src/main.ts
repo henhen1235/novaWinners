@@ -10,6 +10,8 @@ import { buildNav, locate, nearestExitAcross, onMesh, type Leg, type Nav, type V
 import { buildFloors, type Floors, type LayerKey, type ViewMode, type WallMode } from "./floors";
 import { startReplay } from "./replay";
 import { startAnalysis } from "./analysis";
+import { startEdit } from "./edit";
+import { startLive } from "./live";
 
 const params = new URLSearchParams(location.search);
 // An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
@@ -463,13 +465,19 @@ renderer.domElement.addEventListener("pointerup", (event) => {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   if (pickers.some((pick) => pick(raycaster, side))) return;
-  const targets = floors.levels.filter((level) => level.root.visible && !level.ghost).flatMap((level) => [level.layers.model, level.layers.navmesh]);
-  const hit = raycaster.intersectObjects(targets, true).find((item) => shown(item.object));
-  if (!hit) return;
-  const level = floors.levelOf(hit.object);
-  if (!level) return;
-  routeFrom(hit.point.clone().sub(level.root.position), level.id);
+  const picked = pickFloor(raycaster);
+  if (picked) routeFrom(new THREE.Vector3(picked.x, 0, picked.z), picked.level);
 });
+
+function pickFloor(ray: THREE.Raycaster) {
+  if (!floors) return null;
+  const targets = floors.levels.filter((level) => level.root.visible && !level.ghost).flatMap((level) => [level.layers.model, level.layers.navmesh]);
+  const hit = ray.intersectObjects(targets, true).find((item) => shown(item.object));
+  const level = hit && floors.levelOf(hit.object);
+  if (!hit || !level) return null;
+  const point = hit.point.clone().sub(level.root.position);
+  return { level: level.id, x: point.x, z: point.z };
+}
 
 // ---- loading ----
 const sceneLoaded = fetch(sceneUrl)
@@ -630,7 +638,11 @@ ready.then((data) => {
     onLayout: (fn) => layoutHooks.push(fn),
     pxPerMeter,
     setFloorCount,
+    pickFloor,
+    setNavigation: (enabled) => (controls.enabled = enabled),
   };
   startAnalysis(context, params.get("analysis"));
   startReplay(context, params.get("replay"), params.get("compare"));
+  startEdit(context);
+  if (!params.get("replay")) startLive(context, params.get("live"));
 });
