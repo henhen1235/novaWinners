@@ -18,7 +18,7 @@ from geometry.rooms import attach_doors
 from ingest_blueprint.types import DoorOpening
 
 DOOR_M = 0.9
-TOUCH_M = 0.08
+TOUCH_M = 0.3  # raster faces can sit a wall gap apart; stays inside attach_doors' 0.35 m
 SPARSE_RATIO = 0.3
 
 

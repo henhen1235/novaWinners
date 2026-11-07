@@ -34,7 +34,8 @@ from render.extrude import build_display, build_navmesh_debug
 
 ROOT = Path(__file__).resolve().parents[1]
 SLAB_M = 3.0
-RASTER_DOOR_DEPTH_M = 0.6
+RASTER_DOOR_DEPTH_M = 0.9  # covers attach_doors' 0.35 m reach plus a wall on each side
+MIN_WALL_M = 0.15  # shorter wall pieces fall under the validator's 0.01 m^2 polygon floor
 
 
 def generated_by() -> str:
@@ -237,15 +238,24 @@ def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[
     openings = [LineString([door.p1, door.p2]) for door in doors]
     walls: list[Segment] = []
     for face in faces:
-        ring = list(face.exterior.coords)
+        ring = _decimate(list(face.exterior.coords), MIN_WALL_M)
         for start, end in zip(ring, ring[1:]):
-            if (start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2 < 0.03**2:
-                continue
             if any(opening.distance(Point(start)) <= near and opening.distance(Point(end)) <= near for opening in openings):
                 continue
             for piece_start, piece_end in _cut_openings(start, end, openings, near):
                 walls.append(Segment(piece_start, piece_end, thickness_m))
     return walls
+
+
+def _decimate(ring: list, step_m: float) -> list:
+    """Drop ring vertices closer than ``step_m`` to the last kept one; the ring stays closed."""
+
+    kept = [ring[0]]
+    for point in ring[1:-1]:
+        if (point[0] - kept[-1][0]) ** 2 + (point[1] - kept[-1][1]) ** 2 >= step_m**2:
+            kept.append(point)
+    kept.append(ring[-1])
+    return kept
 
 
 def _cut_openings(start, end, openings: list[LineString], near: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
@@ -267,7 +277,7 @@ def _cut_openings(start, end, openings: list[LineString], near: float) -> list[t
         pieces.append((cursor, edge.length))
     out = []
     for low, high in pieces:
-        if high - low < 0.03:
+        if high - low < MIN_WALL_M:
             continue
         p, q = edge.interpolate(low), edge.interpolate(high)
         out.append(((float(p.x), float(p.y)), (float(q.x), float(q.y))))
