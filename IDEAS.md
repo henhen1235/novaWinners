@@ -16,6 +16,14 @@ Sources: research/PITCH_IDEAS.md, research/EVAC_PSYCHOLOGY.md, research/LLM_LATE
 - Exit sign reading from photos listed in scan_notes.json (vision LLM).
 - Live scan of the judging room the morning of the demo (keep a recorded fallback).
 
+## From IBS27/rumi (HackMIT 2026; NO LICENSE: ideas only, do not copy code)
+- Phone-to-browser pairing: RoomScanner uploads the scan straight to the web
+  app (QR code / short code), no AirDrop. Makes a live judging-room scan smooth.
+- "The model proposes; code checks" as a pitch line: LLM proposes semantics,
+  occupants and fixes; geometry + contract validator accept or reject.
+- First-person view in the viewer/replay: see the evacuation through one
+  occupant's eyes.
+
 ## WS-C (sim side), from research
 - Interview the occupant: click an agent, ask why it went left; answers come
   only from its decision log.
