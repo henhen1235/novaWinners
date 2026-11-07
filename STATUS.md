@@ -1,21 +1,42 @@
 # STATUS (WS-B, LiDAR -> scene)
 
-Updated: 2026-11-07
+Updated: 2026-11-07 ~12:30
 
 ## Works
-- `contract/models.py` + generated `contract/scene.schema.json` (pushed to main).
+- Contract (`contract/`): models, schema, validator, fixtures, negative fixtures.
+- Path B (`python -m ingest_lidar scan.obj -o out/x`): OBJ/PLY/GLB/USDZ -> scene.json,
+  display.glb (scan + walls_clean), navmesh_debug.glb, debug PNGs + GeoJSON.
+- Path A (`python -m ingest_lidar structure.json -o out/x`, or a folder of
+  RoomPlan room JSONs): RoomPlan CapturedRoom/CapturedStructure converter.
+- iOS app `ios/RoomScanner` (RoomPlan, multi-room merge, export) compiles for device.
+- LLM room labels via OpenRouter (cached; skipped with `--no-llm`).
+- Exit tagging UI: `python -m tools.tag_exits out/x`.
+- Synthetic benchmark: `python -m tools.make_synthetic_scan --bench data/synth` then
+  `python -m tools.score_against_truth --bench data/bench -o out/bench`.
 
-## In progress
-- M0: validator, geometry helpers, fixtures, negative fixtures (subagent).
-- M3: iOS RoomPlan app scaffold and CapturedRoom JSON format (subagent).
+## Benchmark (30 synthetic scans, all targets met)
+| metric | result | target |
+|---|---|---|
+| up error < 2 deg | 100% | 100% |
+| walkable IoU (1.5 cm, 5% holes) | 0.956 | >= 0.90 |
+| walkable IoU (3 cm, 10% holes) | 0.914 | >= 0.80 |
+| door recall / precision | 0.979 / 0.961 | >= 0.85 / 0.80 |
+| room count within +-1 | 96.7% | >= 85% |
+| wall centerline median error | 0.012 m | < 0.10 m |
+| obstacle recall (> 0.5 m) | 0.997 | >= 0.80 |
+| runtime | <= 2.3 s (55k-150k tris) | <= 90 s at 500k |
 
-## Blocked / needs a human
-- Real scans need a LiDAR iPhone or iPad and a person to walk the building.
-- iOS app install needs Xcode + Apple ID signing on a device.
+## Not done / known issues
+- No real Path B scan yet (needs a human with an iPhone; see SCAN_GUIDE.md, ios/README.md).
+- RoomPlan samples from homes produce many "exits" where doors lead to unscanned
+  rooms; use exit_tags.json.
+- Multi-level scans and Path B stairs: not implemented (stretch).
+- 500k-triangle runtime not measured yet.
+- Synthetic scans are Manhattan; diagonal walls are not emitted as clean walls.
 
 ## How to run
 ```
 /Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest -q          # 66 passed in ~14 s
 ```
