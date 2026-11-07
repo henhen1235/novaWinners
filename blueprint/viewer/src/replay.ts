@@ -543,7 +543,8 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       const group = groups.get(key) ?? { key, text: "", rank, members: [], level, x, z };
       group.members.push(k);
       groups.set(key, group);
-      group.text = `${group.members.length} ${personaName(agent.persona, group.members.length).toLowerCase()} ${what}, ${levelName(level).toLowerCase()}`;
+      const where = levelIds.length > 1 ? `, ${levelName(level).toLowerCase()}` : "";
+      group.text = `${group.members.length} ${personaName(agent.persona, group.members.length).toLowerCase()} ${what}${where}`;
     });
     return [...groups.values()].sort((a, b) => a.rank - b.rank || b.members.length - a.members.length);
   }

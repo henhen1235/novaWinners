@@ -385,3 +385,9 @@ body.close-zoom .room-label span { display: inline; }
 .edit-collapse > summary h2 { display: inline; margin: 0; }
 .edit-collapse > summary::after { content: " +"; color: var(--color-text-muted); }
 .edit-collapse[open] > summary::after { content: " -"; }
+/* Two runs side by side in the result: smaller figures so each sentence fits its column. */
+.counters:has(.counter + .counter) .result-line { font-size: var(--size-sm); }
+.counters:has(.counter + .counter) .result-line b { font-size: var(--size-2xl); }
+.scenario-pick select { max-width: 340px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+header .building { flex: 0 1 auto; min-width: 0; }

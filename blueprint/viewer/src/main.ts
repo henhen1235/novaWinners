@@ -216,6 +216,35 @@ function drawTitleBlock(data: SceneDoc) {
   titleBlock.hidden = false;
   if (data.levels.length > 1) titleBlock.classList.add("folded"); // side by side needs the corner
   buildingTitle.textContent = headerTitle(data);
+  void scenarioPicker(data);
+}
+
+// Scenario select: other recorded runs of this building (public/replays/index.json from
+// scripts/replay_index.ts). Picking one swaps the replay and keeps the view; compare is dropped.
+async function scenarioPicker(data: SceneDoc) {
+  const replay = params.get("replay");
+  const key = sceneUrl.split("/").filter(Boolean)[0] ?? "";
+  if (!replay || !key || params.get("compare")) return;
+  let runs: { dir: string; title: string; scene: string; url: string }[] = [];
+  try {
+    const response = await fetch("/replays/index.json");
+    if (!response.ok) return;
+    runs = ((await response.json()).runs ?? []).filter((run: { scene: string }) => run.scene.split("/").includes(key));
+  } catch {
+    return; // no index: the header keeps the plain scenario name
+  }
+  if (!runs.some((run) => run.url === replay)) runs.unshift({ dir: "", title: scenarioName(replay.split("/").slice(-2, -1)[0] ?? ""), scene: "", url: replay });
+  if (runs.length < 2) return;
+  const select = document.querySelector<HTMLSelectElement>("#scenario")!;
+  select.replaceChildren(...runs.map((run) => Object.assign(document.createElement("option"), { value: run.url, textContent: run.title })));
+  select.value = replay;
+  select.addEventListener("change", () => {
+    const url = new URL(location.href);
+    url.searchParams.set("replay", select.value);
+    location.href = url.toString();
+  });
+  document.querySelector<HTMLElement>("#scenario-pick")!.hidden = false;
+  buildingTitle.textContent = `${buildingName(data.meta?.name)}:`;
 }
 
 // Header: building, then what is being shown (the replay's scenario, or the compare names).
