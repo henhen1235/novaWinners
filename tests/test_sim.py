@@ -231,3 +231,49 @@ def test_no_climbing_toward_floors_without_exits_tepper() -> None:
     sim.run()
     assert sim.stair_moves
     _assert_no_climb_to_dead_floor(sim)
+
+
+def test_branch_without_edit_reproduces_the_run() -> None:
+    from sim.live import branch
+    ev = [{"id": "f", "type": "fire", "t_start_s": 0, "at": {"room": "L1_office_n2"}},
+          {"id": "r", "type": "rumor", "t_start_s": 20, "at": {"room": "L1_corridor"},
+           "params": {"claim": {"exit_blocked": "exit_02"}}}]
+    scen = _scenario(ev, duration=200)
+    a = _run(scen, seed=11)
+    b = branch(SCENE, scen, 11, a.records, t_branch=45.0, run_id="run")
+    assert not b.done and b.tick == 90
+    b.run()
+    assert json.dumps(replay(a, "s", "c")) == json.dumps(replay(b, "s", "c"))
+
+
+def test_branch_edit_adds_people_and_events_at_t() -> None:
+    from sim.live import branch
+    scen = _scenario([{"id": "a", "type": "alarm_only", "t_start_s": 0, "at": {"room": "L1_corridor"}}], duration=200)
+    a = _run(scen, seed=11)
+    b = branch(SCENE, scen, 11, a.records, 30.0,
+               events=[{"id": "b", "type": "blocked_exit", "t_start_s": 0, "at": {"exit": "exit_01"}}],
+               occupants=[{"where": {"room": "L1_office_s2"}, "count": 3, "personas": {"staff": 1.0},
+                           "traits": {"speed_mps": 1.0}}])
+    b.run()
+    added = b.agents[len(a.agents):]
+    assert len(added) == 3 and all(x.traits["speed_mps"] == 1.0 for x in added)
+    assert [f["a"][:len(a.agents)] for f in a.frames[:60]] == [f["a"][:len(a.agents)] for f in b.frames[:60]]
+    assert not [e for e in b.replay_events if e["kind"] == "exited" and e["ref"] == "exit_01" and e["t"] >= 30.0]
+
+
+def test_async_decisions_fall_back_after_deadline() -> None:
+    import time as _time
+    from sim.live import AsyncDecisions
+    from sim.policy import decide
+
+    def slow(view: dict) -> dict:
+        _time.sleep(0.2)
+        return decide(view)
+
+    sim = Sim(SCENE, _scenario([], duration=20), 1)
+    sim.async_dec = AsyncDecisions(slow, workers=4)
+    sim.run()  # unpaced: ticks take ~ms, so the 0.2 s answers miss the 4-tick deadline
+    sim.async_dec.close()
+    st = sim.async_dec.summary()
+    assert st["fallback_deadline"] > 0
+    assert any(r["validation"]["status"] == "fallback_deadline" for r in sim.records)

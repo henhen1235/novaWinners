@@ -75,6 +75,11 @@ class Sim:
         self.msg_seq = 0
         self.llm_calls = 0
         self.cost_usd = 0.0
+        self.done = False
+        self.replay: dict[tuple[int, str], dict] = {}  # (tick, agent id) -> recorded decision
+        self.replay_until = 0  # ticks below this take decisions from `replay`, not the decider
+        self.async_dec = None  # sim.live.AsyncDecisions when decisions must not block the clock
+        self.n_ticks = int(round(self.duration / DT))
 
     def _apply_interventions(self, items: list[dict]) -> None:
         """Static interventions known before the run (signage). Others are events or occupants."""
@@ -96,13 +101,52 @@ class Sim:
 
     # ---- main loop ---------------------------------------------------------
     def run(self) -> None:
-        n_ticks = int(round(self.duration / DT))
-        for self.tick in range(n_ticks + 1):
-            self.t = round(self.tick * DT, 3)
-            self.step()
-            self._frame()
-            if all(a.state == "exited" for a in self.agents):
-                break
+        while self.advance():
+            pass
+
+    def advance(self) -> bool:
+        """Simulate one tick and record its frame; False once the run is over."""
+        if self.done:
+            return False
+        self.t = round(self.tick * DT, 3)
+        self.step()
+        self._frame()
+        if all(a.state == "exited" for a in self.agents) or self.tick >= self.n_ticks:
+            self.done = True
+            return False
+        self.tick += 1
+        return True
+
+    # ---- live edits (sim.live, sim.serve) ----------------------------------------
+    def add_events(self, events: list[dict]) -> list[Event]:
+        """Scenario-schema events; anything in the past starts at the next tick."""
+        out = []
+        for e in events:
+            ev = self.world.resolve_event(e)
+            ev.t_start = max(ev.t_start, round(self.tick * DT, 3))
+            out.append(ev)
+        self.events = sorted(self.events + out, key=lambda e: (e.t_start, e.id))
+        cues = [e.t_start for e in out if e.type in ("alarm_only", "fire", "smoke", "pa_announcement")]
+        if cues:
+            self.alarm_t = min(self.alarm_t, min(cues))
+        return out
+
+    def add_occupants(self, occupants: list[dict]) -> list[Agent]:
+        """Scenario-schema occupant groups spawned now (they notice the alarm after their own delay).
+
+        An occupant group may carry "traits" (e.g. speed_mps, premove_s) that override the draws.
+        """
+        new, pos, lv = spawn(self.world, occupants, self.seed * 1000 + len(self.agents), self.omniscient,
+                             start_row=len(self.agents), width=max(3, len(str(len(self.agents) + 999))))
+        t0 = round(self.tick * DT, 3)
+        for a in new:
+            a.spawn_t = t0
+        self.agents += new
+        self.pos = np.vstack([self.pos, pos]) if len(pos) else self.pos
+        self.lv = np.concatenate([self.lv, lv]) if len(lv) else self.lv
+        for a in new:
+            self.event("spawned", agent=a.id, ref=a.persona, text=f"{a.persona} added")
+        return new
 
     def step(self) -> None:
         for hook in self.hooks:
@@ -113,6 +157,8 @@ class Sim:
         self._timers()
         for agent, result, rec in self.pending.pop(self.tick, []):
             self._apply(agent, result, rec)
+        if self.async_dec is not None:
+            self.async_dec.poll(self)
         self._decide_all()
         self._move()
 
@@ -250,7 +296,7 @@ class Sim:
         if self.t < self.alarm_t:
             return
         for a in self.active():
-            if a.cue_t is None and self.t >= self.alarm_t + a.traits["notice_s"]:
+            if a.cue_t is None and self.t >= max(self.alarm_t, a.spawn_t) + a.traits["notice_s"]:
                 a.cue_t = self.t
                 self.trigger(a, "cue_noticed", "alarm")
 
@@ -271,12 +317,36 @@ class Sim:
         if not ready:
             return
         views = [perception.build_view(self, a) for a in ready]
-        results = self._call_decider(views)
-        for a, view, res in zip(ready, views, results):
-            rec = self._record(a, view, res)
+        for a in ready:
             a.in_flight, a.last_decide_tick, a.trigger, a.trigger_prio = True, self.tick, None, 0
             a.next_periodic_t = 1e18
-            self.pending.setdefault(self.tick + DECISION_DELAY_TICKS, []).append((a, res, rec))
+        if self.tick < self.replay_until:
+            results = [self._replayed(a, v) for a, v in zip(ready, views)]
+        elif self.async_dec is not None:
+            self.async_dec.submit(self, ready, views)
+            return
+        else:
+            results = self._call_decider(views)
+        for a, view, res in zip(ready, views, results):
+            rec = self._record(a, view, res, res.get("apply_tick"))
+            self.pending.setdefault(rec["apply_tick"], []).append((a, res, rec))
+
+    def _replayed(self, a: Agent, view: dict) -> dict:
+        """The recorded decision for this agent and tick (branch re-runs make no decider calls)."""
+        rec = self.replay.get((self.tick, a.id))
+        if rec is None:
+            log.warning("branch replay: no recorded decision for %s at tick %d; default policy", a.id, self.tick)
+            return _fallback(view, ["replay_missing"])
+        return self._checked(view, {"choice": rec["choice"], "say": rec.get("say"), "record": rec,
+                                    "apply_tick": rec.get("apply_tick")})
+
+    def finish_async(self, a: Agent, view: dict, res: dict, req_tick: int, status: str | None = None) -> None:
+        """An async decision (or its deadline fallback) applies at the current tick."""
+        res = self._checked(view, res)
+        if status:
+            res.setdefault("record", {})["validation"] = {"status": status, "errors": []}
+        rec = self._record(a, view, res, self.tick, req_tick=req_tick)
+        self._apply(a, res, rec)
 
     def _call_decider(self, views: list[dict]) -> list[dict]:
         if self.decide_batch is not None:
@@ -301,14 +371,17 @@ class Sim:
             return _fallback(view, [f"invalid choice: {res.get('choice') if isinstance(res, dict) else res!r}"])
         return res
 
-    def _record(self, a: Agent, view: dict, res: dict) -> dict:
-        rec = {"record_id": f"d_{len(self.records) + 1:06d}", "run_id": self.run_id, "tick": self.tick,
-               "t_s": self.t, "agent_id": a.id, "persona": a.persona, "model": a.model,
+    def _record(self, a: Agent, view: dict, res: dict, apply_tick: int | None = None,
+                req_tick: int | None = None) -> dict:
+        tick = self.tick if req_tick is None else req_tick
+        rec = {"record_id": f"d_{len(self.records) + 1:06d}", "run_id": self.run_id, "tick": tick,
+               "t_s": round(tick * DT, 3), "agent_id": a.id, "persona": a.persona, "model": a.model,
                "trigger": view["trigger"], "percepts": view["percepts"], "beliefs_before": view["beliefs"],
                "options": view["options"]}
         extra = res.get("record") or {}
         rec.update({k: v for k, v in extra.items() if k not in ("record_id", "run_id", "tick", "t_s", "agent_id")})
-        rec.update({"choice": res["choice"], "say": res.get("say"), "apply_tick": self.tick + DECISION_DELAY_TICKS})
+        rec.update({"choice": res["choice"], "say": res.get("say"),
+                    "apply_tick": int(apply_tick) if apply_tick is not None else tick + DECISION_DELAY_TICKS})
         if rec.get("raw_output"):
             self.llm_calls += 1
         self.cost_usd += float(rec.get("cost_usd") or 0.0)

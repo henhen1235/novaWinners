@@ -43,6 +43,7 @@ class Agent:
     hold: bool = False  # stopped until the next decision applies (landing, smoky or crowded stair)
     stair_asked: list = field(default_factory=list)  # (stair id, level) already asked about
     last_speech_trigger_t: float = -1e9
+    spawn_t: float = 0.0
     cue_t: float | None = None
     first_move_t: float | None = None
     exit_t: float | None = None
@@ -81,13 +82,16 @@ def _entry_weights(world: World) -> dict[str, float]:
             for eid, ex in world.exits.items()}
 
 
-def spawn(world: World, occupants: list[dict], seed: int,
-          omniscient: bool = False) -> tuple[list[Agent], np.ndarray, np.ndarray]:
-    """Create agents, start positions (N, 2) and level indices (N,) from scenario occupant groups."""
+def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = False, start_row: int = 0,
+          width: int | None = None) -> tuple[list[Agent], np.ndarray, np.ndarray]:
+    """Create agents, start positions (N, 2) and level indices (N,) from scenario occupant groups.
+
+    start_row and width let live edits append agents after existing ones with distinct ids.
+    """
     root = np.random.SeedSequence(seed)
     place_rng = np.random.default_rng(root.spawn(1)[0])
     total = sum(int(g.get("count", 0)) for g in occupants)
-    width = max(2, len(str(total)))
+    width = width or max(2, len(str(total)))
     agent_seqs = root.spawn(total + 1)[1:]
     agents: list[Agent] = []
     pos: list[np.ndarray] = []
@@ -100,8 +104,8 @@ def spawn(world: World, occupants: list[dict], seed: int,
             log.warning("occupants: unknown room %s, spawning anywhere walkable", room)
             room = None
         for _ in range(int(g.get("count", 0))):
-            row = len(agents)
-            rng = np.random.default_rng(agent_seqs[row])
+            row = start_row + len(agents)
+            rng = np.random.default_rng(agent_seqs[row - start_row])
             persona = resolve(_choice(rng, g.get("personas") or {"regular": 1.0}))
             model = _choice(rng, g.get("models") or {"rule-based": 1.0})
             lv = world.room_lv[room] if room else world.lv_index.get(where.get("level"), _exit_level(world))
@@ -117,6 +121,7 @@ def spawn(world: World, occupants: list[dict], seed: int,
             else:
                 known = [entry] + ([nearest] if nearest != entry and rng.random() < persona.knows_nearest_p else [])
             traits = sample_traits(persona, rng)
+            traits.update({k: v for k, v in (g.get("traits") or {}).items() if k in traits})  # viewer sliders
             if omniscient:
                 traits.update(premove_s=0.0, notice_s=0.0)
             agents.append(Agent(f"a_{row + 1:0{width}d}", row, persona.name, model, traits, rng, r, entry, known))
