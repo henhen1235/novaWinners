@@ -473,7 +473,8 @@ def _stat(sums: list[dict]) -> dict:
             "stragglers": med("stragglers"), "max_queue": med("max_queue")}
 
 
-def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], seeds: list[int], work: Path) -> tuple[list[dict], dict]:
+def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], seeds: list[int], work: Path,
+           kinds: set[str] | None = None) -> tuple[list[dict], dict]:
     """Attach verified {simulated, seeds, before, after} (or simulated false) and rank by measured effect, then effort."""
     n0 = sum(g["count"] for g in scenario["occupants"])
     base = work / "baseline"
@@ -482,7 +483,7 @@ def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], see
                    else _runs(scene, scenario, seeds, base, n0))
     out = []
     for i, rec in enumerate(recs):
-        p = to_patch(rec, scene, scenario, cands)
+        p = to_patch(rec, scene, scenario, cands) if not kinds or rec["kind"] in kinds else None
         if p is None:
             out.append({**rec, "verified": {"simulated": False, "seeds": 0, "before": None, "after": None}})
             continue
@@ -549,7 +550,7 @@ def report_md(res: dict) -> str:
 
 
 def advise(run_dir: Path, scene_path: str, scenario_path: str, out: Path, model: str = MODEL, n_seeds: int = 5,
-           no_llm: bool = False, llm: Callable = call_llm) -> dict:
+           no_llm: bool = False, llm: Callable = call_llm, kinds: set[str] | None = None) -> dict:
     scene = json.loads(Path(scene_path).read_text())
     scenario = {**json.loads(Path(scenario_path).read_text()), "scene": scene_path}
     errs = validate_scenario(scenario, scene)
@@ -566,7 +567,7 @@ def advise(run_dir: Path, scene_path: str, scenario_path: str, out: Path, model:
     res = heuristic(evidence, data, scene, scenario, cands) if no_llm else \
         diagnose_and_propose(evidence, summary, ids, model, llm)
     seeds = [42 + i for i in range(n_seeds)]
-    recs, combined = verify(res["recommendations"], scene, scenario, cands, seeds, out.parent / "advise_runs")
+    recs, combined = verify(res["recommendations"], scene, scenario, cands, seeds, out.parent / "advise_runs", kinds)
     body = {"model": "heuristic" if no_llm else model, "summary": res["summary"], "evidence": evidence,
             "findings": res["findings"], "recommendations": recs, "combined": combined, "cost_usd": round(res["cost_usd"], 4)}
     out.write_text(json.dumps(body, indent=1))
@@ -583,9 +584,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--seeds", type=int, default=5)
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--verify-kinds", help="comma list; only these kinds are re-run one by one (time on big buildings)")
     a = ap.parse_args(argv)
     out = a.out or a.run_dir / "recommendations.json"
-    body = advise(a.run_dir, a.scene, a.scenario, out, a.model, a.seeds, a.no_llm)
+    kinds = set(a.verify_kinds.split(",")) if a.verify_kinds else None
+    body = advise(a.run_dir, a.scene, a.scenario, out, a.model, a.seeds, a.no_llm, kinds=kinds)
     print(f"wrote {out} and {out.with_name('report.md')}: {len(body['findings'])} findings, "
           f"{len(body['recommendations'])} recommendations, ${body['cost_usd']}")
     return 0
