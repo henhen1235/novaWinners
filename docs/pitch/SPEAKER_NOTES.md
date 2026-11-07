@@ -1,163 +1,236 @@
 # Rehearsal pitch: speaker notes
 
-Deck: open `docs/pitch/index.html` in a browser, press `F` for fullscreen.
-Keys: Right / Space / PageDown next, Left / PageUp back, `1`-`9` jump to a sheet, Home / End.
+Deck: open `docs/pitch/index.html`, press `F` for fullscreen. Right / Space / PageDown next,
+Left / PageUp back, `1`-`8` jump to a slide, Home / End.
 
-Budget: 5:00 total. Slides 3:00, live demo 1:30, buffer 0:30.
-Word counts assume about 150 words a minute. Say the numbers exactly as written.
+Budget: 5:00. Spoken script about 4:30, 0:30 buffer. Slides 5 to 7 carry the demo: either
+the recorded footage in their media slots, or switch to the live viewer for those three
+slides. Word counts assume about 150 words a minute.
 
-| Sheet | Topic | Time | Ends at |
+| Slide | Topic | Time | Ends at |
 |---|---|---|---|
-| 1 | Hook | 0:20 | 0:20 |
-| 2 | Problem | 0:25 | 0:45 |
-| 3 | What Rehearsal does | 0:20 | 1:05 |
-| 4 | Live demo | 1:30 | 2:35 |
-| 5 | Architecture | 0:25 | 3:00 |
-| 6 | Occupant minds | 0:25 | 3:25 |
-| 7 | Adversary vs optimizer | 0:25 | 3:50 |
-| 8 | Accessibility and interviews | 0:25 | 4:15 |
-| 9 | Limits, next, close | 0:15 | 4:30 |
+| 1 | Squirrel Hill fire | 0:25 | 0:25 |
+| 2 | The stakes | 0:25 | 0:50 |
+| 3 | Rehearsal | 0:20 | 1:10 |
+| 4 | How it works | 0:40 | 1:50 |
+| 5 | Tepper (demo) | 0:35 | 2:25 |
+| 6 | Ask why (demo) | 0:40 | 3:05 |
+| 7 | Exit blocked (demo) | 0:45 | 3:50 |
+| 8 | Accessibility, close | 0:40 | 4:30 |
 | | Buffer | 0:30 | 5:00 |
 
-If you are behind at the end of the demo, cut sheet 6 to its first and last sentence.
+If you run long, shorten slide 4 to one sentence per stage and drop the cost line on slide 7.
 
 ---
 
-## 1. Hook (0:20)
+## 1. Squirrel Hill fire (0:25)
 
-"Fire drills test whether people know the drill. They can't test what happens when the
-main exit is locked and someone says the other one is too.
+"On September 9th last year, a fire broke out in Squirrel Hill, just a few miles from here.
+Firefighters evacuated the residents, including people with mobility issues.
 
-What if you could rehearse an evacuation before the alarm is real? That's Rehearsal."
+Every building has an evacuation plan on paper. That night tested whether it worked."
 
-## 2. Problem (0:25)
+## 2. The stakes (0:25)
 
-"Evacuations go wrong on decisions, not walking speed. At the World Trade Center in 2001,
-the median survivor in Tower 1 waited three minutes before starting to leave. At the
-Station nightclub, about two thirds went for the door they came in. And mass panic is
-rare: people wait, finish what they're doing, and believe what they hear.
+"Not every fire ends that way. In 2024 there were about 343,000 residential building fires
+in the U.S., and 2,975 people died in them.
 
-Professional egress tools need days of CAD work and treat behavior as fixed parameters."
+Knowing where the exits are is not the hard part. The hard part is knowing what happens
+when one of them can't be used."
 
-## 3. What Rehearsal does (0:20)
+## 3. Rehearsal (0:20)
 
-"Rehearsal takes an iPhone scan or a building's floor plans and makes a validated 3D model
-in seconds. It runs a drill with AI occupants. Then an adversary agent attacks the
-building, an optimizer agent fixes it, and we measure before and after. People left
-behind are the finding, not a bug."
+"So how do you test an evacuation plan without a real emergency? That's Rehearsal. We turn
+a real building into a simulation, so we can see what happens when something goes wrong,
+and try a fix before anyone needs it."
 
-## 4. Live demo (1:30)
+## 4. How it works (0:40)
 
-Handoff line: "Let me show you instead of telling you." Switch to the viewer window
-(Alt+Tab). URLs are in `out/demo/urls.txt` after `scripts/demo/start.sh`; full script in
-`docs/DEMO.md`.
+"It works in five steps.
 
-**0:00-0:30 Tepper, five floors.** Open the Tepper side-by-side URL (`&view=side`), press
-play, speed 16x.
-"This is Tepper here at CMU, floors 1 to 5, built from its CAD floor plans: 576 rooms,
-915 doors, 29 exits, zero validator errors. Fire on floor 3, 170 occupants moving across
-floors and down stairs."
+First, we bring a building in, either from an iPhone LiDAR scan or from its floor-plan PDFs.
 
-**0:30-1:00 Attacked vs fixed.** Open the compare URL (`&compare=` ... `names=Attacked,Fixed`).
-"Same building, same seed. Left, the adversary locked the busiest exit. Right, the
-optimizer's fix: a key holder, wardens, signage. You can watch where people stall."
+Second, we build a 3D model: rooms, doors, exits, and on multi-floor buildings, stairs.
+Software checks it before anything runs, for example that every room has a way out.
 
-**1:00-1:30 Interview.** Pause, click one occupant, type "Why did you go that way?"
-"Every answer comes only from that occupant's decision log, and the reasons are tested by
-removing them. I'll show you the numbers in a second."
+Third, we simulate the people. Each occupant is an AI that decides what to do from what it
+can see and hear. The simulator handles the actual walking, queuing at doors and stairs.
 
-Return to the deck: press `5`.
+Fourth, the stress test. One AI agent tries to break the building: it blocks an exit or
+starts a fire. A second agent proposes fixes, like wardens or signs, and we re-run.
 
-Which runs are on the laptop: the recorded 36-person LLM hall loop (`loop_hall_*`) and the
-hall scan only exist where `out/loop/demo_hall/` and `samples/scans/hall_mesh/mesh.ply`
-were copied before `setup.sh`. Without them the compare URL uses the offline tiny_office
-loop. Then say "this is an offline run with rule-based occupants; the LLM numbers are on
-the next slides." Never present an offline run as the LLM run.
+Finally, you get replays that show who got out, who didn't, and which fix helped."
 
-### If the demo fails
+Transition: "Here's a real building."
 
-Do not debug on stage. Say "Let me give you the recorded version" and either play
-`out/demo/fallback.mp4` (if recorded) or stay on sheet 4 and narrate, pointing at the
-three moments on the slide (about 45 s, then move on to sheet 5 and use the time saved):
+## 5. Tepper (0:35)
 
-"In the viewer you'd see Tepper at CMU, five floors from its floor plans: 576 rooms, 29
-exits, zero validator errors, with 170 people moving down the stairs. Next, two runs side
-by side: one where the adversary locked the busiest exit, and the optimizer's fix. Then I'd
-click on one person and ask why they went that way. The answer comes only from their
-decision log. The next slides have the measured results from those runs."
+Media slot `tepper`: replay of the Tepper fire in the viewer, floors side by side.
 
-If only the interview fails (no network or API key): "The interview server needs network
-for new questions," and go straight to sheet 8, which has the tested result.
+"This is CMU's Tepper building. We rebuilt five floors straight from CMU's own floor-plan
+PDFs: 633 rooms, 22 exits, 12 stair connections, and the checker found zero errors.
 
-## 5. Architecture (0:25)
+Here a fire starts on the third floor and you can watch people move floor by floor down the
+stairs. Every dot is one person making their own decisions."
 
-"Here's how it works. Three inputs (iPhone LiDAR, CAD floor plans, blueprints) become one
-frozen scene format, and a validator gates everything: zero errors or it doesn't run.
-Geometry is computed, never generated. LLMs never output coordinates. They make
-judgments, and code checks those too. On 30 synthetic scans, door recall is 0.996 and
-median wall error is 6 millimeters. A real 1.67 million triangle scan ingests in 4.8
-seconds."
+If live: open the Tepper side-by-side URL from `out/demo/urls.txt`, press play at 16x.
 
-Point at the green dashed loop: every attack and fix goes back through the same validator.
+## 6. Ask why (0:40)
 
-## 6. Occupant minds (0:25)
+Media slot `interview`: clicking an occupant in the hall run and asking "Why did you go that
+way?" in the interview panel.
 
-"Each occupant is code plus one LLM call. Code computes what research can measure: what
-you can see, what you believe and from whom, how afraid you are. The LLM answers the five
-questions of the Protective Action Decision Model and has to cite evidence ids, which we
-validate. Calibrated this way, their median time to start moving is 63.8 seconds against
-a research target of about 60. And no panic state, on purpose."
+"Each AI occupant decides from what it can actually perceive: the alarm, smoke it can see,
+what people nearby say, which exits it knows about.
 
-## 7. Adversary vs optimizer (0:25)
+So we can click on someone and ask why. The answer can only use what that person saw and
+decided at the time, and we check it. If an occupant says it left because it saw the fire,
+we re-run that moment without the fire. When we did, its choice changed seven times out of
+seven. When we removed a belief it had mentioned, it changed zero times out of seven. So the
+answer tells you which reasons really mattered."
 
-"This is a real scanned hall with 36 LLM occupants. Baseline: 34 of 36 get out. The
-adversary locks the exit 23 people were using, 38.8 percent of the exit width: 15 of 36.
-The optimizer can only pick fixes the code can execute. It unlocks the exit, posts two
-wardens, adds signage: 33 of 36. 400 decisions cost 8.6 cents. Replays are free. Single
-run, seed 42."
+If live: pause the replay, click one occupant, type the question. It needs network and the
+API key; if it hangs, keep talking and move on.
 
-## 8. Accessibility and interviews (0:25)
+## 7. Exit blocked (0:45)
 
-"Averages hide who gets left behind. In Tepper, without an assisted-evacuation plan, 166
-of 170 get out, and three wheelchair users are left waiting at stair refuges on floor 4.
-With a plan, staff carry all three out.
+Media slots `hallBaseline`, `hallAttacked`, `hallFixed`: the three replays of the recorded
+36-occupant hall run, same camera angle.
 
-And you can ask why. When we remove the fire from an occupant's view, its choice flips 7
-times out of 7. Remove a stated belief: 0 out of 7. The answer tells you which reasons
-actually mattered."
+"Now the stress test. This is a real hall we scanned with an iPhone, with 36 AI occupants.
+With every exit open, 34 of 36 get out.
 
-## 9. Close (0:15)
+Then our adversary agent picked the exit that 23 people were using, nearly 40 percent of
+the exit width, and locked it. Only 15 got out.
 
-"Rehearsal is a planning tool, not a certification. Decisions aren't validated against
-real evacuations yet, there's no fire physics, and these are single runs. Next: movement
-verification and many seeds. Scan or plan in. Drill, break, fix, measure. Thank you."
+The optimizer can only choose fixes a building could really make. It sent a key holder to
+reopen the exit, posted two wardens, and added exit signs. Re-run: 33 of 36.
+
+That whole run was 400 AI decisions and cost under 9 cents. It's one run, so we read it as
+a finding, not a guarantee."
+
+## 8. Accessibility, close (0:40)
+
+Media slots `tepperNoPlan`, `tepperPlan`: the two Tepper fire replays, ending on floor 4.
+
+"Averages hide who gets left behind. Back in Tepper, we ran a fire with 173 occupants. This
+run uses simple fixed rules instead of AI, so it's fast and repeatable.
+
+Without an assistance plan, 169 of 173 got out. Three of the four left inside were
+wheelchair users waiting at stair refuges on the fourth floor. With a plan, staff carried
+all three down the stairs: 172 of 173.
+
+That's what Rehearsal is for. It's a planning tool, not a certification. It shows you who a
+building leaves behind, before a night like Squirrel Hill. Thank you."
 
 ---
 
-## Likely judge questions (keep answers to ~20 s)
+## Demo media and fallback
 
-- **How do you know it's right?** Movement uses standard walking speeds and door-flow
-  limits; decision behavior is not validated against real evacuations yet, and we say so.
-  Pre-movement is calibrated to research (63.8 s vs about 60 s). Next step is standard
-  movement test cases and multiple seeds.
-- **Why LLMs instead of rules?** Rules cover what the modeler anticipated. An LLM occupant
-  reacts to content: a rumor, a warden contradicting a sign. Personas are plain text, and
-  every choice cites evidence we can test. Persona explains about 3 times more of the
-  choice than which model plays it (304 calls).
-- **Cost and determinism?** One LLM call per decision, about 0.94 s, $0.086 for the
-  36-person run. Every response is recorded, so replays are exact and cost nothing.
-- **Isn't this just Pathfinder?** Pathfinder is the trusted tool for flow and has published
-  verification. Its non-IFC import needs doors and floors tagged by hand. We go from scan
-  or plan to a validated model in seconds, and add the attack/fix loop and interviews. We
-  don't claim to be first at LLM evacuation agents.
-- **Fire and smoke?** Scheduled blocking events plus a closed-form smoke-clock estimate.
-  No CFD.
-- **Elevators?** Recalled in a fire and not used; occupants may walk to a lobby and turn
-  back. A modeling choice.
-- **Tepper adversary loop?** A 60-occupant LLM run was in progress at submission; do not
-  quote numbers unless `out/loop/demo_tepper/report.md` exists and you have read it.
+The media slots are filled by the `media` object at the bottom of `index.html` (put files in
+`docs/pitch/img/`). Each slot should show the run the slide's numbers come from:
 
-## Claims to avoid
+| Slot | Run | Numbers on the slide |
+|---|---|---|
+| `cover` | Any viewer view of Tepper or the hall | none |
+| `tepper` | Tepper fire, floors side by side | 633 rooms, 22 exits |
+| `interview` | Interview panel on the recorded hall LLM run | none |
+| `hallBaseline`, `hallAttacked`, `hallFixed` | `loop_hall_r0_baseline`, `loop_hall_r1_attack`, `loop_hall_r1_fixed` | 34, 15, 33 of 36 |
+| `tepperNoPlan`, `tepperPlan` | `tepper_fire_noplan`, `tepper_fire_plan` on the current Tepper model | 169 and 172 of 173 |
 
-"First", "validated", "certified", "compliant", "safe", "realistic panic", fire or smoke
-physics, any scale beyond what ran (36 LLM occupants, 170 rule-based occupants).
+Never fill the hall slots with the offline tiny_office loop, and never put the Tepper LLM
+loop footage on slide 8 (that slide's numbers are the rule-based run).
+
+If footage is missing or the live viewer fails, don't apologize or debug. Stay on the slide
+and narrate the result: "In the replay you'd see..." followed by the slide's numbers. The
+script above already works without the video.
+
+---
+
+## Judge Q&A (deeper technical answers, about 20 s each)
+
+**How does a scan become a model?** We find which way is up and snap the walls to their main
+directions, rasterize the scan into a walkable grid, then detect walls, rooms, doors and
+obstacles. A vision model (OWLv2) finds exit signs and removes people who were standing in
+the scan. On 30 synthetic scans with known answers, door recall is 0.996, precision 0.982,
+and median wall error 6 mm, at 2 to 8 seconds per scan. A real 1.67-million-triangle iPhone
+mesh takes 4.8 s. Real hall scan: 19 people removed, 4 exit signs found.
+
+**And floor plans?** CAD-exported PDFs keep their layers. We read room outlines, door symbols
+and stair treads, and set each floor's scale from the printed room areas. Floors are aligned
+and joined at the stairs. LLMs are not used for geometry.
+
+**What gets validated?** One frozen scene format is shared by every input, scenario and fix.
+The validator checks things like every room reaching an exit, door widths in range, and a
+connected walkable mesh. Optimizer fixes are patches that go through the same checks before
+they run. Tepper passes with 0 errors and some warnings (suspected wall gaps, unknown spaces
+near doors) that are shown, not hidden.
+
+**Is the LLM moving the people?** No. The simulator moves everyone on a 0.5-second clock:
+shortest paths on the walkable mesh, door flow limits, stairs, refuges, staff carrying people
+who can't use stairs. The LLM is only asked at decision points: an alarm, smoke, a blocked
+path, a fork, someone needing help. It never outputs coordinates.
+
+**What does the LLM actually see?** Code computes perception (what's in view, what's
+audible), beliefs with a source and confidence, and fear or anxiety from published appraisal
+models. The LLM gets a closed list of options and answers the five questions of the
+Protective Action Decision Model (is it real, do I need to act, what can I do...). It has to
+cite evidence ids, and code checks each id exists and was visible to that person. Bad output
+is repaired once, then a persona rule decides. Every response is recorded, so a replay is
+exact and free.
+
+**Is the behavior realistic?** Not validated against real evacuations yet, and we say so. We
+calibrated delay: our LLM occupants' median time before moving is 63.8 s against a research
+target of about 60 s. There is no "panic" state on purpose; research finds mass panic rare
+and delay common. In a 304-call test, the persona explained about three times more of each
+choice than which model played it.
+
+**How do the adversary and optimizer work?** Both are LLM agents using tool calls, with a
+fixed heuristic fallback. The adversary can block an exit, start a fire, or plant a rumor,
+and must justify the target with numbers from the building analysis or the last run. The
+optimizer picks from seven fixes a facility can do: wardens, signage, a PA announcement,
+unlocking an exit, drilling a familiar exit, widening a door, or an assisted-evacuation plan.
+
+**Cost and speed?** Hall run: 400 decisions, $0.086, about 0.94 s per decision on
+gemini-2.5-flash-lite. Calls run in parallel. Replays cost nothing.
+
+**Did you run the attack and fix loop on Tepper too?** Yes, with 60 AI occupants, single run:
+55 of 60 at baseline, 41 of 60 after an exit block, a classroom fire and a rumor, and 55 of
+60 after the fixes (exit reopened, a PA countering the rumor, one warden). The optimizer did
+not pick the assisted plan, so the three mobility-impaired occupants still waited at refuges.
+That is a reason a person should review the recommendations.
+
+**Is this Pathfinder?** Pathfinder and similar tools are trusted for crowd flow and publish
+verification. They need hours to days of CAD modeling and treat behavior as parameters. We
+don't claim better physics. We add going from a scan or plan to a checked model in seconds,
+occupants you can question, and agents that look for failures and test fixes.
+
+**Fire and smoke?** Scheduled events that block rooms and doors, plus a simple smoke-timing
+estimate. No fire physics. Elevators are recalled in a fire and not used.
+
+## Numbers and where they come from
+
+| Number | Run | Source |
+|---|---|---|
+| 633 rooms, 22 exits, 12 stair links, 0 errors | Tepper model, 5 floors, from floor-plan PDFs | `samples/cmu/tepper/report.md`, `scene.json` |
+| 34, 15, 33 of 36; 400 decisions, $0.086 | Scanned hall, 36 LLM occupants, gemini-2.5-flash-lite, seed 42, single run | `ANDREW_AGENT.md`, `docs/pitch/RESEARCH.md` |
+| Exit used by 23 people, 38.8% of exit width | Same hall run, adversary's cited reason | same |
+| 169 and 172 of 173 | Tepper fire, rule-based occupants, seed 42, single run | `ANDREW_AGENT.md` section 7, `docs/pitch/RESEARCH.md` |
+| 7 of 7 vs 0 of 7 | Interview re-runs: fire percept removed vs stated belief removed | `README.md` |
+| 63.8 s vs about 60 s | LLM pre-movement median | `README.md` |
+| 343,000 fires, 2,975 deaths | U.S. residential building fires, 2024 | Team-supplied; see below |
+
+## Still to verify before judging
+
+- Slide 2 statistics (343,000 fires, 2,975 deaths, 2024) are not in the repo. Confirm the
+  source (likely NFPA or USFA) and that the deaths figure covers the same category.
+- The 173-occupant Tepper run: `sim/examples/tepper_fire.json` in the repo spawns 170
+  occupants, so the 169/173 and 172/173 run (Karthik, after the Tepper reader fixes) came from
+  a scenario not committed here. Make sure the `tepperNoPlan` and `tepperPlan` footage is
+  from that same run, or change the numbers to match the footage.
+- "Five floors": the model covers floors 1 to 5. Don't say "all floors" unless confirmed.
+- Hall adversary: the docs don't say whether the recorded hall attack came from the LLM
+  adversary or its heuristic fallback. The slide says "adversary agent", which is true
+  either way; check `out/loop/demo_hall/report.md` before saying "the AI chose".
+- Squirrel Hill details beyond the slide (building, cause, injuries) are not in the repo;
+  say only what is on the slide.
