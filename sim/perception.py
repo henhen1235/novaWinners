@@ -141,8 +141,10 @@ def _options(sim: "Sim", a: "Agent", tri: int, movers: list["Agent"]) -> list[di
     for eid in exits:
         route = sim.world.route_m(eid, tri)
         if np.isfinite(route):
+            cost = sim.world.route_cost(eid, tri)
             out.append({"action": "EVACUATE", "exit": eid, "label": sim.world.exits[eid].label,
-                        "route_m": round(route, 1), "queue_s": _queue_s(sim, eid)})
+                        "route_m": round(route, 1), "queue_s": _queue_s(sim, eid),
+                        "through_hazard": bool(cost > route * 1.05 + 0.5)})
     if not sim.omniscient:
         lead = min((b for b in movers if b.target_exit), default=None,
                    key=lambda b: float(np.linalg.norm(sim.pos[b.row] - sim.pos[a.row])))

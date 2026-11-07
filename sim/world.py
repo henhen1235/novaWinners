@@ -126,11 +126,30 @@ class World:
     # ---- routing ---------------------------------------------------------
     def refresh_fields(self) -> None:
         """Recompute every exit's cost-to-go field from the current triangle multipliers."""
-        self.fields = {eid: self.nav.distance_field(ex.seed_tri) for eid, ex in self.exits.items()}
+        self.fields = {}
+        self.lengths: dict[str, np.ndarray] = {}
+        for eid, ex in self.exits.items():
+            cost, nxt = self.nav.distance_field(ex.seed_tri)
+            self.fields[eid] = (cost, nxt)
+            self.lengths[eid] = self._walk_length(cost, nxt)
+
+    def _walk_length(self, cost: np.ndarray, nxt: np.ndarray) -> np.ndarray:
+        """Meters along the cost-optimal tree (centroid to centroid), inf where unreachable."""
+        length = np.full(len(cost), INF)
+        for t in np.argsort(cost, kind="stable"):
+            if not np.isfinite(cost[t]):
+                break
+            n = nxt[t]
+            length[t] = 0.0 if n < 0 else length[n] + float(np.linalg.norm(self.nav.centroids[t] - self.nav.centroids[n]))
+        return length
+
+    def route_cost(self, exit_id: str, tri: int) -> float:
+        """Hazard-weighted route cost (m-equivalent) from triangle `tri` to the exit (inf if cut off)."""
+        return float(self.fields[exit_id][0][tri])
 
     def route_m(self, exit_id: str, tri: int) -> float:
-        """Cost-weighted route length in m from triangle `tri` to the exit (inf if cut off)."""
-        return float(self.fields[exit_id][0][tri])
+        """Walking length in m of the preferred route from `tri` to the exit (inf if cut off)."""
+        return float(self.lengths[exit_id][tri])
 
     def path_to_exit(self, pos: np.ndarray, tri: int, exit_id: str) -> list[np.ndarray] | None:
         """Funnel waypoints from pos to the exit goal, or None when unreachable."""

@@ -81,7 +81,8 @@ def _pick_exit(view: dict, blocked: set[str]) -> dict | None:
 
     def score(o: dict) -> float:
         bonus = FAMILIAR_BONUS_S if o["exit"] == a.get("entry_exit") and a["persona"] != "staff" else 0.0
-        return o["route_m"] / speed + o.get("queue_s", 0.0) - bonus
+        hazard_s = 60.0 if o.get("through_hazard") else 0.0
+        return o["route_m"] / speed + o.get("queue_s", 0.0) + hazard_s - bonus
 
     return min(pool, key=score) if pool else None
 
