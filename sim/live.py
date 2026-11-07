@@ -105,6 +105,19 @@ class AsyncDecisions:
     def about_to_miss(self, tick: int) -> list[Future]:
         return [f for f, _, _, req in self.waiting if not f.done() and tick + 1 - req >= self.deadline]
 
+    def stall(self, tick: int, timeout: float) -> float:
+        """Wait (at most timeout s) for answers that would miss their deadline next tick; returns s waited."""
+        late = self.about_to_miss(tick)
+        if not late:
+            return 0.0
+        from concurrent.futures import wait
+        t0 = time.perf_counter()
+        wait(late, timeout=timeout)
+        return time.perf_counter() - t0
+
+    def pending(self) -> int:
+        return len(self.waiting)
+
     def summary(self) -> dict:
         lat = sorted(self.stats["latency_s"])
         n = self.stats["requested"] or 1
@@ -115,6 +128,82 @@ class AsyncDecisions:
 
     def close(self) -> None:
         self.pool.shutdown(wait=False, cancel_futures=True)
+
+
+class CognitionLive:
+    """cognition.live.Live behind the AsyncDecisions interface: non-blocking submit, poll, deadline expire.
+
+    Also prefetches the landing decision for people within PREFETCH_S of the end of a stair flight.
+    """
+
+    PREFETCH_S = 2.0
+
+    def __init__(self, deadline_ticks: int = DEADLINE_TICKS, max_in_flight: int = 24) -> None:
+        from cognition.live import Live
+        self.live = Live(batching=False, max_in_flight=max_in_flight)
+        self.deadline = deadline_ticks
+        self.waiting: dict[str, tuple[object, dict, int, float]] = {}
+        self.stats = {"requested": 0, "applied": 0, "fallback_deadline": 0, "errors": 0, "prefetched": 0,
+                      "latency_s": []}
+
+    def submit(self, sim: Sim, agents: list, views: list[dict]) -> None:
+        t0 = time.perf_counter()
+        for h, a, v in zip(self.live.submit(views), agents, views):
+            self.waiting[h] = (a, v, sim.tick, t0)
+            self.stats["requested"] += 1
+
+    @staticmethod
+    def _res(r: dict) -> dict:
+        return {k: r[k] for k in ("choice", "say", "record", "pace") if k in r}
+
+    def poll(self, sim: Sim) -> None:
+        now = time.perf_counter()
+        for r in self.live.poll():
+            item = self.waiting.pop(r["handle"], None)
+            if item is None:
+                continue
+            a, view, req, t0 = item
+            self.stats["latency_s"].append(now - t0)
+            sim.finish_async(a, view, self._res(r), req)
+            self.stats["applied"] += 1
+        for h, (a, view, req, _) in list(self.waiting.items()):
+            if sim.tick - req >= self.deadline:
+                self.waiting.pop(h)
+                sim.finish_async(a, view, self._res(self.live.expire(h, view)), req, status="fallback_deadline")
+                self.stats["fallback_deadline"] += 1
+        self._prefetch(sim)
+
+    def _prefetch(self, sim: Sim) -> None:
+        from sim import perception
+        from sim.pace import stair_pace_speed
+        for a in sim.active():
+            st = a.stair
+            if st is None or st.get("prefetched"):
+                continue
+            left_s = (st["link"].length_m - st["prog"]) / max(stair_pace_speed(a, st["link"].down), 0.1)
+            if left_s <= self.PREFETCH_S:
+                st["prefetched"] = True
+                v = perception.build_view(sim, a)
+                v["trigger"] = {"kind": "level_reached", "ref": sim.world.nav.level_ids[st["link"].b_lv]}
+                v["prefetch"] = True
+                self.live.submit([v])
+                self.stats["prefetched"] += 1
+
+    def stall(self, tick: int, timeout: float) -> float:
+        late = [h for h, (_, _, req, _) in self.waiting.items() if tick + 1 - req >= self.deadline]
+        if not late:
+            return 0.0
+        t0 = time.perf_counter()
+        time.sleep(min(timeout, 0.25))  # answers land in Live's queue; the next poll picks them up
+        return time.perf_counter() - t0
+
+    def pending(self) -> int:
+        return len(self.waiting)
+
+    summary = AsyncDecisions.summary
+
+    def close(self) -> None:
+        self.live.close()
 
 
 class Pacer:
@@ -132,18 +221,9 @@ class Pacer:
     def wait(self, sim: Sim) -> float:
         """Sleep until the next tick is due (and briefly for answers near their deadline); returns warp."""
         if sim.async_dec is not None:
-            late = sim.async_dec.about_to_miss(sim.tick)
-            if late:
-                t0 = time.perf_counter()
-                for f in late:
-                    f_timeout = MAX_STALL_S - (time.perf_counter() - t0)
-                    if f_timeout <= 0:
-                        break
-                    try:
-                        f.exception(timeout=f_timeout)
-                    except Exception:  # timeout or cancelled: the deadline fallback handles it
-                        break
-                self.stalled_s += time.perf_counter() - t0
+            waited = sim.async_dec.stall(sim.tick, MAX_STALL_S)
+            if waited:
+                self.stalled_s += waited
                 self.reset(sim.t)
         due = self.t_wall0 + (sim.t + DT - self.sim_t0) / max(self.speed, 1e-3)
         now = time.perf_counter()

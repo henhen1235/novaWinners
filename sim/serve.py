@@ -22,7 +22,7 @@ import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from sim.engine import DT, Sim
-from sim.live import MAX_STALL_S, AsyncDecisions, branch
+from sim.live import MAX_STALL_S, AsyncDecisions, CognitionLive, branch
 from sim.output import write_run
 
 log = logging.getLogger("sim")
@@ -54,16 +54,22 @@ def _load(ref: str | dict) -> dict:
 
 
 def _decider(name: str, no_llm: bool, run_id: str):
-    """(decide, async?) for 'policy' (rule-based, synchronous) or 'cognition' (async thread pool)."""
+    """(decide, async maker or None): 'policy' is the synchronous rule policy; 'cognition' uses
+    cognition.live.Live (non-blocking) when present, else cognition.decide in a thread pool."""
     if name == "cognition":
         try:
             import cognition
             cognition.configure(offline=no_llm, run_id=run_id)
-            return cognition.decide, True
         except ImportError as exc:
             log.warning("cognition unavailable (%s); rule policy used", exc)
+        else:
+            try:
+                import cognition.live  # noqa: F401
+                return cognition.decide, CognitionLive
+            except ImportError:
+                return cognition.decide, lambda: AsyncDecisions(cognition.decide)
     from sim.policy import decide
-    return decide, False
+    return decide, None
 
 
 class Session:
@@ -88,14 +94,14 @@ class Session:
 
     def _new_sim(self, records: list[dict] | None = None, t: float = 0.0) -> Sim:
         run_id = f"{self.id}_b{self.branch_n}"
-        decide, is_async = _decider(self.decide_name, self.no_llm, run_id)
+        decide, make_async = _decider(self.decide_name, self.no_llm, run_id)
         if records is not None:
             sim = branch(self.scene, self.scenario, self.seed, records, t, decider=decide, run_id=run_id,
                          history=self.edits)
         else:
             sim = Sim(self.scene, self.scenario, self.seed, decide, run_id=run_id)
-        if is_async:
-            sim.async_dec = AsyncDecisions(decide)
+        if make_async is not None:
+            sim.async_dec = make_async()
         return sim
 
     # ---- control messages ------------------------------------------------
@@ -173,26 +179,21 @@ class Session:
         return {"type": "status", "t": self.sim.t, "tick": self.sim.tick, "speed": self.speed, "warp": warp,
                 "paused": self.paused, "ticks_per_s": round(tps, 2), "decisions": len(self.sim.records),
                 "evacuated": sum(a.exit_t is not None for a in self.sim.agents), "total": len(self.sim.agents),
-                "async": ad.summary() if ad else None, "pending": len(ad.waiting) if ad else 0}
+                "async": ad.summary() if ad else None, "pending": ad.pending() if ad else 0}
 
 
-async def _stall_for_late(sess: Session) -> None:
+async def _stall_for_late(sess: Session) -> float:
+    """Slow the clock (instead of dropping answers) when decisions are about to miss their deadline."""
     ad = sess.sim.async_dec
-    late = ad.about_to_miss(sess.sim.tick) if ad else []
-    if late:
-        await asyncio.to_thread(_wait_any, late, MAX_STALL_S)
-
-
-def _wait_any(futs: list, timeout: float) -> None:
-    from concurrent.futures import wait
-    wait(futs, timeout=timeout)
+    return await asyncio.to_thread(ad.stall, sess.sim.tick, MAX_STALL_S) if ad else 0.0
 
 
 async def run_session(sess: Session) -> None:
     """Paced tick loop: apply queued control messages between ticks, stream, keep about `speed` x real time."""
     await sess.send_meta()
     await sess.send_updates(frame=True)
-    wall0, sim0, last_frame, last_status, ticks, t_rate = time.perf_counter(), sess.sim.t, 0.0, 0.0, 0, time.perf_counter()
+    wall0, sim0, last_frame, ticks, t_rate = time.perf_counter(), sess.sim.t, 0.0, 0, time.perf_counter()
+    last_status, status_sim_t = time.perf_counter(), sess.sim.t
     warp = sess.speed
     while not sess.ended:
         while sess.queue:
@@ -227,7 +228,8 @@ async def run_session(sess: Session) -> None:
                 await sess.ws.send_json({"type": "finished", "t": sess.sim.t})
             await asyncio.sleep(0.05)
             continue
-        await _stall_for_late(sess)
+        if await _stall_for_late(sess):
+            wall0, sim0 = time.perf_counter(), sess.sim.t
         await asyncio.to_thread(sess.sim.advance)
         ticks += 1
         now = time.perf_counter()
@@ -237,11 +239,11 @@ async def run_session(sess: Session) -> None:
         due = wall0 + (sess.sim.t - sim0) / sess.speed
         if due > now:
             await asyncio.sleep(due - now)
-        wall = time.perf_counter() - wall0
-        warp = round((sess.sim.t - sim0) / wall, 2) if wall > 0 else sess.speed
-        if now - last_status >= STATUS_EVERY_S:
+        now = time.perf_counter()
+        if now - last_status >= STATUS_EVERY_S:  # warp: sim seconds per wall second over the last window
+            warp = round((sess.sim.t - status_sim_t) / (now - last_status), 2)
             await sess.ws.send_json(sess.status(warp, ticks / max(now - t_rate, 1e-6)))
-            last_status, ticks, t_rate = now, 0, now
+            last_status, status_sim_t, ticks, t_rate = now, sess.sim.t, 0, now
 
 
 @app.get("/health")

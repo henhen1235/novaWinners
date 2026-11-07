@@ -149,8 +149,10 @@ and `Sim.add_occupants` (scenario-schema occupant groups, optional `"traits": {"
 "premove_s": 30, ...}` overriding the draws; they notice the alarm after their own notice delay from
 the moment they appear; event "spawned") work on any Sim between ticks.
 
-Async decisions: `sim.async_dec = AsyncDecisions(decide)` sends each decide(view) to a thread pool
-(24 workers); an answer applies at the first tick after it returns, within 4 ticks (2 s). Otherwise
+Async decisions: with `decide: "cognition"` the server uses cognition.live.Live (non-blocking
+async HTTP; `CognitionLive` adapter, which also prefetches the landing decision 2 s before the end
+of a stair flight); otherwise `sim.async_dec = AsyncDecisions(decide)` sends each decide(view) to a
+thread pool (24 workers); an answer applies at the first tick after it returns, within 4 ticks (2 s). Otherwise
 the rule policy applies and the record's validation.status is "fallback_deadline"; late answers
 are dropped. Records keep the request tick and the real apply_tick, so a branch replays them exactly.
 
