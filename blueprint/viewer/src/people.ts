@@ -47,6 +47,29 @@ function merge(parts: THREE.BufferGeometry[]) {
   return mergeGeometries(parts.map(flat), false)!;
 }
 
+function personTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 64;
+  const g = canvas.getContext("2d")!;
+  g.clearRect(0, 0, 64, 64);
+  g.fillStyle = "#fff";
+  g.beginPath();
+  g.arc(32, 12, 8, 0, Math.PI * 2);
+  g.fill();
+  g.fillRect(27, 21, 10, 16);
+  g.fillRect(16, 23, 10, 5);
+  g.fillRect(38, 23, 10, 5);
+  g.fillRect(27, 37, 4, 18);
+  g.fillRect(33, 37, 4, 18);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function personPlane() {
+  return new THREE.PlaneGeometry(0.7, 1.6).translate(0, 0.8, 0);
+}
+
 function bodyGeometry() {
   return merge([
     new THREE.BoxGeometry(0.13, 0.8, 0.13).translate(0, 0.4, 0.09),
@@ -102,6 +125,7 @@ export interface AgentSample {
   state: string;
   moving: boolean;
   fear: number; // 0..1, NaN when unknown
+  speed: number; // m/s, 0 when unknown
   fill: THREE.Color;
   ring: THREE.Color;
   phase: number; // per-agent walk phase
@@ -138,7 +162,7 @@ export class People {
     this.worldPositions = new Float32Array(this.count * 3).fill(NaN);
     this.samples = new Array(this.count).fill(null);
     this.slots = Array.from({ length: this.count }, () => ({
-      level: "", x: 0, z: 0, world: new THREE.Vector3(), heading: 0, state: "", moving: false, fear: NaN, fill: new THREE.Color(), ring: new THREE.Color(), phase: 0,
+      level: "", x: 0, z: 0, world: new THREE.Vector3(), heading: 0, state: "", moving: false, fear: NaN, speed: 0, fill: new THREE.Color(), ring: new THREE.Color(), phase: 0,
     }));
     this.hazard = context.token("hazard-bright");
     this.calm = context.token("drafting");
@@ -150,6 +174,7 @@ export class People {
     this.add("ring", new THREE.RingGeometry(0.75, 0.95, 24).rotateX(-Math.PI / 2).translate(0, 0.05, 0), basic({ side: THREE.DoubleSide }));
     this.add("refuge", dashedRing(), basic({ color: context.token("warn"), side: THREE.DoubleSide }));
     this.add("fear", new THREE.RingGeometry(0.42, 0.58, 24).rotateX(-Math.PI / 2).translate(0, 0.04, 0), basic({ side: THREE.DoubleSide, transparent: true, opacity: 0.85, depthWrite: false }));
+    this.add("figure", personPlane(), basic({ map: personTexture(), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }));
     this.add("body", bodyGeometry(), lit());
     this.add("vest", new THREE.CylinderGeometry(0.175, 0.212, 0.42, 6).translate(0, 1.16, 0), lit({ color: VEST }));
     this.add("chair", wheelchairGeometry(), lit({ color: context.token("line-strong") }));
@@ -171,6 +196,9 @@ export class People {
     const mesh = new THREE.InstancedMesh(geometry, material, this.count);
     mesh.frustumCulled = false;
     mesh.raycast = () => {};
+    mesh.renderOrder = 30;
+    material.depthTest = false;
+    material.depthWrite = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let k = 0; k < this.count; k += 1) mesh.setMatrixAt(k, this.hidden);
     mesh.setColorAt(0, new THREE.Color(1, 1, 1));
@@ -216,20 +244,18 @@ export class People {
     for (const heat of this.heats.values()) heat.mesh.visible = visible && this.lod === "far";
   }
 
-  /** Start a frame: pick the level of detail from the zoom. */
+  /** Start a frame. People stay 3D at every zoom so a stacked building cannot hide them as dots. */
   begin(pxPerMeter: number) {
-    this.lod = lodFor(pxPerMeter);
-    const far = this.lod === "far";
-    const mid = this.lod === "mid";
-    const near = this.lod === "near";
-    this.meshes.dot.visible = far;
-    this.meshes.chevron.visible = mid;
-    this.meshes.ring.visible = !far;
-    this.meshes.refuge.visible = !far;
-    for (const name of ["body", "vest", "chair", "child", "fear"]) this.meshes[name].visible = near;
-    this.meshes.fly.visible = !far;
-    for (const heat of this.heats.values()) heat.mesh.visible = far && this.root.visible;
+    this.lod = "near";
     this.pxPerMeter = pxPerMeter;
+    this.meshes.dot.visible = false;
+    this.meshes.ghost.visible = false;
+    this.meshes.chevron.visible = false;
+    this.meshes.figure.visible = true;
+    this.meshes.ring.visible = true;
+    this.meshes.refuge.visible = true;
+    for (const name of ["body", "vest", "chair", "child", "fear", "fly"]) this.meshes[name].visible = false;
+    for (const heat of this.heats.values()) heat.mesh.visible = false;
     this.linkPositions.length = 0;
   }
 
@@ -249,76 +275,41 @@ export class People {
     if (exited) this.samples[k] = null;
     else {
       const slot = this.slots[k];
-      Object.assign(slot, { level: a.level, x: a.x, z: a.z, heading: a.heading, state: a.state, moving: a.moving, fear: a.fear, phase: a.phase });
+      Object.assign(slot, { level: a.level, x: a.x, z: a.z, heading: a.heading, state: a.state, moving: a.moving, fear: a.fear, speed: a.speed, phase: a.phase });
       slot.world.copy(a.world);
       this.samples[k] = slot;
     }
     if (exited) {
       this.worldPositions[k * 3] = NaN;
-      this.s.setScalar(Math.max(0.2, (DOT_PX * 0.8) / px));
-      this.m.compose(a.world, this.q.identity(), this.s);
-      this.meshes.ghost.setMatrixAt(k, this.m);
       return;
     }
-    a.world.toArray(this.worldPositions, k * 3);
     this.q.setFromAxisAngle(this.up, a.heading);
-    const isFly = persona === "fruit_fly";
-    if (this.lod === "far") {
-      this.s.setScalar(Math.max(0.25, DOT_PX / px));
-      this.m.compose(a.world, this.q, this.s);
-      this.meshes.dot.setMatrixAt(k, this.m);
-      this.meshes.dot.setColorAt(k, a.fill);
-      return;
-    }
-    const size = this.lod === "mid" ? Math.max(0.9, CHEVRON_PX / px) : 0.6;
-    // Rings say what state someone is in: amber pulse while deciding, dashed while held at a refuge.
+    const isFly = persona === "fruit_fly" || persona === "fruit_fly_scrambled" || persona === "fly";
+    // A person is about 1.7 m tall. Grow the figure when the camera is far so it stays clickable,
+    // and stand it just above the slab so a floor plate cannot cover the feet.
+    const figure = Math.max(0.9, Math.min(2.2, 26 / Math.max(px, 0.6) / 1.6));
+    this.p.copy(a.world);
+    this.p.y += 0.35;
+    this.p.toArray(this.worldPositions, k * 3);
+    const size = 0.55 * figure;
     const pulse = a.state === "deciding" ? 1 + 0.25 * Math.sin(now / 130) : 1;
     this.s.setScalar(size * pulse);
-    this.m.compose(a.world, this.q, this.s);
+    this.m.compose(this.p, this.q, this.s);
     if (a.state === "waiting_at_refuge") this.meshes.refuge.setMatrixAt(k, this.m);
     else {
       this.meshes.ring.setMatrixAt(k, this.m);
       this.meshes.ring.setColorAt(k, a.ring);
     }
-    if (isFly) {
-      this.s.setScalar(this.lod === "mid" ? size * 1.6 : FLY_SCALE * 0.5);
-      this.p.copy(a.world);
-      this.p.y += Math.sin(now / 90 + a.phase) * 0.05;
-      this.m.compose(this.p, this.q, this.s);
-      this.meshes.fly.setMatrixAt(k, this.m);
-      return;
-    }
-    if (this.lod === "mid") {
-      this.s.setScalar(size);
-      this.m.compose(a.world, this.q, this.s);
-      this.meshes.chevron.setMatrixAt(k, this.m);
-      this.meshes.chevron.setColorAt(k, a.fill);
-      return;
-    }
-    // Near: a figure that bobs as it walks; people in wheelchairs sit lower and do not bob.
-    const seated = persona === "mobility_impaired" || a.state === "carried";
-    this.p.copy(a.world);
-    if (a.moving && !seated) this.p.y += Math.abs(Math.sin(now / 160 + a.phase)) * 0.06;
-    this.s.set(1, seated ? 0.78 : 1, 1);
-    if (seated) this.p.y += 0.12;
+    // Face the camera so a top-down plan still shows a person, not a dot.
+    const pace = Math.max(0.4, a.speed || 1.2);
+    const bob = a.moving ? Math.abs(Math.sin(now / (200 / pace) + a.phase)) * 0.08 * figure : 0;
+    this.p.y += bob;
+    this.q.copy(this.context.camera.quaternion);
+    const tall = persona === "child" ? 0.62 : persona === "mobility_impaired" ? 0.72 : 1;
+    this.s.set(figure * (isFly ? 0.45 : 1), figure * tall, 1);
     this.m.compose(this.p, this.q, this.s);
-    this.meshes.body.setMatrixAt(k, this.m);
-    this.meshes.body.setColorAt(k, a.fill);
-    if (persona === "staff") this.meshes.vest.setMatrixAt(k, this.m);
-    if (persona === "parent_with_child") {
-      this.meshes.child.setMatrixAt(k, this.m);
-      this.meshes.child.setColorAt(k, a.fill);
-    }
-    if (seated) {
-      this.m.compose(a.world, this.q, this.s.setScalar(1));
-      this.meshes.chair.setMatrixAt(k, this.m);
-    }
-    if (a.fear >= 0.2) {
-      this.s.setScalar(0.8 + a.fear * 0.6);
-      this.m.compose(a.world, this.q, this.s);
-      this.meshes.fear.setMatrixAt(k, this.m);
-      this.meshes.fear.setColorAt(k, this.c.copy(this.calm).lerp(this.hazard, Math.min(1, a.fear * 1.4)));
-    }
+    this.meshes.figure.setMatrixAt(k, this.m);
+    this.meshes.figure.setColorAt(k, a.fill);
   }
 
   /** Finish a frame: upload instances, pair carriers with the people they carry, refresh the heat layer. */

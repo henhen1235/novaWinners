@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import type { CSS2DObject } from "three/addons/renderers/CSS2DRenderer.js";
 import type { ViewerContext } from "./context";
-import { openInterview, updateInterview, type DecisionRecord } from "./interview";
+import { openInterview, refreshInterview, updateInterview, type DecisionRecord } from "./interview";
 import { People, type AgentSample } from "./people";
 import { parseFrames, type ParsedFrames } from "./frames";
 import { agentNames, clockText, personaName, scenarioName } from "./names";
@@ -11,7 +11,7 @@ import { agentNames, clockText, personaName, scenarioName } from "./names";
 export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: string; text?: string };
 export type ReplayDoc = {
   meta: { dt: number; duration_s: number; llm_calls?: number; cost_usd?: number; label?: string; run_id?: string; scenario?: string; seed?: number };
-  agents: { id: string; persona: string; model?: string; color?: string }[];
+  agents: { id: string; persona: string; model?: string; color?: string; speed?: number }[];
   // The 5th element is the level id; older replays have 4 elements (first level).
   frames: { t: number; a: [string, number, number, string, string?][] }[];
   events: ReplayEvent[];
@@ -47,6 +47,8 @@ export interface LiveHooks {
 
 export interface PlayerHandle {
   addEvents: (run: Run, events: ReplayEvent[]) => void;
+  setCalls: (run: Run, calls: number, cost: number, errors: number) => void;
+  noteDecisions: (run: Run, records: DecisionRecord[]) => void;
 }
 
 // Live frames are shown this far behind the newest one so positions can be interpolated.
@@ -217,12 +219,9 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     addExitCounts(context, run);
   });
   runs[0].root.add(runs[0].labels);
-  // In stacked and exploded views people draw over every floor so the ghosted floors never hide them.
-  const onTop = (view: string) => {
-    const xray = view === "stacked" || view === "exploded";
-    for (const run of runs) {
-      run.people.setOnTop(xray);
-    }
+  // People draw over the building in every view. A floor plate above them must not clip the figure.
+  const onTop = (_view: string) => {
+    for (const run of runs) run.people.setOnTop(true);
   };
   onTop(context.view());
   let started = false; // the split below re-lays out the stage before the clock exists
@@ -241,7 +240,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   const fireKinds = new Set(["fire", "fire_spread", "smoke"]);
   if (runs.some((run) => run.doc.events.some((event) => fireKinds.has(event.kind)))) context.setElevatorsRecalled(true);
   let duration = Math.max(...runs.map((run) => run.doc.meta.duration_s ?? run.doc.frames[run.doc.frames.length - 1]?.t ?? 0));
-  const clock = { t: 0, playing: false, speed: 1, colorBy: "state" as "state" | "persona", last: 0 };
+  const clock = { t: 0, playing: false, speed: 1, colorBy: "persona" as "state" | "persona", last: 0 };
 
   const personaColors = new Map<string, THREE.Color>();
   for (const run of runs) {
@@ -274,7 +273,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   const p0 = new THREE.Vector3();
   const p1 = new THREE.Vector3();
   const sample: AgentSample = {
-    level: "", x: 0, z: 0, world: p0, heading: 0, state: "", moving: false, fear: NaN, fill: new THREE.Color(), ring: new THREE.Color(), phase: 0,
+    level: "", x: 0, z: 0, world: p0, heading: 0, state: "", moving: false, fear: NaN, speed: 0, fill: new THREE.Color(), ring: new THREE.Color(), phase: 0,
   };
   const fearAt = (run: Run, k: number, t: number) => {
     const series = run.fear[k];
@@ -351,6 +350,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       sample.state = state;
       sample.moving = moving;
       sample.fear = fearAt(run, k, t);
+      sample.speed = agent.speed ?? 0;
       sample.phase = k * 1.7;
       const persona = personaColors.get(agent.persona) ?? stateColor("");
       sample.fill.copy(clock.colorBy === "state" ? stateColor(state) : persona);
@@ -478,6 +478,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   const nameOf = (run: Run, id: string | undefined) => (id && names.get(run)!.get(id)) || id || "";
   const totals: HTMLElement[] = [];
   const outcomes: HTMLElement[] = [];
+  const callouts: HTMLElement[] = [];
   const counters = runs.map((run) => {
     const column = document.createElement("div");
     column.className = "counter";
@@ -498,12 +499,11 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     now.append("Now: ", value);
     column.append(outcome, last, now);
     const calls = run.doc.meta.llm_calls ?? 0;
-    if (calls) {
-      const cost = document.createElement("p");
-      cost.className = "counter-caption";
-      cost.textContent = `${calls} model calls, $${(run.doc.meta.cost_usd ?? 0).toFixed(2)}`;
-      column.append(cost);
-    }
+    const cost = document.createElement("p");
+    cost.className = "counter-caption";
+    cost.textContent = calls ? `${calls} model calls, $${(run.doc.meta.cost_usd ?? 0).toFixed(4)}` : "No model calls";
+    callouts.push(cost);
+    column.append(cost);
     $("#counters").append(column);
     return value;
   });
@@ -772,10 +772,14 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     refresh();
   });
 
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-color]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.color === "persona"));
+  }
   drawLegend();
   started = true;
   refresh(true);
   if (new URLSearchParams(location.search).has("autoplay")) setPlaying(true);
+
   return {
     addEvents(run, events) {
       for (const source of events) {
@@ -789,6 +793,32 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
         $("#feed").append(item.element);
       }
       shown = -1; // re-evaluate visibility on the next refresh
+    },
+    setCalls(run, calls, cost, errors) {
+      const i = runs.indexOf(run);
+      if (i < 0) return;
+      run.doc.meta.llm_calls = calls;
+      run.doc.meta.cost_usd = cost;
+      const line = callouts[i];
+      if (!line) return;
+      if (calls > 0) line.textContent = `${calls} model calls, $${cost.toFixed(4)}`;
+      else if (errors > 0) line.textContent = `Model calls failing (${errors})`;
+      else line.textContent = "No model calls";
+    },
+    noteDecisions(run, records) {
+      const index = new Map(run.doc.agents.map((agent, i) => [agent.id, i]));
+      for (const record of records) {
+        run.decisions.push(record);
+        const who = run.doc.agents.find((agent) => agent.id === record.agent_id);
+        if (who && record.model?.includes("/")) who.model = record.model;
+        const k = index.get(record.agent_id);
+        const fear = record.emotion?.fear;
+        if (k === undefined || typeof fear !== "number") continue;
+        run.fear[k] ??= { t: [], v: [] };
+        run.fear[k].t.push(record.t_s);
+        run.fear[k].v.push(fear);
+      }
+      refreshInterview();
     },
   };
 }

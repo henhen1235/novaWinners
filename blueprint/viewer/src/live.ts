@@ -5,7 +5,7 @@
 import type { ViewerContext } from "./context";
 import { buildRun, play, type PlayerHandle, type ReplayDoc, type ReplayEvent, type Run } from "./replay";
 import { People } from "./people";
-import { getDraft } from "./edit";
+import { clearPlacedPeople, getDraft, type Occupant } from "./edit";
 
 type Meta = {
   type: "meta";
@@ -15,13 +15,14 @@ type Meta = {
   duration_s: number;
   levels: string[];
   states: string[];
-  agents: { index: number; id: string; persona: string; model?: string; color?: string }[];
+  agents: { index: number; id: string; persona: string; model?: string; color?: string; speed?: number }[];
 };
 type Message =
   | Meta
   | { type: "agents"; agents: Meta["agents"] }
   | { type: "events"; events: ReplayEvent[] }
-  | { type: "status"; t: number; speed?: number; warp?: number; paused?: boolean; pending?: number; evacuated?: number; total?: number; decisions?: number }
+  | { type: "status"; t: number; speed?: number; warp?: number; paused?: boolean; pending?: number; evacuated?: number; total?: number; decisions?: number; llm_calls?: number; cost_usd?: number; model_errors?: number }
+  | { type: "log"; records: import("./interview").DecisionRecord[] }
   | { type: "edit_ok" }
   | { type: "error"; for?: string; errors?: unknown }
   | { type: "finished" }
@@ -179,10 +180,9 @@ export function startLive(context: ViewerContext, target: string | null) {
 
   const url = target === "" ? "ws://127.0.0.1:8790/ws" : target;
   const mock = url === "mock";
-  const socket: Socket = mock ? new MockServer(params.get("mock") ?? "/replays/tepper_alarm/replay.json", levelIds) : (new WebSocket(url) as unknown as Socket);
-  if (!mock) (socket as unknown as WebSocket).binaryType = "arraybuffer";
+  let socket: Socket = { send() {}, close() {}, onmessage: null, onopen: null, onclose: null, readyState: 0 };
   const send = (message: object) => socket.readyState === 1 && socket.send(JSON.stringify(message));
-  status.textContent = mock ? "Connecting to the stand-in server" : `Connecting to ${url}`;
+  status.textContent = "Connecting";
 
   let meta: Meta | null = null;
   let run: Run | null = null;
@@ -193,35 +193,112 @@ export function startLive(context: ViewerContext, target: string | null) {
   const personas: string[] = [];
   const CAPACITY_HEADROOM = 200; // people added during the run
 
-  socket.onopen = () => {
-    status.textContent = mock ? "Stand-in server ready (streams a recorded run)" : "Connected to sim.serve";
-    startButton.disabled = false;
-  };
-  socket.onclose = () => {
-    status.textContent = "Disconnected";
-    startButton.disabled = true;
-  };
+  let pendingStart = false;
+
+  // Used only when the sidebar has not placed anyone. Same rooms as sim/examples/tepper_fire.json.
+  const TEPPER_OCCUPANTS = [
+    { where: { room: "r_5254" }, count: 20, personas: { regular: 0.5, visitor: 0.3, staff: 0.1, older_adult: 0.1 } },
+    { where: { room: "r_OTB5-1" }, count: 20, personas: { regular: 0.6, visitor: 0.3, skeptic: 0.1 } },
+    { where: { room: "c_4_001" }, count: 25, personas: { regular: 0.6, visitor: 0.2, staff: 0.1, mobility_impaired: 0.1 } },
+    { where: { room: "r_4242" }, count: 15, personas: { regular: 0.7, staff: 0.1, parent: 0.2 } },
+    { where: { room: "c_3_002" }, count: 30, personas: { regular: 0.5, visitor: 0.4, staff: 0.1 } },
+    { where: { room: "r_2602" }, count: 30, personas: { regular: 0.4, visitor: 0.5, staff: 0.1 } },
+    { where: { room: "r_1042" }, count: 30, personas: { regular: 0.4, visitor: 0.5, staff: 0.1 } },
+  ];
+
+  function defaultOccupants() {
+    if (context.doc.rooms.some((room) => room.id === "r_3500")) return TEPPER_OCCUPANTS;
+    const rooms = [...context.doc.rooms].filter((room) => (room.area_m2 ?? 0) >= 12)
+      .sort((a, b) => (b.area_m2 ?? 0) - (a.area_m2 ?? 0)).slice(0, 16);
+    const chosen = rooms.length ? rooms : context.doc.rooms.slice(0, 8);
+    return chosen.filter((room) => room.id).map((room) => ({
+      where: { room: room.id },
+      count: Math.max(1, Math.min(6, Math.round((room.area_m2 ?? 12) / 25))),
+      personas: { regular: 0.6, visitor: 0.25, staff: 0.15 },
+    }));
+  }
 
   function scenario() {
     const draft = getDraft();
-    const path = params.get("scenario");
-    if (path && !draft.events.length && !draft.occupants.length) return path;
+    const occupants = draft.occupants.length ? draft.occupants : defaultOccupants();
+    const hasAlarm = draft.events.some((event) => event.type === "alarm_only" || event.type === "fire");
+    const events = hasAlarm ? draft.events : [
+      { id: "ev_alarm", type: "alarm_only", t_start_s: 0, at: { room: context.doc.rooms[0]?.id }, params: {} },
+      ...draft.events,
+    ];
     return {
-      schema_version: "0.1", scene: `blueprint/viewer/public${sceneUrl}`, seed: 42, duration_s: 600,
-      events: [{ id: "ev_alarm", type: "alarm_only", t_start_s: 0, at: { room: context.doc.rooms[0]?.id }, params: {} }, ...draft.events],
-      occupants: draft.occupants,
-      assumptions: ["Built in the viewer"],
+      schema_version: "0.1",
+      scene: `blueprint/viewer/public${sceneUrl}`,
+      seed: Math.floor(Math.random() * 1_000_000_000),
+      duration_s: 600,
+      events,
+      occupants: personalize(occupants),
+      assumptions: ["Started from the viewer"],
     };
   }
 
-  startButton.addEventListener("click", () => {
+  // A shared slider speed is the center of the group. Each person draws their own pace around it.
+  function personalize(groups: Occupant[]) {
+    return groups.flatMap((group) => {
+      const count = group.count ?? 1;
+      const mean = Number(group.traits?.speed_mps);
+      if (!Number.isFinite(mean) || count <= 1) return [group];
+      return Array.from({ length: count }, () => {
+        const speed = Math.min(2, Math.max(0.3, mean * (0.82 + Math.random() * 0.36)));
+        return { ...group, count: 1, traits: { ...group.traits, speed_mps: Math.round(speed * 100) / 100 } };
+      });
+    });
+  }
+
+  function sendStart() {
+    const draft = getDraft();
+    const people = (draft.occupants.length ? draft.occupants : defaultOccupants())
+      .reduce((sum, group) => sum + (group.count ?? 1), 0);
     startButton.disabled = true;
     endButton.disabled = false;
+    const built = scenario();
     send({
-      type: "start", scene: params.get("livescene") ?? `blueprint/viewer/public${sceneUrl}`, scenario: scenario(), seed: 42,
-      decide: params.get("decide") ?? "policy", no_llm: !params.has("llm"), speed: 1,
+      type: "start", scene: params.get("livescene") ?? `blueprint/viewer/public${sceneUrl}`, scenario: built, seed: built.seed,
+      decide: params.get("decide") ?? "cognition", no_llm: params.get("decide") === "policy", speed: 1,
     });
-    status.textContent = "Starting";
+    const notes = [];
+    if (draft.events.length) notes.push(`${draft.events.length} sidebar event${draft.events.length === 1 ? "" : "s"}`);
+    if (draft.occupants.length) notes.push("the people you placed");
+    clearPlacedPeople();
+    status.textContent = notes.length ? `Starting ${people} people with ${notes.join(" and ")}` : `Starting ${people} people`;
+    pendingStart = false;
+  }
+
+  function connect() {
+    socket = mock
+      ? new MockServer(params.get("mock") ?? "/replays/tepper_alarm/replay.json", levelIds)
+      : (new WebSocket(url) as unknown as Socket);
+    if (!mock) (socket as unknown as WebSocket).binaryType = "arraybuffer";
+    socket.onopen = () => {
+      status.textContent = mock ? "Ready. Press Start simulation." : "Ready. Press Start simulation.";
+      startButton.disabled = false;
+      if (pendingStart) sendStart();
+    };
+    socket.onclose = () => {
+      if (run) {
+        status.textContent = "Disconnected";
+        startButton.disabled = true;
+        return;
+      }
+      status.textContent = "Waiting for the simulation server";
+      startButton.disabled = true;
+      if (!mock) window.setTimeout(connect, 1500);
+    };
+    socket.onmessage = onSocketMessage;
+  }
+
+  startButton.addEventListener("click", () => {
+    if (socket.readyState !== 1) {
+      pendingStart = true;
+      status.textContent = "Connecting, then starting";
+      return;
+    }
+    sendStart();
   });
   endButton.addEventListener("click", () => {
     send({ type: "end" });
@@ -241,7 +318,7 @@ export function startLive(context: ViewerContext, target: string | null) {
   function addAgents(agents: Meta["agents"]) {
     if (!run) return;
     for (const agent of agents) {
-      run.doc.agents[agent.index] = { id: agent.id, persona: agent.persona, model: agent.model, color: agent.color };
+      run.doc.agents[agent.index] = { id: agent.id, persona: agent.persona, model: agent.model, color: agent.color, speed: agent.speed };
       personas[agent.index] = agent.persona;
       run.fear[agent.index] = { t: [], v: [] };
     }
@@ -270,6 +347,7 @@ export function startLive(context: ViewerContext, target: string | null) {
       latest: () => latest,
     });
     document.querySelector<HTMLButtonElement>("#play")?.click(); // a live run plays from the start
+    document.querySelector<HTMLButtonElement>('[data-view="side"]')?.click(); // spread the floors so nobody is buried in the stack
   }
 
   function addFrame(buffer: ArrayBuffer) {
@@ -302,7 +380,7 @@ export function startLive(context: ViewerContext, target: string | null) {
     latest = frame.t;
   }
 
-  socket.onmessage = ({ data }) => {
+  function onSocketMessage({ data }: { data: unknown }) {
     if (data instanceof ArrayBuffer) return addFrame(data);
     if (data instanceof Blob) return void data.arrayBuffer().then(addFrame);
     const message = JSON.parse(String(data)) as Message;
@@ -310,6 +388,7 @@ export function startLive(context: ViewerContext, target: string | null) {
       if (!run) begin(message);
       status.textContent = `Running, branch ${message.branch}`;
     } else if (message.type === "agents") addAgents(message.agents);
+    else if (message.type === "log" && run && player) player.noteDecisions(run, message.records);
     else if (message.type === "events" && run && player) player.addEvents(run, message.events);
     else if (message.type === "status") {
       const parts = [`${message.t.toFixed(1)} s`, `${message.evacuated ?? 0} of ${message.total ?? 0} out`];
@@ -317,11 +396,20 @@ export function startLive(context: ViewerContext, target: string | null) {
       if (message.warp && message.warp < 0.99) parts.push(`slowed to ${message.warp.toFixed(2)}x while the model answers`);
       if (message.paused) parts.push("paused");
       status.textContent = parts.join(", ");
+      if (player && run) player.setCalls(run, message.llm_calls ?? 0, message.cost_usd ?? 0, message.model_errors ?? 0);
     } else if (message.type === "edit_ok") status.textContent = "Edit applied at the next tick";
-    else if (message.type === "error") status.textContent = `Server error${message.for ? ` (${message.for})` : ""}: ${JSON.stringify(message.errors ?? "")}`;
+    else if (message.type === "error") {
+      status.textContent = `Server error${message.for ? ` (${message.for})` : ""}: ${JSON.stringify(message.errors ?? "")}`;
+      if (message.for === "start" && !run) {
+        startButton.disabled = false;
+        endButton.disabled = true;
+      }
+    }
     else if (message.type === "finished") status.textContent = "Run finished; press End to write the replay";
     else if (message.type === "ended") showResult(message.run_dir);
-  };
+  }
+
+  connect();
 
   // The branch's replay is exact (recorded decisions), so the end of a live run is a normal replay link.
   function showResult(runDir: string) {

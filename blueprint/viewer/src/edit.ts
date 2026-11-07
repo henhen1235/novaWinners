@@ -100,6 +100,12 @@ export function getDraft() {
   return { events: [...draft.events], occupants: [...draft.occupants] };
 }
 
+let hidePlaced: () => void = () => {};
+/** Remove the white placement dots once the simulation is drawing the people itself. */
+export function clearPlacedPeople() {
+  hidePlaced();
+}
+
 // ---- geometry helpers ----
 function inside(poly: number[][], x: number, z: number) {
   let hit = false;
@@ -368,10 +374,16 @@ export function startEdit(context: ViewerContext) {
       ocean: Object.fromEntries(OCEAN.map(([key]) => [key, round(value(`ocean-${key}`) * 2 - 1)])),
     };
   }
+  function variedTraits() {
+    const base = traits();
+    const spread = 0.82 + Math.random() * 0.36;
+    const speed = Math.min(2, Math.max(0.3, Number(base.speed_mps) * spread));
+    return { ...base, speed_mps: Math.round(speed * 100) / 100 };
+  }
   function placePeople(points: Hit[]) {
     const who = persona.value;
-    const shared = { count: 1, personas: { [who]: 1.0 }, traits: traits() };
-    const occupants: Occupant[] = points.map((p) => ({ where: { point: [round(p.x), round(p.z)], level: p.level }, ...shared }));
+    const shared = { count: 1, personas: { [who]: 1.0 } };
+    const occupants: Occupant[] = points.map((p) => ({ where: { point: [round(p.x), round(p.z)], level: p.level }, ...shared, traits: variedTraits() }));
     const name = PERSONAS.find((p) => p[0] === who)?.[1].toLowerCase() ?? who;
     const label = `${points.length === 1 ? "1 person" : `${points.length} people`} (${name}) on ${levelName(points[0].level)}`;
     commit({ label, occupants, people: points.map((p) => ({ ...p, persona: who })) });
@@ -471,6 +483,13 @@ export function startEdit(context: ViewerContext) {
       clouds.set(level, cloud);
     }
   }
+  hidePlaced = () => {
+    for (const cloud of clouds.values()) {
+      cloud.removeFromParent();
+      cloud.geometry.dispose();
+    }
+    clouds.clear();
+  };
   /** Dots for occupants given by room (server results): random points in the room polygon. */
   function peopleFor(occupant: Occupant): Person[] {
     const who = Object.entries(occupant.personas ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "regular";

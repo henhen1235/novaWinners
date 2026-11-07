@@ -168,11 +168,26 @@ export function openInterview(player: Player, run: Run, agent: number, onClose: 
   const info = run.doc.agents[agent];
   $("#iv-title").textContent = info.id;
   const persona = info.persona.replace(/_/g, " ");
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${info.model ?? "model not recorded"}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  const speed = typeof info.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
+  const model = info.model?.includes("/") ? info.model : "waiting for its model call";
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
   $("#iv-answer").replaceChildren();
   const items = drawTimeline(player, run, info.id);
   current = { player, run, agent, onClose, items };
   $("#interview").hidden = false;
+  updateInterview(player.time());
+}
+
+/** Rebuild the open log after live decisions arrive. */
+export function refreshInterview() {
+  if (!current) return;
+  const { player, run, agent } = current;
+  const info = run.doc.agents[agent];
+  const persona = (info?.persona ?? "person").replace(/_/g, " ");
+  const speed = typeof info?.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
+  const model = info?.model?.includes("/") ? info.model : "waiting for its model call";
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  current.items = drawTimeline(player, run, info.id);
   updateInterview(player.time());
 }
 

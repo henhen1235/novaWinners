@@ -31,20 +31,20 @@ class Persona:
 
 
 PERSONAS: dict[str, Persona] = {p.name: p for p in [
-    Persona("staff", 1.34, 0.26, 20, 0.5, 3, True, 1.0, 0.9, 1, "#2e7d32"),
-    Persona("regular", 1.34, 0.26, 60, 0.7, 6, False, 1.0, 0.5, 3, "#1565c0"),
-    Persona("visitor", 1.34, 0.26, 90, 0.8, 8, False, 0.3, 0.3, 3, "#f9a825"),
-    Persona("committed", 1.20, 0.2, 120, 0.8, 10, False, 0.3, 0.3, 5, "#6a1b9a"),
-    Persona("parent", 0.90, 0.2, 90, 0.8, 6, False, 1.0, 0.4, 4, "#ef6c00", 0.5, 0.35),
-    Persona("older_adult", 0.80, 0.15, 120, 0.9, 10, False, 0.5, 0.3, 4, "#8d6e63", 0.3, 0.25),
-    Persona("mobility_impaired", 0.60, 0.1, 120, 0.9, 10, False, 0.5, 0.3, 4, "#c62828", 0.3, 0.2, False),
-    Persona("skeptic", 1.34, 0.26, 300, 1.0, 10, False, 1.0, 0.2, 99, "#455a64"),
+    Persona("staff", 1.55, 0.16, 20, 0.5, 3, True, 1.0, 0.9, 1, "#2e7d32"),
+    Persona("regular", 1.25, 0.18, 60, 0.7, 6, False, 1.0, 0.5, 3, "#1565c0"),
+    Persona("visitor", 1.05, 0.16, 90, 0.8, 8, False, 0.3, 0.3, 3, "#f9a825"),
+    Persona("committed", 1.00, 0.12, 120, 0.8, 10, False, 0.3, 0.3, 5, "#6a1b9a"),
+    Persona("parent", 0.85, 0.12, 90, 0.8, 6, False, 1.0, 0.4, 4, "#ef6c00", 0.5, 0.35),
+    Persona("older_adult", 0.68, 0.10, 120, 0.9, 10, False, 0.5, 0.3, 4, "#8d6e63", 0.3, 0.25),
+    Persona("mobility_impaired", 0.48, 0.08, 120, 0.9, 10, False, 0.5, 0.3, 4, "#c62828", 0.3, 0.2, False),
+    Persona("skeptic", 1.22, 0.16, 300, 1.0, 10, False, 1.0, 0.2, 99, "#455a64"),
     # Viewer baseline agents: decisions come from flyagent (--decide flyagent); walking like a regular,
     # and no social shortcut (crowd cues do not cut their pre-movement).
-    Persona("fruit_fly", 1.34, 0.26, 60, 0.7, 6, False, 1.0, 0.5, 99, "#7cb342"),
-    Persona("fruit_fly_scrambled", 1.34, 0.26, 60, 0.7, 6, False, 1.0, 0.5, 99, "#9e9d24"),
+    Persona("fruit_fly", 1.25, 0.18, 60, 0.7, 6, False, 1.0, 0.5, 99, "#7cb342"),
+    Persona("fruit_fly_scrambled", 1.25, 0.18, 60, 0.7, 6, False, 1.0, 0.5, 99, "#9e9d24"),
     # A child stays with its parent; its own pre-movement only matters if it is alone.
-    Persona("child", 1.0, 0.15, 90, 0.8, 8, False, 0.0, 0.0, 99, "#ec407a", 0.4, 0.3),
+    Persona("child", 1.35, 0.18, 90, 0.8, 8, False, 0.0, 0.0, 99, "#ec407a", 0.4, 0.3),
 ]}
 
 ALIASES = {
