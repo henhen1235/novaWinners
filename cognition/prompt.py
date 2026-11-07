@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 
-from .personas import persona
+from .personas import persona, trait_text
 
 SYSTEM = """You are simulating ONE building occupant at one decision point during an emergency in a building.
 You answer as THIS person, with this person's knowledge, habits and limits. You are not a safety expert,
@@ -115,7 +115,7 @@ def _timing(traits: dict) -> list[str]:
 def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], beliefs: list[dict],
                  options: list[dict], appraisal: dict, emotion: dict | None, notes: list[str] = ()) -> str:
     name, p = persona(agent.get("persona", ""))
-    lines = [f"PERSONA: {name}. {p['text']}",
+    lines = [f"PERSONA: {name}. {p['text']} {trait_text(name, agent.get('traits'))}",
              f"YOU: {agent['id']} in {agent.get('room')}{_level(agent)} at t={t_s:.1f} s. Known exits: "
              f"{', '.join(agent.get('known_exits') or []) or 'only the way you came in'}.",
              f"TRAITS: {_fields(agent.get('traits') or {}) or 'none'}",

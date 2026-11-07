@@ -143,11 +143,12 @@ def update_beliefs(before: list[dict], percepts: list[dict], persona_name: str, 
 
 # ---------- appraisal ----------
 
-def social_proof(percepts: list[dict]) -> float:
-    """Share of visible people leaving; the sim's aggregate people_moving cue counts 4+ movers as 1."""
+def social_proof(percepts: list[dict], threshold: float = 4.0) -> float:
+    """Share of visible people leaving; the aggregate people_moving cue saturates at the occupant's
+    social threshold (default 4 movers)."""
     agg = [p for p in percepts if p.get("kind") == "people_moving"]
     if agg:
-        return clip(max(float(p.get("count") or 0) for p in agg) / 4)
+        return clip(max(float(p.get("count") or 0) for p in agg) / max(1.0, threshold))
     people = [p for p in percepts if p.get("kind") == "person"]
     if not people:
         return 0.0
@@ -175,12 +176,22 @@ def stair_crowd_s(o: dict) -> float:
     return {"low": 0.0, "medium": 15.0, "high": 40.0}.get(c, float(c) * 40 if isinstance(c, (int, float)) else 0.0)
 
 
-def option_success(o: dict, beliefs: list[dict], persona_name: str = "", hazard: bool = False) -> float:
+def option_success(o: dict, beliefs: list[dict], persona_name: str = "", hazard: bool = False,
+                   traits: dict | None = None) -> float:
+    """Estimated success of an option. Walking speed sets travel time; exit familiarity raises
+    confidence that a known route works (0.8 at none, 1.0 at full)."""
+    t = traits or {}
+    speed = float(t.get("speed_mps") or 1.3)
+    known = 0.8 + 0.2 * float(t["exit_familiarity"]) if t.get("exit_familiarity") is not None else 1.0
+    return known * _success(o, beliefs, persona_name, hazard, speed)
+
+
+def _success(o: dict, beliefs: list[dict], persona_name: str, hazard: bool, speed: float) -> float:
     a = o.get("action")
     if a == "TAKE_STAIRS":
         if persona(persona_name)[0] in CANNOT_STAIRS:
             return 0.05
-        t = float(o.get("route_m") or 20.0) / 1.0 + float(o.get("queue_s") or 0.0) + stair_crowd_s(o)
+        t = float(o.get("route_m") or 20.0) / max(0.3, speed * 0.75) + float(o.get("queue_s") or 0.0) + stair_crowd_s(o)
         return math.exp(-t / COPING_T_S) * stair_ok_prob(beliefs, o) * (1.0 if o.get("direction", "down") == "down"
                                                                        else 0.6)
     if a == "USE_ELEVATOR":
@@ -188,7 +199,7 @@ def option_success(o: dict, beliefs: list[dict], persona_name: str = "", hazard:
     if a == "WAIT_REFUGE":
         return 0.45
     if a == "EVACUATE":
-        t = float(o.get("route_m") or 20.0) / 1.3 + float(o.get("queue_s") or 0.0)
+        t = float(o.get("route_m") or 20.0) / max(0.3, speed) + float(o.get("queue_s") or 0.0)
         return math.exp(-t / COPING_T_S) * exit_open_prob(beliefs, o.get("exit"))
     return {"FOLLOW": 0.6, "TURN_BACK": 0.5, "HIDE": 0.4, "SHELTER": 0.5}.get(a, 0.0)
 
@@ -197,7 +208,7 @@ def appraise(percepts: list[dict], beliefs: list[dict], options: list[dict], per
              trigger: dict, traits: dict | None = None) -> dict:
     """R, S, U, C, B plus social proof and protection responsibility; H = R*S*(1-C)."""
     traits = traits or {}
-    sp = social_proof(percepts)
+    sp = social_proof(percepts, float(traits.get("social_threshold") or 4.0))
     cues = []
     for b in beliefs:
         if not b["value"]:
@@ -223,9 +234,11 @@ def appraise(percepts: list[dict], beliefs: list[dict], options: list[dict], per
     else:
         r, u = (0.5 if s > 0 else 0.2), (0.3 if s > 0 else 0.1)
     r = clip(r + 0.3 * resp)
+    if traits.get("risk_tolerance") is not None:  # ours: risk-tolerant people rate the threat as less relevant
+        r = clip(r * (1.2 - 0.4 * float(traits["risk_tolerance"])))
 
     hazard = any(b["value"] and b["key"].startswith("hazard:") for b in beliefs)
-    c = max((option_success(o, beliefs, persona_name, hazard) for o in options if o.get("action") in PROTECTIVE),
+    c = max((option_success(o, beliefs, persona_name, hazard, traits) for o in options if o.get("action") in PROTECTIVE),
             default=0.1)
     blocked = 1.0 if trigger.get("kind") in ("path_blocked", "blocked") else 0.0
     stairs = [o for o in options if o.get("action") == "TAKE_STAIRS" and o.get("direction", "down") == "down"]
@@ -275,13 +288,13 @@ def contagion(q: float, delta_r: float, neighbours: list[dict], key: str) -> tup
 
 
 def emotions(appraisal: dict, mind: dict | None, t_s: float, persona_name: str,
-             neighbours: list[dict]) -> tuple[dict, list[dict]]:
+             neighbours: list[dict], traits: dict | None = None) -> tuple[dict, list[dict]]:
     """Decay prior emotion toward the persona baseline, raise it to the appraisal value, then contagion.
 
     Appraisal can only push fear, anxiety, frustration and concern up; they fall by decay
     (emotions outlast their cause). Hope tracks the appraisal; relief is a decaying pulse.
     """
-    base = baseline(persona_name)
+    base = baseline(persona_name, traits)
     mind = mind or {}
     prev = mind.get("emotion") or {k: base[k] for k in ("fear", "anxiety", "frustration", "hope", "relief", "concern")}
     dt = t_s - mind.get("t_s", t_s)
@@ -292,7 +305,7 @@ def emotions(appraisal: dict, mind: dict | None, t_s: float, persona_name: str,
         out[k] = v if k == "hope" else max(d, v)
         if out[k] - d > 1e-4:
             sources.append({"emotion": k, "from": "appraisal", "delta": round(out[k] - d, 4)})
-    delta_r = contagion_traits(persona_name)["delta"]
+    delta_r = contagion_traits(persona_name, traits)["delta"]
     for k in ("fear", "anxiety"):
         out[k], src = contagion(out[k], delta_r, neighbours, k)
         sources += src

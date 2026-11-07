@@ -88,7 +88,7 @@ class Decision(BaseModel):
 
 
 class Validation(BaseModel):
-    status: Literal["ok", "repaired", "fallback", "replayed"]
+    status: Literal["ok", "repaired", "fallback", "fallback_deadline", "replayed"]
     errors: list[str] = []
 
 

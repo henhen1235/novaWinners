@@ -84,20 +84,73 @@ def _unit(x: float) -> float:
     return min(1.0, max(0.0, x))
 
 
-def contagion_traits(persona_name: str) -> dict:
+OCEAN_KEYS = (("O", "openness"), ("C", "conscientiousness"), ("E", "extraversion"), ("A", "agreeableness"),
+              ("N", "neuroticism"))
+
+
+def ocean(persona_name: str, traits: dict | None = None) -> tuple[float, ...]:
+    """Big Five in [-1, 1]: per-occupant values from the UI (traits.ocean as dict or list, or top-level
+    O/C/E/A/N or full names) override the persona default trait by trait."""
+    base = list(persona(persona_name)[1]["ocean"])
+    t = traits or {}
+    src = t.get("ocean")
+    if isinstance(src, (list, tuple)) and len(src) == 5:
+        src = dict(zip("OCEAN", src))
+    src = {**{k: t[k] for pair in OCEAN_KEYS for k in pair if k in t}, **(src or {})}
+    for i, (short, full) in enumerate(OCEAN_KEYS):
+        v = src.get(short, src.get(full))
+        if isinstance(v, (int, float)):
+            base[i] = max(-1.0, min(1.0, float(v)))
+    return tuple(base)
+
+
+def contagion_traits(persona_name: str, traits: dict | None = None) -> dict:
     """ASCRIBE openness (delta) and expressiveness (eps) from OCEAN, rescaled to [0, 1].
 
     Coefficients from van Haeringen and Gerritsen 2023 / Durupinar 2016 (correlations,
     not weights summing to 1), so the sum over traits in [-1, 1] is mapped by (x + 1) / 2.
     """
-    o, c, e, a, n = persona(persona_name)[1]["ocean"]
+    o, c, e, a, n = ocean(persona_name, traits)
     delta = 0.354 * o + 0.177 * c + 0.135 * e + 0.312 * a + 0.021 * n
     eps = 0.14 * o - 0.02 * c + 0.32 * e + 0.11 * a + 0.29 * n
     return {"delta": _unit((delta + 1) / 2), "eps": _unit((eps + 1) / 2)}
 
 
-def baseline(persona_name: str) -> dict:
+def baseline(persona_name: str, traits: dict | None = None) -> dict:
     """Resting emotion levels; higher neuroticism gives a higher anxiety floor and slower decay (tau)."""
-    n = persona(persona_name)[1]["ocean"][4]
+    n = ocean(persona_name, traits)[4]
     return {"fear": 0.0, "anxiety": round(0.05 + 0.1 * max(0.0, n), 3), "frustration": 0.0, "hope": 0.2,
             "relief": 0.0, "concern": 0.0, "tau_s": 10 + 20 * (n + 1) / 2}
+
+
+def _level(v: float, words: tuple[str, str, str]) -> str:
+    return words[0] if v <= -0.35 else words[2] if v >= 0.35 else words[1]
+
+
+def trait_text(persona_name: str, traits: dict | None) -> str:
+    """One plain sentence describing this occupant's sliders, for the prompt (persona > model)."""
+    t = traits or {}
+    o, c, e, a, n = ocean(persona_name, t)
+    bits = [f"{_level(o, ('conventional', 'fairly open', 'curious and open'))}",
+            f"{_level(c, ('easygoing about rules', 'moderately careful', 'careful and rule-following'))}",
+            f"{_level(e, ('quiet and reserved', 'moderately social', 'outgoing and talkative'))}",
+            f"{_level(a, ('independent-minded', 'cooperative', 'very cooperative and helpful'))}",
+            f"{_level(n, ('calm under stress', 'somewhat anxious under stress', 'easily alarmed'))}"]
+    out = [f"Personality: {', '.join(bits)} (Big Five O {o:+.1f} C {c:+.1f} E {e:+.1f} A {a:+.1f} N {n:+.1f})."]
+    if t.get("speed_mps") is not None:
+        sp = float(t["speed_mps"])
+        out.append(f"You walk {'slowly' if sp < 1.0 else 'briskly' if sp > 1.5 else 'at a normal pace'} "
+                   f"({sp:.1f} m/s).")
+    if t.get("exit_familiarity") is not None:
+        f = float(t["exit_familiarity"])
+        out.append("You know this building's exits " + ("well." if f >= 0.66 else "a little." if f >= 0.33
+                                                         else "hardly at all."))
+    if t.get("sign_follow_p") is not None:
+        out.append(f"You {'usually' if float(t['sign_follow_p']) >= 0.6 else 'rarely'} follow exit signs.")
+    if t.get("social_threshold") is not None:
+        out.append(f"You start to go along once about {int(t['social_threshold'])} people near you are leaving.")
+    if t.get("risk_tolerance") is not None:
+        r = float(t["risk_tolerance"])
+        out.append("You " + ("take risks easily." if r >= 0.66 else "avoid risks." if r <= 0.33 else
+                             "take ordinary care.") )
+    return " ".join(out)

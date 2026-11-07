@@ -118,6 +118,8 @@ def build_inputs(view: dict) -> dict:
     raw = []
     for i, p in enumerate(view.get("percepts") or []):
         p = {"id": p.get("id") or f"p{i + 1}", "channel": p.get("channel", "sight"), **p}
+        if p["kind"] == "exit_sign" and (agent.get("traits") or {}).get("sign_follow_p") is not None:
+            p.setdefault("salience", float(agent["traits"]["sign_follow_p"]))  # UI slider: sign following
         if p["kind"] in SPEECH:
             p["source_kind"] = _source_kind(p, agent)
             p.setdefault("claim", parse_claims(p.get("text", ""), exits))
@@ -132,7 +134,7 @@ def build_inputs(view: dict) -> dict:
         if m and m.get("emotion") and who != aid and all(n["agent"] != who for n in neighbours):
             neighbours.append({"agent": who, "pid": pid, "dist_m": round(dist, 2), "channel": channel,
                                "fear": m["emotion"]["fear"], "anxiety": m["emotion"]["anxiety"],
-                               "eps": contagion_traits(m["persona"])["eps"]})
+                               "eps": contagion_traits(m["persona"], m.get("traits"))["eps"]})
     for p in percepts:
         if p["kind"] == "person" and p.get("ref"):
             add_nb(p["ref"], p["id"], float(p.get("dist_m") or 0.0), "sight")
@@ -180,7 +182,7 @@ def compute_state(inp: dict, remove: frozenset = frozenset(), keep_only: set | N
     neighbours = [n for n in inp["neighbours"] if n["pid"] in pids]
     traits = {**(agent.get("traits") or {}), "target_exit": agent.get("target_exit")}
     a = appraise(percepts, after, inp["options"], name, inp["trigger"], traits)
-    emo, src = emotions(a, inp["mind_before"], inp["t_s"], name, neighbours)
+    emo, src = emotions(a, inp["mind_before"], inp["t_s"], name, neighbours, agent.get("traits"))
     cues = cue_summary(percepts, after)
     lim = limits(agent, inp["mind_before"], cues, inp["options"])
     offered = [o for o in inp["options"] if o["id"] in lim["offered"]]
@@ -268,7 +270,9 @@ def validate(raw: str, ids: set, options: list[dict], persona_name: str = "", ha
 
 def _evac_cost(o: dict, beliefs: list[dict], traits: dict) -> float:
     familiar = o.get("exit") in {traits.get("entry_exit"), traits.get("familiar_exit")} - {None}
-    return (float(o.get("route_m") or 20) / 1.3 + float(o.get("queue_s") or 0) - (30 if familiar else 0)
+    bonus = 30 * (0.5 + float(traits["exit_familiarity"])) if traits.get("exit_familiarity") is not None else 30
+    return (float(o.get("route_m") or 20) / float(traits.get("speed_mps") or 1.3) + float(o.get("queue_s") or 0)
+            - (bonus if familiar else 0)
             + 300 * (1 - exit_open_prob(beliefs, o.get("exit"))))
 
 
@@ -291,7 +295,8 @@ def fallback(inp: dict, st: dict) -> dict:
                 if x["kind"] in SPEECH and (x.get("urgent") or (x.get("claim") or {}).get("told_to_leave"))}
     waited = (inp["trigger"].get("kind") == "premove_done" or
               float(traits.get("t_since_cue_s") or 0) >= float(traits.get("premove_s") or 1e9))
-    act = (a["certainty"] >= p["act_at"] or (name == "skeptic" and (seen or len(speakers) >= 2))
+    act_at = p["act_at"] + 0.3 * (float(traits.get("risk_tolerance") or 0.5) - 0.5)
+    act = (a["certainty"] >= act_at or (name == "skeptic" and (seen or len(speakers) >= 2))
            or (waited and name != "skeptic") or (waited and a["certainty"] >= 0.5)
            or not any(o.get("action") in ("CONTINUE_TASK", "SEEK_INFO") for o in opts))
     if not act:
@@ -404,7 +409,7 @@ def _remember(rec: dict) -> None:
     waits = dict(MINDS.get(rec["agent_id"], {}).get("waits") or {})
     if act in WAIT_ACTIONS:
         waits[act] = waits.get(act, 0) + 1
-    MINDS[rec["agent_id"]] = {"waits": waits,"persona": rec["persona"], "emotion": rec["emotion"], "t_s": rec["t_s"],
+    MINDS[rec["agent_id"]] = {"waits": waits, "traits": (rec.get("inputs") or {}).get("agent", {}).get("traits"),"persona": rec["persona"], "emotion": rec["emotion"], "t_s": rec["t_s"],
                               "pos": (rec.get("inputs") or {}).get("agent", {}).get("pos"),
                               "harm": rec["appraisal"]["harm"], "certainty": rec["appraisal"]["certainty"],
                               "beliefs": rec["beliefs_after"]}
