@@ -163,8 +163,8 @@ def expand_occupants(groups: list[dict], scene: dict) -> list[dict]:
     out = []
     for g in groups:
         where = g.get("where") if isinstance(g, dict) else None
-        if not isinstance(where, dict) or "room" in where or not isinstance(g.get("count"), int):
-            out.append(g)  # left as is: room groups, or malformed ones the validator will report
+        if not isinstance(where, dict) or not where.get("all") or not isinstance(g.get("count"), int):
+            out.append(g)  # left as is: room/point/box groups, or malformed ones the validator will report
             continue
         total, n = sum(loads.values()), g.get("count", 0)
         share = {rid: n * w / total for rid, w in loads.items() if w > 0}

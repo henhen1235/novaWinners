@@ -199,3 +199,51 @@ def test_assisted_evacuation_plan_and_param():
     bad = validate(_with(interventions=[{"type": "assisted_evacuation_plan", "staff_per_person": 3}],
                          params={"assisted_evacuation": "yes"}), SCENE)
     assert any("staff_per_person" in e for e in bad) and any("params.assisted_evacuation" in e for e in bad), bad
+
+
+VIEWER_TRAITS = {"speed_mps": 1.25, "exit_familiarity": 0.5, "sign_follow_p": 0.6, "risk_tolerance": 0.5,
+                 "ocean": {"O": 0.2, "C": -0.4, "E": 0.0, "A": 1.0, "N": -1.0}}
+
+
+def test_viewer_placed_people_validate():
+    """Shapes blueprint/viewer/src/edit.ts sends: one group per clicked point, or a dragged box."""
+    data = _with(occupants=[
+        {"where": {"point": [1.0, 1.0], "level": "L1"}, "count": 1, "personas": {"fruit_fly": 1.0},
+         "traits": VIEWER_TRAITS},
+        {"where": {"point": [8.0, 5.0], "level": "L1"}, "count": 1, "personas": {"fruit_fly_scrambled": 1.0},
+         "traits": {**VIEWER_TRAITS, "social_threshold": 0.3, "ocean": [0.1, 0.2, 0.3, 0.4, 0.5]}},
+        {"where": {"box": [[4.0, 9.0], [1.0, 6.5]], "level": "L1"}, "count": 8, "personas": {"older_adult": 1.0}}])
+    assert validate(data, SCENE) == []
+    out = normalize(data)
+    assert out["occupants"][0]["traits"]["ocean"]["A"] == 1.0
+    assert out["occupants"][2]["where"] == {"box": [[4.0, 9.0], [1.0, 6.5]], "level": "L1"}
+
+
+def test_point_and_box_groups_are_not_spread_by_chat():
+    groups = [{"where": {"point": [1.0, 1.0], "level": "L1"}, "count": 1},
+              {"where": {"box": [[1.0, 6.5], [4.0, 9.0]], "level": "L1"}, "count": 3}]
+    assert chat.expand_occupants(groups, SCENE) == groups
+
+
+@pytest.mark.parametrize("group, expected", [
+    ({"where": {"point": [2.5, 2.0], "level": "L1"}, "count": 1}, "not inside walkable"),  # the desk in Office N1
+    ({"where": {"point": [1.0, 1.0], "level": "L9"}, "count": 1}, "unknown level 'L9'"),
+    ({"where": {"point": [1.0, 1.0]}, "count": 1}, "need a level"),
+    ({"where": {"room": "L1_office_n1", "level": "L1"}, "count": 1}, "room takes none"),
+    ({"where": {"room": "L1_office_n1", "point": [1.0, 1.0], "level": "L1"}, "count": 1}, "exactly one of room, point, box"),
+    ({"where": {"box": [[40.0, 40.0], [50.0, 50.0]], "level": "L1"}, "count": 1}, "no walkable area"),
+    ({"where": {"box": [[1.0, 1.0], [1.5, 1.5]], "level": "L1"}, "count": 50}, "holds at most"),
+    ({"where": {"room": "L1_office_n1"}, "count": 1, "traits": {"speed_mps": 3.0}}, "traits.speed_mps"),
+    ({"where": {"room": "L1_office_n1"}, "count": 1, "traits": {"risk_tolerance": 1.5}}, "traits.risk_tolerance"),
+    ({"where": {"room": "L1_office_n1"}, "count": 1, "traits": {"ocean": {"O": 2.0}}}, "traits.ocean"),
+    ({"where": {"room": "L1_office_n1"}, "count": 1, "traits": {"ocean": [0.1, 0.2]}}, "traits.ocean"),
+    ({"where": {"room": "L1_office_n1"}, "count": 1, "personas": {"fruit_bat": 1.0}}, "unknown persona 'fruit_bat'"),
+])
+def test_viewer_people_errors(group, expected):
+    errors = validate(_with(occupants=[group]), SCENE)
+    assert any(expected in e for e in errors), errors
+
+
+def test_points_count_against_their_room_cap():
+    groups = [{"where": {"point": [1.0, 1.0], "level": "L1"}, "count": 20}] * 2  # 40 > 37 for Office N1
+    assert any("holds at most 37" in e for e in validate(_with(occupants=groups), SCENE))

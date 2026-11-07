@@ -19,7 +19,8 @@ MAX_WIDTH_M = 2.4  # widen_door cap, docs/SIM_INTERFACES.md Interventions
 # Archetypes from research/EVAC_PSYCHOLOGY.md, then the sim's short names
 # (sim/personas.py: staff, regular, visitor, committed, parent); sim and cognition alias both.
 PERSONAS = ("warden", "regular_employee", "first_time_visitor", "committed_task", "parent_with_child",
-            "older_adult", "mobility_impaired", "skeptic", "regular", "visitor", "staff", "committed", "parent")
+            "older_adult", "mobility_impaired", "skeptic", "regular", "visitor", "staff", "committed", "parent",
+            "fruit_fly", "fruit_fly_scrambled")  # the last two are the viewer's baseline agents
 DEFAULT_PERSONAS = {"regular_employee": 0.6, "first_time_visitor": 0.25, "warden": 0.1, "mobility_impaired": 0.05}
 DEFAULT_MODEL = "google/gemini-2.5-flash-lite"
 MAX_PER_M2 = 2.0  # hard cap per room [H], research/SCENARIOS_AND_MODELS.md 2.2
@@ -59,7 +60,35 @@ class Event(_Model):
 
 
 class Where(_Model):
-    room: str
+    """Exactly one of room, point (with level) or box (with level; count spread inside walkable)."""
+    room: Optional[str] = None
+    point: Optional[Point2] = None
+    box: Optional[Annotated[list[Point2], Field(min_length=2, max_length=2)]] = None
+    level: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _exactly_one(self):
+        set_ = [k for k in ("room", "point", "box") if getattr(self, k) is not None]
+        if len(set_) != 1:
+            raise ValueError(f"exactly one of room, point, box; got {set_ or 'none'}")
+        if (self.room is None) != (self.level is not None):
+            raise ValueError("point and box need a level; room takes none")
+        return self
+
+
+Unit = Annotated[float, Field(ge=0, le=1)]
+Ocean = Annotated[float, Field(ge=-1, le=1)]
+
+
+class Traits(BaseModel):
+    """Per-occupant sliders from the viewer; other keys pass through to the sim (it keeps those it knows)."""
+    model_config = ConfigDict(extra="allow")
+    speed_mps: Optional[Annotated[float, Field(ge=0.3, le=2.0)]] = None
+    exit_familiarity: Optional[Unit] = None
+    sign_follow_p: Optional[Unit] = None
+    social_threshold: Optional[Unit] = None
+    risk_tolerance: Optional[Unit] = None
+    ocean: Optional[dict[Literal["O", "C", "E", "A", "N"], Ocean] | Annotated[list[Ocean], Field(min_length=5, max_length=5)]] = None
 
 
 class Occupants(_Model):
@@ -68,6 +97,7 @@ class Occupants(_Model):
     personas: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_PERSONAS))
     models: dict[str, float] = Field(default_factory=lambda: {DEFAULT_MODEL: 1.0})
     familiar_exit: Optional[str] = None
+    traits: Optional[Traits] = None
 
 
 class Signage(_Model):
@@ -187,6 +217,38 @@ def _check_weights(where: str, weights: dict[str, float], allowed: tuple[str, ..
     return errs
 
 
+def _room_at(scene: dict, level: str, pt: list[float]) -> str | None:
+    return next((r["id"] for r in scene["rooms"] if r["level"] == level and r["type"] != "outside"
+                 and Polygon(r["polygon"]).covers(Point(pt))), None)
+
+
+def _check_where(w: str, occ: Occupants, scene: dict, ids: dict, rooms: dict) -> tuple[str | None, list[str]]:
+    """(room the group counts against, errors). Point groups count against the room they stand in."""
+    wh = occ.where
+    if wh.room is not None:
+        if wh.room not in rooms:
+            return None, [f"{w}.where.room: unknown room '{wh.room}'; known: {_known(ids['room'])}"]
+        if rooms[wh.room]["type"] == "outside":
+            return None, [f"{w}.where.room: '{wh.room}' is outside the building"]
+        return wh.room, []
+    if wh.level not in ids["level"]:
+        return None, [f"{w}.where.level: unknown level '{wh.level}'; known: {_known(ids['level'])}"]
+    if wh.point is not None:
+        if not _inside_walkable(scene, wh.level, wh.point):
+            return None, [f"{w}.where.point: {wh.point} is not inside walkable area of level {wh.level}"]
+        return _room_at(scene, wh.level, wh.point), []
+    (x1, z1), (x2, z2) = wh.box
+    polys = [Polygon(p["exterior"], p.get("holes", [])) for p in scene["walkable"].get(wh.level, {}).get("polygons", [])]
+    free = shapely.union_all(polys).intersection(shapely.box(min(x1, x2), min(z1, z2), max(x1, x2), max(z1, z2))).area \
+        if polys else 0.0
+    if free <= 0:
+        return None, [f"{w}.where.box: no walkable area of level {wh.level} inside {wh.box}"]
+    if occ.count > MAX_PER_M2 * free:
+        return None, [f"{w}.where.box: {free:.1f} m2 walkable holds at most {int(MAX_PER_M2 * free)} people "
+                      f"({MAX_PER_M2:g} per m2), got {occ.count}"]
+    return None, []
+
+
 def validate(data: dict, scene: dict) -> list[str]:
     """All problems with a scenario dict against a scene dict; [] when valid."""
     try:
@@ -209,13 +271,12 @@ def validate(data: dict, scene: dict) -> list[str]:
     per_room: dict[str, int] = {}
     for i, occ in enumerate(sc.occupants):
         w = f"occupants[{i}]"
-        rid = occ.where.room
-        if rid not in rooms:
-            errs.append(f"{w}.where.room: unknown room '{rid}'; known: {_known(ids['room'])}")
+        rid, where_errs = _check_where(w, occ, scene, ids, rooms)
+        errs += where_errs
+        if where_errs:
             continue
-        if rooms[rid]["type"] == "outside":
-            errs.append(f"{w}.where.room: '{rid}' is outside the building")
-        per_room[rid] = per_room.get(rid, 0) + occ.count
+        if rid:
+            per_room[rid] = per_room.get(rid, 0) + occ.count
         if occ.familiar_exit is not None and occ.familiar_exit not in ids["exit"]:
             errs.append(f"{w}.familiar_exit: unknown exit '{occ.familiar_exit}'; known: {_known(ids['exit'])}")
         errs += _check_weights(f"{w}.personas", occ.personas, PERSONAS)
