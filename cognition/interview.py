@@ -263,15 +263,14 @@ def attribute(rec: dict, b: Budget) -> tuple[list[dict], dict]:
     text = {**{p["id"]: f"{p['kind']} {p.get('where') or p.get('ref') or p.get('text') or ''}".strip()
                for p in rec["percepts"]},
             **{x["id"]: f"belief {x['key']} = {x['value']}" for x in rec["beliefs_after"]}}
+    rates = {i: _rate(samples[f"rm:{i}"], choice) for i in cited}
+    needed = {i for i, (k1, n1) in rates.items() if fisher_lower(k1, n1, k0, n0) < ALPHA}
     reasons = []
     for i in cited:
-        k1, n1 = _rate(samples[f"rm:{i}"], choice)
-        if fisher_lower(k1, n1, k0, n0) < ALPHA:
-            label = "necessary"
-        elif joint_sig and sufficient:
-            label = "jointly sufficient"
-        else:
-            label = "stated, not decisive"
+        k1, n1 = rates[i]
+        # redundant reasons: none needed alone, all removed together flips the choice, kept alone they suffice
+        label = "necessary" if i in needed else \
+            "jointly sufficient" if joint_sig and sufficient and not needed else "stated, not decisive"
         reasons.append({"id": i, "text": text.get(i, i), "label": label,
                         "keep_rate_removed": round(k1 / n1, 2) if n1 else None, "n": n1})
     base = {"choice": choice, "keep_rate": round(k0 / n0, 2) if n0 else None, "n": n0,

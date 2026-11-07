@@ -82,5 +82,5 @@ def chat(messages: list[dict], model: str = DEFAULT_MODEL, temperature: float = 
 
 
 def parse_json(text: str) -> dict:
-    """Tolerate code fences or a stray sentence around the object."""
-    return json.loads(text[text.find("{"): text.rfind("}") + 1])
+    """First JSON object in the text; tolerates code fences, a stray sentence or trailing junk after it."""
+    return json.JSONDecoder().raw_decode(text[text.find("{"):])[0]

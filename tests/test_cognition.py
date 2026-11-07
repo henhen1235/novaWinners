@@ -292,3 +292,16 @@ def test_interview_grounds_stair_names(tmp_path, monkeypatch):
     assert "east stairs" in ans["answer"]
     cf = interview(run, "a_50", "What if the east stairs had smoke in them?")
     assert cf["counterfactual"]["change"].startswith("you saw st_east")
+
+
+def test_parse_json_ignores_trailing_junk():
+    assert llm.parse_json('```json\n{"a": 1}\n37]."]}') == {"a": 1}
+
+
+def test_redundant_label_only_when_no_single_reason_is_necessary(tmp_path):
+    from cognition.interview import Budget, attribute
+    rec = D.decide(view())["record"]  # fake LLM: evacuates iff the smoke percept p2 is present
+    reasons, base = attribute({**rec, "decision": {**rec["decision"], "padm": {
+        **rec["decision"]["padm"], "choice_evidence": ["p2", "p1"]}}}, Budget(40))
+    labels = {r["id"]: r["label"] for r in reasons}
+    assert labels == {"p2": "necessary", "p1": "stated, not decisive"}
