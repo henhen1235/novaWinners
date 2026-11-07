@@ -57,6 +57,8 @@ class Segment:
     p1: tuple[float, float]
     p2: tuple[float, float]
     thickness_m: float = 0.2
+    # None means a full-height wall. Railings set a shorter barrier height.
+    height_m: float | None = None
 
     @property
     def length_m(self) -> float:

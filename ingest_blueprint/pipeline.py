@@ -281,7 +281,10 @@ def _align(levels: list[dict]) -> None:
         if abs(shift[0]) < 1e-6 and abs(shift[1]) < 1e-6:
             continue
         level["faces"] = [_shift_poly(face, shift) for face in level["faces"]]
-        level["walls"] = [Segment(_shift(wall.p1, shift), _shift(wall.p2, shift), wall.thickness_m) for wall in level["walls"]]
+        level["walls"] = [
+            Segment(_shift(wall.p1, shift), _shift(wall.p2, shift), wall.thickness_m, getattr(wall, "height_m", None))
+            for wall in level["walls"]
+        ]
         shifted_doors = []
         for door in level["doors"]:
             shifted_doors.append(

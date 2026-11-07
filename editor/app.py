@@ -57,6 +57,7 @@ def _generate_body(
         "run_id": run_id,
         "exit_code": code,
         "rooms": len(scene["rooms"]),
+        "walls": len(scene["walls"]),
         "doors": len(scene["doors"]),
         "exits": len(scene["exits"]),
         "warnings": scene["warnings"],
@@ -275,7 +276,7 @@ def create_app() -> FastAPI:
         source.write_bytes(payload)
         built = None
         try:
-            built = read_area_plans(source, run_dir)
+            built = read_area_plans(source, run_dir, label=file.filename or "")
         except Exception:
             built = None
         if not built:

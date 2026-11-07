@@ -77,10 +77,11 @@ def _subtract_door(wall: Segment, door: DoorOpening) -> list[Segment]:
     if door_b < wall_a + 0.05 or door_a > wall_b - 0.05:
         return [wall]
     pieces = []
+    height_m = getattr(wall, "height_m", None)
     if door_a - wall_a >= 0.05:
-        pieces.append(Segment(wall.p1, _at(origin, direction, door_a), wall.thickness_m))
+        pieces.append(Segment(wall.p1, _at(origin, direction, door_a), wall.thickness_m, height_m))
     if wall_b - door_b >= 0.05:
-        pieces.append(Segment(_at(origin, direction, door_b), wall.p2, wall.thickness_m))
+        pieces.append(Segment(_at(origin, direction, door_b), wall.p2, wall.thickness_m, height_m))
     return pieces
 
 

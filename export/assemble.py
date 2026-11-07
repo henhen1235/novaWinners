@@ -22,6 +22,24 @@ def _centroid(poly: Polygon) -> list[float]:
     return [float(point.x), float(point.y)]
 
 
+def _polygonal_parts(geom) -> list:
+    """Polygon pieces of a shapely geometry. Empty when there is nothing to add."""
+
+    if geom is None or getattr(geom, "is_empty", True):
+        return []
+    kind = geom.geom_type
+    if kind == "Polygon":
+        return [geom] if geom.area > 1.0 else []
+    if kind == "MultiPolygon":
+        return [part for part in geom.geoms if part.area > 1.0]
+    if kind == "GeometryCollection":
+        parts = []
+        for child in geom.geoms:
+            parts.extend(_polygonal_parts(child))
+        return parts
+    return []
+
+
 def assemble_scene(
     levels: list[dict],
     meta_name: str,
@@ -102,12 +120,13 @@ def assemble_scene(
             if poly.is_empty or poly.geom_type != "Polygon" or poly.area <= 0.01:
                 continue
             wall_polys.append(poly)
+            height_m = getattr(segment, "height_m", None) or level["ceiling_height_m"]
             walls.append(
                 {
                     "id": f"w_{level_id}_{wall_index:03d}",
                     "level": level_id,
                     "polygon": ring_coords(poly.exterior),
-                    "height_m": level["ceiling_height_m"],
+                    "height_m": float(height_m),
                 }
             )
             wall_index += 1
@@ -180,11 +199,24 @@ def assemble_scene(
                     "passable": False,
                 }
             )
-        room_polys = list(level["faces"])
+        # Open-to-below voids are named so they stay on the plan, but they are
+        # not floor. The floor plate (when the reader built one) is the walkable
+        # slab; openings are the railing-side voids subtracted from it.
+        cutting = level.get("walk_base") is not None
+        room_polys = []
+        for index, face in enumerate(level["faces"]):
+            name, _room_type = level["labels"][index]
+            if cutting and str(name).upper().startswith("OTB"):
+                continue
+            room_polys.append(face)
+        room_polys.extend(_polygonal_parts(level.get("walk_base")))
+        opening_polys = []
+        for opening in level.get("openings") or []:
+            opening_polys.extend(_polygonal_parts(opening))
         walkable = build_walkable(
             room_polys,
             wall_polys,
-            obstacle_polys,
+            obstacle_polys + opening_polys,
             door_segments,
             wall_thickness_m=0.2,
             agent_radius_m=0.25,

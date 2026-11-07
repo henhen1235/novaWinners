@@ -23,9 +23,14 @@ type FloorLayout = {
   maxZ: number;
 };
 
+// A plain visit opens the Tepper sheet (rooms, walls, and railings).
+// An explicit ?glb= or ?scene= still overrides this.
+const TEPPER_GLB = "/api/runs/5e1cf0301fc7/display.glb";
+const TEPPER_SCENE = "/api/runs/5e1cf0301fc7/scene.json";
+
 const params = new URLSearchParams(location.search);
-const glbUrl = params.get("glb") ?? "/office/display.glb";
-const sceneUrl = params.get("scene") ?? "/office/scene.json";
+const glbUrl = params.get("glb") ?? TEPPER_GLB;
+const sceneUrl = params.get("scene") ?? TEPPER_SCENE;
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const readout = document.querySelector<HTMLSpanElement>("#readout")!;
@@ -642,24 +647,17 @@ async function bootBuildings() {
     showScene(sceneUrl);
     return;
   }
+  showModel(glbUrl);
+  showScene(sceneUrl);
   try {
     const response = await fetch("/api/buildings");
-    if (!response.ok) throw new Error(String(response.status));
+    if (!response.ok) return;
     const data = await response.json();
     buildings = Array.isArray(data.buildings) ? data.buildings : [];
     renderBuildingTabs();
-    const city = buildings.find((item) => item.slug === "city-hotel" || item.name === "シティホテル");
-    const linked = buildings.find((item) => item.scene_url && (item.scene_url === sceneUrl || item.glb_url === glbUrl));
-    const chosen = city ?? linked ?? buildings.find((item) => item.scene_url) ?? buildings[0];
-    if (chosen) {
-      selectBuilding(chosen);
-      return;
-    }
   } catch {
-    // The catalog is optional. The URL still points at a model.
+    // The catalog is optional. The Tepper model is already on screen.
   }
-  showModel(glbUrl);
-  showScene(sceneUrl);
 }
 
 bootBuildings();
