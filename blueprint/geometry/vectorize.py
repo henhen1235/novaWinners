@@ -174,7 +174,7 @@ def split_gaps(segments: list[Segment], close_gap_m: float = CLOSE_GAP_M) -> tup
             a = project(segment.p1)
             b = project(segment.p2)
             intervals.append((min(a, b), max(a, b), segment.thickness_m, segment))
-        intervals.sort()
+        intervals.sort(key=lambda item: item[:3])  # Segment is not orderable; identical intervals tie
         merged = [intervals[0]]
         for start, end, thickness, segment in intervals[1:]:
             prev_start, prev_end, prev_thickness, prev_segment = merged[-1]
