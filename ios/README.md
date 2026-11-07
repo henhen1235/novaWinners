@@ -99,6 +99,30 @@ ARMeshClassification raw value: 0 none, 1 wall, 2 floor, 3 ceiling, 4 table,
 5 seat, 6 window, 7 door. `scan_notes.json` has the usual keys plus
 `"mode": "mesh"`, `"frame": "arkit_world_gravity_y_up"` and `"triangles": M`.
 
+Mesh mode also saves keyframes into `mesh-<time>/keyframes/` while scanning,
+so computer vision can run later without rescanning: one each time the camera
+has moved 0.5 m or turned 15 degrees (at most 2 per second, 400 per scan).
+
+| file | content |
+|---|---|
+| `kf_<n>.jpg` | camera image, 1440 px long side, JPEG quality 0.8, sensor (landscape) orientation |
+| `kf_<n>_depth.png` | LiDAR depth, 16-bit grayscale, millimeters, 0 = no reading (256 x 192 on current phones) |
+| `frames.jsonl` | one JSON line per keyframe, see below |
+
+```json
+{"n": 0, "t": 12345.67, "image": "kf_0.jpg", "depth": "kf_0_depth.png",
+ "width": 1440, "height": 1080, "depth_width": 256, "depth_height": 192,
+ "intrinsics": [fx, fy, cx, cy], "camera_to_world": [16 floats, row-major]}
+```
+
+`image` and `depth` are relative to `frames.jsonl`; `depth` and its size are
+null without depth. `t` is the ARKit frame timestamp in seconds. `intrinsics`
+are in JPEG pixels. `camera_to_world` is `ARCamera.transform` in the same
+world frame as `mesh.ply`; the camera axes are ARKit's (x right, y up, z
+toward the viewer, image in landscape), so for OpenCV's convention multiply
+on the right by diag(1, -1, -1, 1). Share sends every file flat; the names
+still match after AirDrop.
+
 ## Exported files
 
 | file | content |

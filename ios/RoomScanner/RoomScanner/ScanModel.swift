@@ -1,7 +1,10 @@
 import ARKit
+import CoreImage
+import ImageIO
 import RealityKit
 import RoomPlan
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Drives one floor capture: scan rooms one after another in a single ARSession,
 /// merge them with StructureBuilder, then write the files the Python converter reads.
@@ -171,12 +174,19 @@ final class MeshModel: ObservableObject {
     private var elapsed: TimeInterval = 0
     private var lastTick: Date?
     private var startedAt = Date.now
+    private let recorder = KeyframeRecorder()
 
     static var isSupported: Bool { ARWorldTrackingConfiguration.supportsSceneReconstruction(.meshWithClassification) }
 
     init() {
         // ponytail: built-in mesh wireframe, not colored by class; add a per-class ModelEntity overlay if coverage is hard to read.
         arView.debugOptions.insert(.showSceneUnderstanding)
+        arView.session.delegate = recorder
+    }
+
+    private var folder: URL {
+        URL.documentsDirectory
+            .appending(path: "mesh-" + startedAt.formatted(.iso8601).replacingOccurrences(of: ":", with: ""))
     }
 
     private var configuration: ARWorldTrackingConfiguration {
@@ -185,6 +195,9 @@ final class MeshModel: ObservableObject {
         config.environmentTexturing = .none
         config.planeDetection = [.horizontal, .vertical]
         config.worldAlignment = .gravity
+        if ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth) {
+            config.frameSemantics.insert(.sceneDepth)
+        }
         return config
     }
 
@@ -209,7 +222,10 @@ final class MeshModel: ObservableObject {
     }
 
     private func run(options: ARSession.RunOptions) {
-        if elapsed == 0 { startedAt = .now }
+        if elapsed == 0 {
+            startedAt = .now
+            recorder.start(in: folder.appending(path: "keyframes"))
+        }
         arView.session.run(configuration, options: options)
         isRunning = true
         lastTick = .now
@@ -228,8 +244,9 @@ final class MeshModel: ObservableObject {
         let triangles = anchors.reduce(0) { $0 + $1.geometry.faces.count }
         let floor = anchors.reduce(Float(0)) { $0 + $1.geometry.floorArea }
         let seconds = Int(elapsed)
-        status = String(format: "%d anchors, %d triangles, floor %.1f m^2, %d:%02d",
-                        anchors.count, triangles, floor, seconds / 60, seconds % 60)
+        status = String(format: "%d anchors, %d triangles, floor %.1f m^2, %d keyframes, %d:%02d",
+                        anchors.count, triangles, floor, recorder.count, seconds / 60, seconds % 60)
+        if let problem = recorder.lastError { status += "\nKeyframe failed: \(problem)" }
     }
 
     func export() {
@@ -239,8 +256,7 @@ final class MeshModel: ObservableObject {
             status = "No mesh yet. Tap Start and scan first."
             return
         }
-        let folder = URL.documentsDirectory
-            .appending(path: "mesh-" + startedAt.formatted(.iso8601).replacingOccurrences(of: ":", with: ""))
+        recorder.flush()
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let (ply, triangles) = Self.ply(anchors)
@@ -252,8 +268,12 @@ final class MeshModel: ObservableObject {
                                   mode: "mesh", frame: "arkit_world_gravity_y_up", triangles: triangles)
             let notesURL = folder.appending(path: "scan_notes.json")
             try encoder.encode(notes).write(to: notesURL)
-            exported = [plyURL, notesURL]
-            status = "Saved \(triangles) triangles to Files > On My iPhone > RoomScanner > \(folder.lastPathComponent)."
+            // No keyframes folder when tracking never settled; the mesh alone is still a valid export.
+            let keyframes = (try? FileManager.default.contentsOfDirectory(
+                at: folder.appending(path: "keyframes"), includingPropertiesForKeys: nil)) ?? []
+            // Shared flat: frames.jsonl names files relative to itself, so AirDrop to ~/Downloads still resolves.
+            exported = [plyURL, notesURL] + keyframes.sorted { $0.lastPathComponent < $1.lastPathComponent }
+            status = "Saved \(triangles) triangles and \(recorder.count) keyframes to Files > On My iPhone > RoomScanner > \(folder.lastPathComponent)."
         } catch {
             status = "Export failed: \(error.localizedDescription)"
         }
@@ -298,6 +318,152 @@ final class MeshModel: ObservableObject {
             """
         return (Data(header.utf8) + vertexData + faceData, faceCount)
     }
+}
+
+/// Saves a keyframe whenever the camera has moved 0.5 m or turned 15 degrees since the last one
+/// (at most 2 per second, 400 per scan) so computer vision can run offline without rescanning:
+/// kf_<n>.jpg, kf_<n>_depth.png (uint16 millimeters, 0 = no depth) and one frames.jsonl line.
+/// ARSession calls it on the main queue; encoding and file writes run on `queue`.
+final class KeyframeRecorder: NSObject, ARSessionDelegate, @unchecked Sendable {
+    private static let minDistance: Float = 0.5
+    private static let minAngle: Float = 15 * .pi / 180
+    private static let minInterval: TimeInterval = 0.5
+    private static let maxCount = 400
+    private static let longSide: CGFloat = 1440
+
+    private let queue = DispatchQueue(label: "org.nova.RoomScanner.keyframes", qos: .utility)
+    private let context = CIContext()
+    private var folder: URL?
+    private var last: (pose: simd_float4x4, time: TimeInterval)?
+    // Main queue only.
+    private(set) var count = 0
+    private(set) var lastError: String?
+
+    func start(in folder: URL) {
+        self.folder = folder
+        last = nil
+        count = 0
+        lastError = nil
+    }
+
+    /// Blocks until every queued keyframe is on disk.
+    func flush() { queue.sync {} }
+
+    func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        guard let folder, count < Self.maxCount, case .normal = frame.camera.trackingState else { return }
+        let pose = frame.camera.transform
+        if let last {
+            guard frame.timestamp - last.time >= Self.minInterval else { return }
+            let moved = simd_distance(pose.columns.3, last.pose.columns.3) >= Self.minDistance
+            guard moved || Self.angle(last.pose, pose) >= Self.minAngle else { return }
+        }
+        last = (pose, frame.timestamp)
+        // ponytail: holds the two pixel buffers, not the ARFrame; 2 per second is far below the camera pool size.
+        let keyframe = Keyframe(n: count, time: frame.timestamp, image: frame.capturedImage,
+                                depth: frame.sceneDepth?.depthMap, intrinsics: frame.camera.intrinsics, pose: pose)
+        count += 1
+        queue.async {
+            do {
+                try self.write(keyframe, to: folder)
+            } catch {
+                let problem = "kf_\(keyframe.n): \(error.localizedDescription)"
+                DispatchQueue.main.async { self.lastError = problem }
+            }
+        }
+    }
+
+    /// Rotation angle between two poses, 0 to pi.
+    private static func angle(_ a: simd_float4x4, _ b: simd_float4x4) -> Float {
+        let turn = (simd_quatf(a).inverse * simd_quatf(b)).angle
+        return min(turn, 2 * .pi - turn)
+    }
+
+    private func write(_ keyframe: Keyframe, to folder: URL) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let sourceWidth = CVPixelBufferGetWidth(keyframe.image)
+        let sourceHeight = CVPixelBufferGetHeight(keyframe.image)
+        let scale = Self.longSide / CGFloat(max(sourceWidth, sourceHeight))
+        let image = CIImage(cvPixelBuffer: keyframe.image).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let options = [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.8]
+        guard let jpeg = context.jpegRepresentation(of: image, colorSpace: CGColorSpaceCreateDeviceRGB(), options: options)
+        else { throw KeyframeError("JPEG encoding failed") }
+        let imageName = "kf_\(keyframe.n).jpg"
+        try jpeg.write(to: folder.appending(path: imageName))
+
+        let depthName = keyframe.depth.map { _ in "kf_\(keyframe.n)_depth.png" }
+        if let depth = keyframe.depth, let depthName {
+            try Self.writeDepthPNG(depth, to: folder.appending(path: depthName))
+        }
+        let k = keyframe.intrinsics
+        let s = Float(scale)
+        let line: [String: Any] = [
+            "n": keyframe.n,
+            "t": keyframe.time,
+            "image": imageName,
+            "depth": depthName ?? NSNull(),
+            "width": Int((CGFloat(sourceWidth) * scale).rounded()),
+            "height": Int((CGFloat(sourceHeight) * scale).rounded()),
+            "depth_width": keyframe.depth.map(CVPixelBufferGetWidth) ?? NSNull(),
+            "depth_height": keyframe.depth.map(CVPixelBufferGetHeight) ?? NSNull(),
+            // ARKit intrinsics are for capturedImage; a uniform resize scales them by the same factor.
+            "intrinsics": [k[0][0] * s, k[1][1] * s, k[2][0] * s, k[2][1] * s].map(Double.init),
+            "camera_to_world": (0..<4).flatMap { row in (0..<4).map { column in Double(keyframe.pose[column][row]) } },
+        ]
+        var data = try JSONSerialization.data(withJSONObject: line, options: [.sortedKeys])
+        data.append(0x0A)
+        let jsonl = folder.appending(path: "frames.jsonl")
+        if !FileManager.default.fileExists(atPath: jsonl.path) {
+            FileManager.default.createFile(atPath: jsonl.path, contents: nil)
+        }
+        let handle = try FileHandle(forWritingTo: jsonl)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+    }
+
+    /// Float32 meters to a 16-bit grayscale PNG in millimeters (big-endian samples, as PNG stores them).
+    private static func writeDepthPNG(_ depth: CVPixelBuffer, to url: URL) throws {
+        guard CVPixelBufferGetPixelFormatType(depth) == kCVPixelFormatType_DepthFloat32 else {
+            throw KeyframeError("unexpected depth format")
+        }
+        CVPixelBufferLockBaseAddress(depth, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(depth, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(depth) else { throw KeyframeError("no depth data") }
+        let width = CVPixelBufferGetWidth(depth)
+        let height = CVPixelBufferGetHeight(depth)
+        let rowBytes = CVPixelBufferGetBytesPerRow(depth)
+        let millimeters = (0..<height).flatMap { y in
+            let row = base.advanced(by: y * rowBytes).assumingMemoryBound(to: Float32.self)
+            return (0..<width).map { x in
+                let meters = row[x]
+                return (meters.isFinite && meters > 0 ? UInt16(min(meters * 1000, 65535).rounded()) : 0).bigEndian
+            }
+        }
+        guard let provider = CGDataProvider(data: millimeters.withUnsafeBytes { Data($0) } as CFData),
+              let image = CGImage(width: width, height: height, bitsPerComponent: 16, bitsPerPixel: 16,
+                                  bytesPerRow: width * 2, space: CGColorSpaceCreateDeviceGray(),
+                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                                  provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent),
+              let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)
+        else { throw KeyframeError("depth PNG setup failed") }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw KeyframeError("depth PNG write failed") }
+    }
+}
+
+/// The parts of an ARFrame a keyframe needs; pixel buffers are only read on the writer queue.
+private struct Keyframe: @unchecked Sendable {
+    let n: Int
+    let time: TimeInterval
+    let image: CVPixelBuffer
+    let depth: CVPixelBuffer?
+    let intrinsics: simd_float3x3
+    let pose: simd_float4x4
+}
+
+private struct KeyframeError: LocalizedError {
+    let errorDescription: String?
+    init(_ message: String) { errorDescription = message }
 }
 
 private extension ARMeshGeometry {
