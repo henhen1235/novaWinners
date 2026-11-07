@@ -81,8 +81,13 @@ if [ -f samples/scans/hall_mesh/mesh.ply ]; then
   else
     fail "hall ingest failed"
   fi
+elif [ -f samples/lidar/hall/scene.json ]; then
+  # Other laptops: the hall already built from the scan (raw scan stays on the scanning laptop).
+  mkdir -p "$PUBLIC/hall"
+  cp samples/lidar/hall/scene.json samples/lidar/hall/display.glb "$PUBLIC/hall/"
+  SCENES+=(hall); echo "hall: copied the built LiDAR scan from samples/lidar/hall"
 else
-  echo "hall: SKIP (samples/scans/hall_mesh/mesh.ply is local to the scanning laptop; copy it there to build the hall)"
+  echo "hall: SKIP (no scan and no samples/lidar/hall)"
 fi
 
 echo "office: ingesting blueprint/samples/blueprints/office_vector/plan.pdf"
