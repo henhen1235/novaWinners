@@ -186,7 +186,7 @@ export function startEdit(context: ViewerContext) {
   section.className = "edit";
   section.setAttribute("aria-labelledby", "edit-title");
   section.innerHTML = `
-    <h2 id="edit-title">Edit scenario</h2>
+    <details class="edit-collapse"><summary><h2 id="edit-title">Change the scenario</h2></summary>
     <div class="views edit-tools" role="group" aria-label="Edit tools">
       ${TOOLS.map(([id, name, title]) => `<button type="button" data-tool="${id}" aria-pressed="false" title="${title}">${name}</button>`).join("")}
     </div>
@@ -216,7 +216,7 @@ export function startEdit(context: ViewerContext) {
         </div>
         <p id="pop-floors" class="edit-hint" aria-live="polite"></p>
       </fieldset>
-      <details open><summary>Traits</summary>
+      <details><summary>More traits</summary>
         ${TRAITS.map(([key, name, min, max, step, value]) => slider(key, name, min, max, step, value)).join("")}
         ${OCEAN.map(([key, name]) => slider(`ocean-${key}`, `${name} (${key})`, 0, 1, 0.05, 0.5)).join("")}
       </details>
@@ -231,10 +231,10 @@ export function startEdit(context: ViewerContext) {
     <h3>Changes</h3>
     <p class="edit-empty" id="edit-empty">No changes yet.</p>
     <ol id="edit-list" class="edit-list"></ol>
-    <button id="edit-download" type="button" class="edit-download">Download scenario.json</button>`;
-  const routeSection = document.querySelector("aside section.route");
-  if (routeSection) routeSection.before(section);
-  else document.querySelector("aside")?.append(section);
+    <button id="edit-download" type="button" class="edit-download">Download scenario.json</button>
+    </details>`;
+  // Findings come first; changing the scenario is the last thing in the rail and starts folded.
+  document.querySelector("aside")?.append(section);
 
   const $ = <T extends Element>(selector: string) => section.querySelector<T>(selector)!;
   const hint = $<HTMLParagraphElement>("#edit-hint");

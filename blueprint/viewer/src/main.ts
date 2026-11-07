@@ -12,6 +12,7 @@ import { startReplay } from "./replay";
 import { startAnalysis } from "./analysis";
 import { startEdit } from "./edit";
 import { startLive } from "./live";
+import { buildingName, scenarioName } from "./names";
 
 const params = new URLSearchParams(location.search);
 // An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
@@ -24,7 +25,7 @@ const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const readout = document.querySelector<HTMLSpanElement>("#readout")!;
 const levelSelect = document.querySelector<HTMLSelectElement>("#level")!;
 const warningList = document.querySelector<HTMLElement>("#warnings")!;
-const buildingName = document.querySelector<HTMLElement>("#building")!;
+const buildingTitle = document.querySelector<HTMLElement>("#building")!;
 const titleBlock = document.querySelector<HTMLElement>("#title-block")!;
 const spacingInput = document.querySelector<HTMLInputElement>("#spacing")!;
 
@@ -137,6 +138,9 @@ function fitPlans() {
   const { width, height } = stageSize();
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
+  // Leave room at the bottom for the replay transport so the last row of plans stays visible.
+  size.z *= 1.12;
+  center.z += size.z * 0.05;
   const half = Math.max(size.z / 2, size.x / 2 / (width / height)) * 1.06;
   Object.assign(orthographic, { left: (-half * width) / height, right: (half * width) / height, top: half, bottom: -half, zoom: 1 });
   orthographic.updateProjectionMatrix();
@@ -179,25 +183,51 @@ function text(tag: string, content: string) {
   return element;
 }
 
+// Title block, as on a drawing sheet, in the words of the person who owns the building's plan.
+// Click the name to fold it so it never covers a floor.
 function drawTitleBlock(data: SceneDoc) {
   const errors = data.warnings.filter((warning) => warning.severity === "error").length;
-  const date = data.meta?.generated_at.slice(0, 10) ?? "";
-  const rows: [string, string, string?][] = [
-    ["Source", data.meta?.source ?? "unknown"],
-    ["Scale", data.meta?.scale_method.replace(/_/g, " ") ?? ""],
-    [data.levels.length > 1 ? "Floors, rooms, exits" : "Rooms, exits", `${data.levels.length > 1 ? `${data.levels.length}, ` : ""}${data.rooms.length}, ${data.exits.length}`],
-    ["Generated", date],
-    ["Checks", errors ? `${errors} errors` : `${data.warnings.length} warnings`, errors ? "fail" : "pass"],
+  const source = data.meta?.source ?? "";
+  const origin = /CMU/.test((data.meta as { source_file?: string } | undefined)?.source_file ?? "")
+    ? "Built from CMU floor plans"
+    : source === "lidar" ? "Built from a LiDAR scan" : source === "blueprint" ? "Built from floor plans" : "Test building";
+  const floorsText = data.levels.length > 1 ? `${data.levels.length} floors, ` : "";
+  const rows: [string, string?][] = [
+    [origin],
+    [`${floorsText}${data.rooms.length} rooms, ${data.exits.length} exits`],
+    [errors ? `Model check: ${errors} problems` : "Model check passed", errors ? "fail" : "pass"],
   ];
-  titleBlock.replaceChildren(text("dt", data.meta?.name ?? "Scene"));
-  titleBlock.firstElementChild!.className = "tb-name";
-  for (const [key, value, state] of rows) {
+  const name = text("dt", buildingName(data.meta?.name));
+  name.className = "tb-name";
+  name.tabIndex = 0;
+  name.setAttribute("role", "button");
+  name.title = "Show or hide details";
+  const toggle = () => titleBlock.classList.toggle("folded");
+  name.addEventListener("click", toggle);
+  name.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
+  });
+  titleBlock.replaceChildren(name);
+  for (const [value, state] of rows) {
     const dd = text("dd", value);
     if (state) dd.className = state;
-    titleBlock.append(text("dt", key), dd);
+    titleBlock.append(dd);
   }
   titleBlock.hidden = false;
-  buildingName.textContent = data.meta?.name ?? "";
+  if (data.levels.length > 1) titleBlock.classList.add("folded"); // side by side needs the corner
+  buildingTitle.textContent = headerTitle(data);
+}
+
+// Header: building, then what is being shown (the replay's scenario, or the compare names).
+function headerTitle(data: SceneDoc) {
+  const building = buildingName(data.meta?.name);
+  const replay = params.get("replay");
+  if (!replay) return building;
+  const dir = (url: string) => url.split("/").slice(-2, -1)[0] ?? "";
+  const names = params.get("names")?.split(",").map((item) => item.trim());
+  const compare = params.get("compare");
+  const scenario = compare ? (names?.length === 2 ? `${names[0]} vs ${names[1]}` : `${scenarioName(dir(replay))} vs ${scenarioName(dir(compare))}`) : scenarioName(dir(replay));
+  return `${building}: ${scenario}`;
 }
 
 // ---- floors rail: one row per level with its live count; clicking a row focuses that floor ----
@@ -642,6 +672,17 @@ ready.then((data) => {
     pickFloor,
     setNavigation: (enabled) => (controls.enabled = enabled),
     setElevatorsRecalled: (recalled) => floors?.setRecalled(recalled),
+    stairNear: (level, x, z) => {
+      const shaft = floors?.shafts.find((item) => {
+        const stop = item.stops.get(level);
+        return stop && Math.hypot(stop[0] - x, stop[1] - z) < 8;
+      });
+      return shaft?.letter ?? null;
+    },
+    focusOn: (level, x, z) => {
+      if (view === "single" && level !== activeLevel) setLevel(level);
+      frame(x, z, level);
+    },
   };
   startAnalysis(context, params.get("analysis"));
   startReplay(context, params.get("replay"), params.get("compare"));

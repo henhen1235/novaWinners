@@ -6,6 +6,7 @@ import type { ViewerContext } from "./context";
 import { openInterview, updateInterview, type DecisionRecord } from "./interview";
 import { People, type AgentSample } from "./people";
 import { parseFrames, type ParsedFrames } from "./frames";
+import { agentNames, clockText, personaName, scenarioName } from "./names";
 
 export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: string; text?: string };
 export type ReplayDoc = {
@@ -60,9 +61,6 @@ export interface Player {
 
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 const SPEEDS = [1, 4, 16];
-const KIND_LABEL: Record<string, string> = {
-  decision: "Decision", said: "Said", heard: "Heard", exited: "Left", blocked: "Blocked", fire_spread: "Fire", rumor: "Rumor",
-};
 // Agent colors follow design/DESIGN.md: calm text, moving route green, deciding amber, trapped hazard.
 const STATE_TOKEN: Record<string, string> = {
   waiting: "text", hiding: "text", helping: "model", moving: "route", deciding: "warn", queued: "drafting",
@@ -70,10 +68,17 @@ const STATE_TOKEN: Record<string, string> = {
   trapped: "hazard-bright", hurt: "hazard-bright", blocked: "hazard-bright",
 };
 const STATE_LABEL: Record<string, string> = {
-  waiting: "Waiting", hiding: "Hiding", helping: "Helping", moving: "Moving", deciding: "Deciding", queued: "Queued at a door",
-  trapped: "Trapped", hurt: "Hurt", blocked: "Blocked", on_stairs: "On the stairs", waiting_at_refuge: "Waiting at refuge",
-  carried: "Being carried", at_elevator_lobby: "At an elevator lobby", exited: "Evacuated",
+  waiting: "Not moving yet", hiding: "Hiding", helping: "Helping someone", moving: "Heading out", deciding: "Deciding", queued: "Queued at a door",
+  trapped: "Trapped", hurt: "Hurt", blocked: "Blocked", on_stairs: "On the stairs", waiting_at_refuge: "Waiting at a refuge",
+  carried: "Being carried", at_elevator_lobby: "At an elevator lobby", exited: "Out",
 };
+// What someone still inside is doing, for the "Still inside" list. Order = who needs a human first.
+const SITUATION: [string, string, number][] = [
+  ["trapped", "trapped", 0], ["blocked", "blocked by fire or smoke", 0], ["hurt", "hurt", 0],
+  ["waiting_at_refuge", "waiting at a refuge", 1], ["carried", "being carried out", 2], ["never", "never started moving", 3],
+  ["waiting", "stopped, not moving", 4], ["hiding", "hiding", 4], ["deciding", "deciding what to do", 5], ["at_elevator_lobby", "at an elevator lobby", 5],
+  ["queued", "queued at a door", 6], ["helping", "helping someone out", 7], ["moving", "still walking out", 8], ["on_stairs", "on the stairs", 8],
+];
 const PERSONA_FALLBACK = ["drafting", "model", "walkable", "text-muted", "line-strong"];
 
 async function fetchJson(url: string) {
@@ -151,7 +156,7 @@ export function buildRun(context: ViewerContext, url: string, source: ReplayDoc,
   const root = new THREE.Group();
   const labels = new THREE.Group();
   root.add(ring);
-  const name = doc.meta.label ?? url.split("/").slice(-2, -1)[0] ?? url;
+  const name = doc.meta.label ?? scenarioName(url.split("/").slice(-2, -1)[0] ?? url);
   // cognition.serve names a run by its directory under --runs (out/<run>/replay.json).
   const runId = url.split("/").slice(-2, -1)[0] || doc.meta.run_id || url;
   const people = null as unknown as People; // made in startReplay once we know whether this run paints heat
@@ -384,6 +389,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   scrub.step = String(runs[0].doc.meta.dt || 0.5);
   $("#transport").hidden = false;
   $("#run").hidden = false;
+  $("#inside").hidden = false;
   $("#agents").hidden = false;
   $("#feed-section").hidden = false;
   document.body.classList.add("replaying");
@@ -456,7 +462,11 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     }
   }
 
+  // ---- result: the outcome first, in a sentence ----
+  const names = new Map(runs.map((run) => [run, agentNames(run.doc.agents)]));
+  const nameOf = (run: Run, id: string | undefined) => (id && names.get(run)!.get(id)) || id || "";
   const totals: HTMLElement[] = [];
+  const outcomes: HTMLElement[] = [];
   const counters = runs.map((run) => {
     const column = document.createElement("div");
     column.className = "counter";
@@ -465,47 +475,205 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       heading.textContent = run.name;
       column.append(heading);
     }
-    const big = document.createElement("p");
-    big.className = "evacuated";
+    const outcome = document.createElement("p");
+    outcome.className = "result-line";
+    outcomes.push(outcome);
+    const last = document.createElement("p");
+    last.className = "counter-caption";
+    totals.push(last);
+    const now = document.createElement("p");
+    now.className = "counter-caption result-now";
     const value = document.createElement("b");
-    const total = document.createElement("span");
-    total.textContent = `/ ${run.doc.agents.length}`;
-    big.append(value, total);
-    totals.push(total);
-    const caption = document.createElement("p");
-    caption.className = "counter-caption";
-    caption.textContent = "evacuated";
-    const cost = document.createElement("p");
-    cost.className = "counter-caption";
+    now.append("Now: ", value);
+    column.append(outcome, last, now);
     const calls = run.doc.meta.llm_calls ?? 0;
-    cost.textContent = calls ? `${calls} model calls, $${(run.doc.meta.cost_usd ?? 0).toFixed(4)}` : "No model calls";
-    column.append(big, caption, cost);
+    if (calls) {
+      const cost = document.createElement("p");
+      cost.className = "counter-caption";
+      cost.textContent = `${calls} model calls, $${(run.doc.meta.cost_usd ?? 0).toFixed(2)}`;
+      column.append(cost);
+    }
     $("#counters").append(column);
     return value;
   });
+  function drawOutcome(run: Run, r: number) {
+    const out = run.exitTime.filter((t) => Number.isFinite(t));
+    const total = run.doc.agents.length;
+    const got = document.createElement("b");
+    got.textContent = String(out.length);
+    outcomes[r].replaceChildren(got, live ? ` of ${total} out so far` : ` of ${total} got out`);
+    totals[r].textContent = out.length ? `Last person out at ${clockText(Math.max(...out))}` : "Nobody got out";
+  }
+  runs.forEach(drawOutcome);
+
+  // ---- still inside: who is left, grouped by who they are, what they are doing and where ----
+  const firstSeen = new Map<Run, Float32Array>();
+  const firstXZ = (run: Run) => {
+    let xz = firstSeen.get(run);
+    if (xz && !live) return xz;
+    xz = new Float32Array(run.doc.agents.length * 2).fill(NaN);
+    run.xs.forEach((xs, f) => {
+      for (let k = 0; k < xz!.length / 2; k += 1) {
+        if (!Number.isNaN(xz![2 * k]) || Number.isNaN(xs[k] ?? NaN)) continue;
+        xz![2 * k] = xs[k];
+        xz![2 * k + 1] = run.zs[f][k];
+      }
+    });
+    firstSeen.set(run, xz);
+    return xz;
+  };
+  type Group = { key: string; text: string; rank: number; members: number[]; level: string; x: number; z: number };
+  const levelName = (id: string) => context.doc.levels.find((level) => level.id === id)?.name ?? id;
+  function stillInside(run: Run, t: number): Group[] {
+    const { i } = frameIndex(run, t);
+    const first = firstXZ(run);
+    const groups = new Map<string, Group>();
+    run.doc.agents.forEach((agent, k) => {
+      const state = run.states[i]?.[k] ?? "";
+      const x = run.xs[i]?.[k] ?? NaN;
+      const z = run.zs[i]?.[k] ?? NaN;
+      if (!state || state === "exited" || Number.isNaN(x)) return;
+      const level = levelIds[run.levels[i][k]];
+      const still = Math.hypot(x - first[2 * k], z - first[2 * k + 1]) < 0.5;
+      const situation = (state === "waiting" || state === "hiding") && still ? "never" : state;
+      const [, phrase, rank] = SITUATION.find(([id]) => id === situation) ?? [situation, STATE_LABEL[situation]?.toLowerCase() ?? situation, 8];
+      const stair = situation === "waiting_at_refuge" ? context.stairNear(level, x, z) : null;
+      const what = stair ? `waiting at the stair ${stair} refuge` : phrase;
+      const key = `${agent.persona}|${what}|${level}`;
+      const group = groups.get(key) ?? { key, text: "", rank, members: [], level, x, z };
+      group.members.push(k);
+      groups.set(key, group);
+      group.text = `${group.members.length} ${personaName(agent.persona, group.members.length).toLowerCase()} ${what}, ${levelName(level).toLowerCase()}`;
+    });
+    return [...groups.values()].sort((a, b) => a.rank - b.rank || b.members.length - a.members.length);
+  }
+  const MAX_INSIDE_ROWS = 7;
+  let insideKey = "";
+  const pins = new Map<Run, CSS2DObject[]>();
+  function drawInside(t: number) {
+    const atEnd = !live && t >= duration - 0.01;
+    const all = runs.map((run) => stillInside(run, t));
+    const key = `${atEnd}|${all.map((groups) => groups.map((g) => `${g.key}:${g.members.length}`).join(",")).join(";")}`;
+    if (key === insideKey) return;
+    insideKey = key;
+    const list = $("#inside-list");
+    list.replaceChildren();
+    runs.forEach((run, r) => {
+      const groups = all[r];
+      if (runs.length > 1) {
+        const heading = document.createElement("li");
+        heading.className = "inside-run";
+        heading.textContent = run.name;
+        list.append(heading);
+      }
+      if (!groups.length) {
+        const done = document.createElement("li");
+        done.className = "inside-none";
+        done.textContent = "Everyone is out.";
+        list.append(done);
+      }
+      for (const group of groups.slice(0, MAX_INSIDE_ROWS)) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = group.rank <= 3 ? "needs-help" : "";
+        button.textContent = group.text.charAt(0).toUpperCase() + group.text.slice(1);
+        button.addEventListener("click", () => {
+          const k = group.members[0];
+          context.focusOn(group.level, run.xs[frameIndex(run, clock.t).i][k], run.zs[frameIndex(run, clock.t).i][k]);
+          select(run, k);
+        });
+        item.append(button);
+        list.append(item);
+      }
+      const rest = groups.slice(MAX_INSIDE_ROWS).reduce((n, g) => n + g.members.length, 0);
+      if (rest) {
+        const more = document.createElement("li");
+        more.className = "inside-none";
+        more.textContent = `and ${rest} more ${rest === 1 ? "person" : "people"}`;
+        list.append(more);
+      }
+      // At the end of a replay the people left behind get a pin on the plan.
+      for (const pin of pins.get(run) ?? []) pin.removeFromParent();
+      pins.set(run, []);
+      if (!atEnd) return;
+      for (const group of groups.slice(0, MAX_INSIDE_ROWS)) {
+        const pin = context.label("inside-pin", (element) => (element.textContent = `${group.members.length} ${group.text.split(",")[0].replace(/^\d+ /, "")}`));
+        context.place(group.level, group.x, group.z, pin.position);
+        pin.center.set(0.5, 1.4);
+        run.labels.add(pin);
+        pins.get(run)!.push(pin);
+      }
+    });
+    const count = all[0].reduce((n, g) => n + g.members.length, 0);
+    $("#inside-title").textContent = runs.length > 1 ? "Still inside" : count ? `Still inside: ${count}` : "Still inside";
+  }
 
   // ---- events feed ----
   type FeedItem = { event: ReplayEvent; run: Run; element: HTMLLIElement };
-  const feedItem = ({ event, run }: { event: ReplayEvent; run: Run }): FeedItem => {
+  // ---- what happened: plain language, routine noise dropped ----
+  const placeText = (text: string) =>
+    text.replace(/\br_(\w+)/g, "room $1").replace(/\bdoor door_(\d+)_\w+/g, "a door on floor $1").replace(/\bdoor_(\d+)_\w+/g, "a door on floor $1").split(";")[0];
+  const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+  const told = new Set<string>();
+  function story(event: ReplayEvent, run: Run): string | null {
+    const who = nameOf(run, event.agent);
+    const text = event.text ?? "";
+    switch (event.kind) {
+      case "alarm": return "The fire alarm sounded";
+      case "fire_spread": return capital(placeText(text));
+      case "blocked": return who ? `${who} found the way blocked` : capital(placeText(text));
+      case "waiting_at_refuge": return `${who} is waiting at a stair refuge for help`;
+      case "help_assigned": case "helping": return who ? `${who} went to help someone` : capital(placeText(text));
+      case "reached_person": return `${who} reached someone who needs help`;
+      case "elevator_recalled": return told.has("elevators") ? null : (told.add("elevators"), "Elevators recalled; not usable in the fire");
+      case "milestone": return text;
+      case "rumor": return `Rumor: ${text}`;
+      case "said": {
+        // Staff instructions are the moments that move people; everyone else's chatter is noise.
+        const persona = run.doc.agents.find((agent) => agent.id === event.agent)?.persona ?? "";
+        if (!["staff", "warden"].includes(persona) || told.has(`said:${event.agent}`)) return null;
+        told.add(`said:${event.agent}`);
+        return `${who} told people: "${text}"`;
+      }
+      case "decision": {
+        if (/go back|return/i.test(text)) return `${who} went back`;
+        // Ignoring the alarm a minute in is a finding; the first seconds of finishing a task are not.
+        if (/continue task/i.test(text) && event.t >= 60 && !told.has(`stay:${event.agent}`)) {
+          told.add(`stay:${event.agent}`);
+          return `${who} kept working`;
+        }
+        if (/refuge/i.test(text) && !told.has(`refuge:${event.agent}`)) {
+          told.add(`refuge:${event.agent}`);
+          return `${who} chose to wait at a refuge`;
+        }
+        return null;
+      }
+      default: return null;
+    }
+  }
+  // Every 25 % out is a line of its own.
+  const milestones = (run: Run): ReplayEvent[] => {
+    const times = run.exitTime.filter((t) => Number.isFinite(t)).sort((a, b) => a - b);
+    const total = run.doc.agents.length;
+    return [0.25, 0.5, 0.75, 1].flatMap((share) => {
+      const n = Math.ceil(total * share);
+      return times.length >= n && n > 0 ? [{ t: times[n - 1], kind: "milestone", text: share === 1 ? `Everyone out (${total})` : `${share * 100}% out (${n} of ${total})` }] : [];
+    });
+  };
+  // story() remembers what it already told (first "kept working" per person), so call it once per event.
+  const feedItem = ({ event, run, line }: { event: ReplayEvent; run: Run; line: string }): FeedItem => {
       const element = document.createElement("li");
       element.className = `feed-${event.kind}`;
       element.hidden = true;
       const button = document.createElement("button");
       button.type = "button";
       const time = document.createElement("time");
-      time.textContent = `${event.t.toFixed(1)} s`;
-      const kind = document.createElement("b");
-      kind.textContent = KIND_LABEL[event.kind] ?? event.kind;
-      const who = document.createElement("span");
-      who.className = "who";
-      who.textContent = [runs.length > 1 ? (run === runs[0] ? "left" : "right") : "", event.agent ?? ""].filter(Boolean).join(", ");
+      time.textContent = clockText(event.t);
       const what = document.createElement("span");
       what.className = "what";
-      what.textContent = event.text ?? event.ref ?? "";
-      const head = document.createElement("span");
-      head.className = "head";
-      head.append(kind, who);
-      button.append(time, head, what);
+      what.textContent = `${runs.length > 1 ? `${run.name}: ` : ""}${line}`;
+      button.append(time, what);
       button.addEventListener("click", () => {
         seek(event.t);
         const agent = run.doc.agents.findIndex((item) => item.id === event.agent);
@@ -515,8 +683,10 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       return { event, run, element };
   };
   const feed: FeedItem[] = runs
-    .flatMap((run) => run.doc.events.filter((event) => event.kind !== "heard").map((event) => ({ event, run })))
+    .flatMap((run) => [...run.doc.events, ...milestones(run)].map((event) => ({ event, run })))
     .sort((a, b) => a.event.t - b.event.t)
+    .map(({ event, run }) => ({ event, run, line: story(event, run) }))
+    .filter((item): item is { event: ReplayEvent; run: Run; line: string } => item.line !== null)
     .map(feedItem);
   $("#feed").append(...feed.map((item) => item.element));
   let shown = 0;
@@ -527,12 +697,13 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     if (!force && t === clock.last) return;
     clock.last = t;
     scrub.value = String(t);
-    clockOut.textContent = live ? `${t.toFixed(1)} s, live` : `${t.toFixed(1)} s / ${duration.toFixed(0)} s`;
+    clockOut.textContent = live ? `${clockText(t)}, live` : `${clockText(t)} of ${clockText(duration)}`;
     runs.forEach((run, r) => {
       const { i } = frameIndex(run, t);
-      counters[r].textContent = String((run.states[i] ?? []).filter((state) => state === "exited").length);
-      totals[r].textContent = `/ ${run.doc.agents.length}`;
+      counters[r].textContent = `${(run.states[i] ?? []).filter((state) => state === "exited").length} out at ${clockText(t)}`;
+      if (live) drawOutcome(run, r);
     });
+    drawInside(t);
     const visible = feed.filter((item) => item.event.t <= t + 1e-6).length;
     if (visible !== shown) {
       feed.forEach((item, k) => (item.element.hidden = k >= visible));
@@ -558,6 +729,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       selection = null;
       for (const item of runs) item.ring.visible = false;
     });
+    $("#iv-title").textContent = nameOf(run, run.doc.agents[agent]?.id);
     refresh(true);
   }
   context.onPick((raycaster, side) => {
@@ -598,8 +770,9 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
         const event = { ...source, text: readable(context, source.text) };
         run.doc.events.push(event);
         if (isSaid(event)) said.get(run)!.push({ event, n: run.doc.events.length - 1 });
-        if (event.kind === "heard") continue;
-        const item = feedItem({ event, run });
+        const line = story(event, run);
+        if (line === null) continue;
+        const item = feedItem({ event, run, line });
         feed.push(item);
         $("#feed").append(item.element);
       }

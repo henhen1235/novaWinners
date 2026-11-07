@@ -51,6 +51,10 @@ export interface ViewerContext {
   setNavigation: (enabled: boolean) => void;
   /** Grey out elevators with a "Recalled" tag (fire scenarios: elevators are not used). */
   setElevatorsRecalled: (recalled: boolean) => void;
+  /** Letter of the stair whose landing is within a few meters of (x, z) on `level`, or null. */
+  stairNear: (level: string, x: number, z: number) => string | null;
+  /** Show `level` (switching floors in single view) and center the camera on (x, z). */
+  focusOn: (level: string, x: number, z: number) => void;
   /** Live people per floor (null clears the count). */
   setFloorCount: (level: string, people: number | null) => void;
 }

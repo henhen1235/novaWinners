@@ -16,8 +16,9 @@ export const CUTAWAY_HEIGHT_M = 1.2;
 // A room label needs about this much screen space (px) before it is drawn; smaller rooms stay unlabeled.
 const LABEL_MIN_W_PX = 72;
 const LABEL_MIN_D_PX = 30;
-// Stair shafts get their own hues, kept clear of exit green, hazard red and warning amber.
-const STAIR_COLORS = ["#B9A4F0", "#7FC8F8", "#F2A0C8", "#D8C7A0", "#9FE6E0", "#C6D27A"];
+// Colour carries meaning (green way out, red fire, amber needs a human), so stairs stay neutral:
+// the shaft letter in an outlined badge says which stair is which.
+const STAIR_COLORS = [getComputedStyle(document.documentElement).getPropertyValue("--color-drafting").trim() || "#8DB4DC"];
 
 const css = getComputedStyle(document.documentElement);
 const cssColor = (name: string, fallback = "#888888") => new THREE.Color(css.getPropertyValue(name).trim() || fallback);
@@ -564,6 +565,7 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
 
   function declutter(pxPerMeter: number) {
     document.body.classList.toggle("zoomed-out", pxPerMeter < 24); // exit names only when there is room
+    document.body.classList.toggle("close-zoom", pxPerMeter >= 30); // room areas only up close
     for (const level of levels) {
       const allowed = layerOn.rooms && level.root.visible && !level.ghost;
       for (const label of level.roomLabels) {
