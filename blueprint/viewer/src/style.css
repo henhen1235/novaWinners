@@ -312,3 +312,9 @@ body.zoomed-out .exit-label .exit-text { display: none; }
 .live-result { margin: var(--space-3) 0 0; }
 .live-result:empty { display: none; }
 .live-result a { color: var(--color-route); }
+
+.elevator-tag {
+  pointer-events: none; padding: 0 4px; font: 500 11px/1.5 var(--font-sans); color: var(--color-text-muted);
+  background: var(--color-ground); border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm);
+}
+body.zoomed-out .elevator-tag { display: none; }

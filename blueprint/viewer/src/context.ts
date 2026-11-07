@@ -14,6 +14,7 @@ export type SceneDoc = {
   warnings: { code: string; message: string; severity: string }[];
   stairs?: { id: string; from_level: string; to_level: string; polygon: number[][]; bottom?: number[]; top?: number[] }[];
   links?: { id: string; type: string; from: { level: string; position: number[] }; to: { level: string; position: number[] }; cost_multiplier?: number }[];
+  elevators?: { id: string; levels: string[]; position: number[]; usable_in_fire?: boolean }[];
   navmesh: { vertices: number[][]; triangles: number[][]; triangle_level: string[] };
 };
 
@@ -48,6 +49,8 @@ export interface ViewerContext {
   pickFloor: (raycaster: THREE.Raycaster) => { level: string; x: number; z: number } | null;
   /** Turn camera drag/zoom on or off (a drag-box tool needs the left button). */
   setNavigation: (enabled: boolean) => void;
+  /** Grey out elevators with a "Recalled" tag (fire scenarios: elevators are not used). */
+  setElevatorsRecalled: (recalled: boolean) => void;
   /** Live people per floor (null clears the count). */
   setFloorCount: (level: string, people: number | null) => void;
 }

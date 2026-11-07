@@ -69,6 +69,7 @@ export interface Floors {
   declutter: (pxPerMeter: number) => void;
   setLayer: (key: LayerKey, visible: boolean) => void;
   setCount: (level: string, people: number | null) => void;
+  setRecalled: (recalled: boolean) => void;
   levelOf: (object: THREE.Object3D) => FloorLevel | undefined;
   place: (level: string, x: number, z: number, out?: THREE.Vector3) => THREE.Vector3;
 }
@@ -160,6 +161,33 @@ function findShafts(doc: SceneDoc): Shaft[] {
       for (const end of members) if (!stops.has(end.level)) stops.set(end.level, [end.p[0], end.p[1]]);
       return { letter: String.fromCharCode(65 + k), color: new THREE.Color(STAIR_COLORS[k % STAIR_COLORS.length]), stops };
     });
+}
+
+const TREAD_M = 0.45;
+
+// Lines across a stair polygon, perpendicular to its longest edge (the run), clipped to the polygon.
+function treadLines(polygon: number[][], y: number, out: number[]) {
+  let longest = 0;
+  let u: [number, number] = [1, 0];
+  polygon.forEach((p, i) => {
+    const q = polygon[(i + 1) % polygon.length];
+    const length = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    if (length > longest) [longest, u] = [length, [(q[0] - p[0]) / length, (q[1] - p[1]) / length]];
+  });
+  const v: [number, number] = [-u[1], u[0]];
+  const ab = polygon.map((p) => [p[0] * u[0] + p[1] * u[1], p[0] * v[0] + p[1] * v[1]]);
+  const as = ab.map((p) => p[0]);
+  for (let a = Math.min(...as) + TREAD_M / 2; a < Math.max(...as); a += TREAD_M) {
+    const bs: number[] = [];
+    ab.forEach((p, i) => {
+      const q = ab[(i + 1) % ab.length];
+      if ((p[0] - a) * (q[0] - a) < 0) bs.push(p[1] + ((a - p[0]) * (q[1] - p[1])) / (q[0] - p[0]));
+    });
+    bs.sort((m, n) => m - n);
+    for (let k = 0; k + 1 < bs.length; k += 2) {
+      out.push(a * u[0] + bs[k] * v[0], y, a * u[1] + bs[k] * v[1], a * u[0] + bs[k + 1] * v[0], y, a * u[1] + bs[k + 1] * v[1]);
+    }
+  }
 }
 
 function levelShort(name: string, index: number) {
@@ -306,6 +334,10 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
       const positions: number[] = [];
       segments(stair.polygon, true, level.elevation + 0.09, positions);
       level.layers.badges.add(lineSegments(positions, new THREE.LineBasicMaterial({ color })));
+      // Tread lines across the run: the drawing-set symbol for a stair, readable at any zoom.
+      const treads: number[] = [];
+      treadLines(stair.polygon, level.elevation + 0.09, treads);
+      level.layers.badges.add(lineSegments(treads, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.75 })));
       const shape = new THREE.Shape(stair.polygon.map(([x, z]) => new THREE.Vector2(x, -z)));
       const fill = new THREE.Mesh(
         new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, level.elevation + 0.05, 0),
@@ -328,6 +360,36 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
       level.layers.badges.add(badge);
     }
   }
+  // Elevators: a shaft symbol (square with an X) on every floor served. In a fire they are recalled
+  // and not used, so the symbol greys out with a small "Recalled" tag.
+  const ELEVATOR_M = 1.6;
+  const elevatorMaterial = new THREE.LineBasicMaterial({ color: token("model") });
+  const recalledTags: CSS2DObject[] = [];
+  for (const elevator of doc.elevators ?? []) {
+    const [x, z] = elevator.position;
+    const h = ELEVATOR_M / 2;
+    for (const levelId of elevator.levels) {
+      const level = byId.get(levelId);
+      if (!level) continue;
+      const y = level.elevation + 0.09;
+      const square = [[x - h, z - h], [x + h, z - h], [x + h, z + h], [x - h, z + h]];
+      const positions: number[] = [];
+      segments(square, true, y, positions);
+      positions.push(x - h, y, z - h, x + h, y, z + h, x + h, y, z - h, x - h, y, z + h);
+      level.layers.badges.add(lineSegments(positions, elevatorMaterial));
+      const label = tag(el("div", "elevator-tag", "Recalled"));
+      label.position.set(x, y, z + h);
+      label.center.set(0.5, -0.2);
+      label.visible = false;
+      level.layers.badges.add(label);
+      recalledTags.push(label);
+    }
+  }
+  function setRecalled(recalled: boolean) {
+    elevatorMaterial.color.copy(token(recalled ? "line-strong" : "model"));
+    for (const label of recalledTags) label.visible = recalled;
+  }
+
   // Shaft lines connect the stops of each stair through the stacked or exploded floors.
   const shaftLines = new THREE.Group();
   scene.add(shaftLines);
@@ -537,5 +599,5 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
     return undefined;
   }
 
-  return { levels, byId, shafts, pulses, footprint, attachModel, setWalls, layout, declutter, setLayer, setCount, levelOf, place };
+  return { levels, byId, shafts, pulses, footprint, attachModel, setWalls, layout, declutter, setLayer, setCount, setRecalled, levelOf, place };
 }

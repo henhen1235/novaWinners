@@ -242,6 +242,9 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     $("#split-captions").hidden = false;
   }
 
+  // Fire or smoke anywhere in the run: elevators are recalled (not used in a fire).
+  const fireKinds = new Set(["fire", "fire_spread", "smoke"]);
+  if (runs.some((run) => run.doc.events.some((event) => fireKinds.has(event.kind)))) context.setElevatorsRecalled(true);
   let duration = Math.max(...runs.map((run) => run.doc.meta.duration_s ?? run.doc.frames[run.doc.frames.length - 1]?.t ?? 0));
   const clock = { t: 0, playing: false, speed: 1, colorBy: "state" as "state" | "persona", last: 0 };
 

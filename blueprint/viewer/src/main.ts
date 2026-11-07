@@ -641,6 +641,7 @@ ready.then((data) => {
     setFloorCount,
     pickFloor,
     setNavigation: (enabled) => (controls.enabled = enabled),
+    setElevatorsRecalled: (recalled) => floors?.setRecalled(recalled),
   };
   startAnalysis(context, params.get("analysis"));
   startReplay(context, params.get("replay"), params.get("compare"));
