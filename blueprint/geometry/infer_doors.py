@@ -86,7 +86,9 @@ def doors_from_arcs(faces: list, arcs: list) -> list[DoorOpening]:
     """
 
     shared = _shared_walls(faces)
-    envelope = unary_union(faces).buffer(TOUCH_M).exterior if faces else None
+    grown = unary_union(faces).buffer(TOUCH_M) if faces else None
+    # One outer ring per separate building part (the union can be a MultiPolygon).
+    envelope = unary_union([part.exterior for part in getattr(grown, "geoms", [grown])]) if grown else None
     doors: list[DoorOpening] = []
     for hinge, middle, radius in arcs:
         hinge_point, middle_point = Point(hinge), Point(middle)

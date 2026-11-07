@@ -108,6 +108,9 @@ def _color(value) -> tuple[float, float, float] | None:
 
 
 def _strokes(page) -> list[Stroke]:
+    # Drawings come in the unrotated page frame; the raster is rendered rotated.
+    # rotation_matrix maps one to the other (identity when /Rotate is 0).
+    turn = page.rotation_matrix
     strokes: list[Stroke] = []
     seen: set[tuple] = set()
     for drawing in page.get_drawings():
@@ -117,18 +120,18 @@ def _strokes(page) -> list[Stroke]:
         for item in drawing.get("items", []):
             kind = item[0]
             if kind == "l":
-                a = _px(item[1])
-                b = _px(item[2])
+                a = _px(item[1] * turn)
+                b = _px(item[2] * turn)
                 key = tuple(sorted((round(a[0], 2), round(a[1], 2), round(b[0], 2), round(b[1], 2))))
                 if key in seen or a == b:
                     continue
                 seen.add(key)
                 strokes.append(Stroke([a, b], width_px, color, False, layer))
             elif kind == "c":
-                points = _sample_cubic(item[1], item[2], item[3], item[4])
+                points = _sample_cubic(*(point * turn for point in item[1:5]))
                 strokes.append(Stroke(points, width_px, color, True, layer))
             elif kind == "re":
-                rect = item[1]
+                rect = item[1] * turn
                 corners = [
                     (rect.x0 * ZOOM, rect.y0 * ZOOM),
                     (rect.x1 * ZOOM, rect.y0 * ZOOM),
@@ -150,7 +153,7 @@ def _texts(page) -> list[TextSpan]:
             text = "".join(span.get("text", "") for span in line.get("spans", [])).strip()
             if not text:
                 continue
-            x0, y0, x1, y1 = line["bbox"]
+            x0, y0, x1, y1 = fitz.Rect(line["bbox"]) * page.rotation_matrix
             size = max((float(span.get("size", 8)) for span in line.get("spans", [])), default=8.0)
             spans.append(
                 TextSpan(

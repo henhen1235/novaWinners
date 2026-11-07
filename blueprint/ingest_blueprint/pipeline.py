@@ -34,6 +34,7 @@ from render.extrude import build_display, build_navmesh_debug
 
 ROOT = Path(__file__).resolve().parents[1]
 SLAB_M = 3.0
+RASTER_DOOR_DEPTH_M = 0.6
 
 
 def generated_by() -> str:
@@ -119,7 +120,7 @@ def run(
                 _mark_nearest_exit(doors, anchor_m, item["name"])
         faces = raster_faces if raster_faces else faces_from_walls(walls, doors)
         if raster_faces and not walls:
-            walls = _boundary_walls(faces, raster_wall_m, doors)
+            walls = _boundary_walls(faces, raster_wall_m, doors, RASTER_DOOR_DEPTH_M)
         labels = label_faces(faces, texts)
         labels = _apply_vision_types(faces, labels, vision, scale.px_per_m)
         stair_indexes = stair_room_indexes(
@@ -150,6 +151,8 @@ def run(
                 "labels": labels,
                 "obstacles": obstacles,
                 "stair_indexes": stair_indexes,
+                # Raster faces of two rooms can sit a wall gap apart, so door bridges reach further.
+                "door_depth_m": RASTER_DOOR_DEPTH_M if raster_faces else 0.2,
                 "page": page,
                 "scale": scale,
             }
@@ -218,7 +221,7 @@ def _rescale_from_area_labels(page: PlanPage, scale: ScaleEstimate, faces, doors
     return ScaleEstimate(scale.px_per_m / ratio, "dimension_text", 0.85), faces, doors, wall_m * ratio
 
 
-def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[DoorOpening] = ()) -> list[Segment]:
+def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[DoorOpening] = (), depth_m: float = 0.2) -> list[Segment]:
     """Centerlines along raster room edges so walkable can cut the wall thickness.
 
     A raster face runs into its half of each door gap, so the edge across the
@@ -229,7 +232,7 @@ def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[
 
     # Neighbouring faces overlap by one wall thickness, so the far face's edge sits
     # a full wall away from the door line; both must be cut.
-    near = thickness_m + 0.05
+    near = max(thickness_m + 0.05, depth_m / 2.0)
     thickness_m = min(thickness_m, 0.2)
     openings = [LineString([door.p1, door.p2]) for door in doors]
     walls: list[Segment] = []

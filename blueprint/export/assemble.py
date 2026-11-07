@@ -186,7 +186,7 @@ def assemble_scene(
             wall_polys,
             obstacle_polys,
             door_segments,
-            wall_thickness_m=0.2,
+            wall_thickness_m=level.get("door_depth_m", 0.2),
             agent_radius_m=0.25,
         )
         walkable_geoms.append((level_id, level["elevation_m"], walkable))

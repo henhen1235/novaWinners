@@ -4,7 +4,7 @@ from pathlib import Path
 
 from shapely.geometry import box
 
-from geometry.infer_doors import infer_doors
+from geometry.infer_doors import doors_from_arcs, infer_doors
 from geometry.rooms import label_faces
 from geometry.vectorize import split_gaps
 from ingest_blueprint.pipeline import run
@@ -52,3 +52,11 @@ def test_curved_plan_rooms_and_exits(tmp_path: Path):
     assert abs(score["room_delta"]) <= 1
     assert score["walkable_iou"] >= 0.75
     assert score["exit_recall"] == 1.0
+
+
+def test_door_arcs_on_two_separate_buildings():
+    # Two disjoint wings: the union of faces is a MultiPolygon (crashed on Tepper TSB-1).
+    faces = [box(0, 0, 4, 4), box(4, 0, 8, 4), box(20, 0, 24, 4)]
+    doors = doors_from_arcs(faces, [((4.0, 1.0), (3.6, 1.6), 0.9), ((24.0, 1.0), (23.5, 1.6), 0.9)])
+    assert len(doors) == 2
+    assert [door.is_exit for door in doors] == [False, True]
