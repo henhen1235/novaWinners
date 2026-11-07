@@ -43,3 +43,24 @@ Run from `blueprint/`:
   Overlay: `data/cmu/out/cohon-center-building-map-1st-floor/overlay.png`.
 - What would make it work: treat filled, non-white, non-gray-legend polygons as room faces (edge = wall),
   filled triangles as door markers on the nearest face edge, and the face union boundary as the exterior.
+
+## 3. Tepper Building (TSB), floors 1-5: ESIM CAD base plans, 0 rooms on every floor
+
+- Plans: `data/cmu/raw/tepper/TSB-{1,2,3,4,5}-ESIM-Base.pdf` (CMU ESIM, behind CMU login, CMU copyright:
+  local only, never commit). Vector CAD export, 1224 x 792 pt, unrotated, 16k-82k drawings. Every path
+  carries its CAD layer through PDF optional content (`page.get_drawings()[i]["layer"]`):
+  `ARCH|A-WALL` (5325 paths on L2), `ARCH|A-DOOR` (1240), `ARCH|A-GLAZ` (4644), `ARCH|A-FLOR-STRS` (456),
+  `A-AREA` (243, closed room boundaries), `A-SPAC-IDEN-RMNO` (room number + area text, e.g. `2611` /
+  `1,959sf`), `ARCH|S-COLS`, `ARCH|P-FIXT`, `ARCH|A-EQPM`, furniture, handrails.
+- Command: `../.venv/bin/python -m ingest_blueprint ../data/cmu/raw/tepper/TSB-2-ESIM-Base.pdf -o ../data/cmu/out/tepper_raw_2 --no-llm`
+  (runtime 5 s for A, 61 s for L1).
+- Result: 0 rooms, 0 doors on all five floors. Validator: `error NO_EXITS [-] scene has no exits` -> FAIL.
+  Overlays: `data/cmu/out/tepper_raw_{1..5}/overlay.png`.
+- Scale: WS-A says `dimension_text` 0.8 with px_per_m = 88.3 on L2. True value is 16.0 px/m
+  (0.17355 m per PDF point; median over 94 rooms of sqrt(labeled sf * 0.092903 / traced A-AREA area),
+  IQR 0.17334-0.17377). It probably parsed an area label like `1,177sf` as a dimension. 16.0 px/m is
+  just above `_plausible`'s 15 px/m floor, so small-scale sheets like this are near the edge.
+- Walls are all hairline (width 0), color 0.6 gray on A-WALL, so `_dark()` and `THICK_WALL_M` drop them.
+- What would make it work: read the PDF OCG layer names like the DXF path does (A-WALL, A-DOOR), use
+  A-AREA polygons as room faces when present, and take scale from `<n>sf` labels inside A-AREA faces.
+  Many walls are curved (atrium on L2-L5, auditorium fronts), drawn as bezier `c` items.
