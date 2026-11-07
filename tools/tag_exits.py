@@ -50,7 +50,9 @@ img{border:1px solid var(--color-line-strong)}</style>
 <script>
 const G=%GRID%; let tags=%TAGS%, walls=%WALLS%, mode='exit', pend=null;
 const S=2; // display scale: 1 image px = 1 grid cell
-i.onload=()=>{document.body.style.setProperty('--w',(i.naturalWidth*S)+'px');c.width=i.naturalWidth*S;c.height=i.naturalHeight*S;ui()};
+const init=()=>{document.body.style.setProperty('--w',(i.naturalWidth*S)+'px');c.width=i.naturalWidth*S;c.height=i.naturalHeight*S;ui()};
+// the image can finish loading before this script runs (cache), so check as well as listen
+if(i.complete&&i.naturalWidth)init();else i.addEventListener('load',init);
 const toPx=(x,z)=>[(x-G.x0)/G.res*S,(z-G.z0)/G.res*S];
 const toW=e=>{const r=c.getBoundingClientRect();const k=c.width/r.width;
  return [+(G.x0+(e.clientX-r.left)*k/S*G.res).toFixed(2),+(G.z0+(e.clientY-r.top)*k/S*G.res).toFixed(2)]};
