@@ -172,3 +172,40 @@ see ingest_plans/README.md once pushed). It turns a building's CAD-exported floo
 PDFs into a validated multi-floor model in seconds (Tepper: 5 floors, 576 rooms; Mudge
 dorm next). Source plans are never committed (CMU-internal); only our code and the
 generated models are in the repo. Demo buildings: Tepper (main) and Mudge (dorm).
+
+## 7. Demo framing (added 15:15, from Karthik)
+
+Who uses it: the person accountable for a building's emergency plan. On a campus that
+is environmental health and safety or emergency management, facilities, and residence
+life; in an office, the facility or EHS manager. They already run drills, have floor
+plans, and answer for the people who did not get out.
+
+The gap: a drill happens in daytime, with every stair open, and mostly checks that
+people know the routine. Nobody can drill the 3 a.m. dorm fire, the blocked main
+stair, a building full of visitors, or the wheelchair user on floor 4. Rehearsal runs
+those scenarios on a model of their own building and shows who gets left behind and
+which change helps. Line: "You can't drill a 3 a.m. fire. You can rehearse one."
+
+Thread for the pitch: in both demo buildings the people left inside were the ones who
+cannot use stairs (Tepper: 3 wheelchair users at floor 4 refuges, 169/173 out, 172/173
+with an assisted-evacuation plan; Mudge House night fire: 80/82, the 2 left are the
+mobility-impaired residents at refuges on floors 2 and 3). Rule-based occupants, seed 42.
+
+Demo order (Tepper is the main building, Mudge is the dorm):
+1. Hook, no screen (20 s): the drill vs the night you cannot drill.
+2. Building in (25 s): Tepper from CMU's own floor-plan PDFs: 5 floors, 633 rooms,
+   22 exits, 12 stair links, validator 0 errors (`python -m ingest_plans`). One line on
+   the iPhone scan for buildings without plans.
+3. Weekday fire in Tepper (40 s): LLM occupants deciding (speech bubbles), the
+   floor 4 refuge finding, then the assisted plan.
+4. AI drill on Tepper (40 s): adversary attacks, optimizer picks fixes from a menu the
+   facility can do, re-run proves it. Numbers: recorded LLM run on the corrected scene
+   (baseline 55/60, attacked 41/60, fixed stage finishing about 15:30; use the final
+   report in out/loop/demo_tepper/report.md).
+5. Ask why (25 s): interview an occupant who stayed; reasons tested by removal.
+6. Mudge House at 3 a.m. (20 s): Populate "Dorm night", click a fire into the common
+   room, live; same finding in a second building.
+7. Close (10 s): planning tool, not certification.
+
+Update docs/DEMO.md and the deck to this order and these numbers. The old ones
+(576 rooms, 29 exits, 166/170) are from before the Tepper reader fixes.
