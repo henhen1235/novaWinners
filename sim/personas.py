@@ -1,7 +1,7 @@
 """Persona traits from research/EVAC_PSYCHOLOGY.md section 5 (our synthesis, not a standard).
 
-Speeds in m/s (normal, clipped at 0.3), pre-movement and notice delays in s
-(lognormal: median, sigma). `knows_nearest_p` is the chance a persona also
+Speeds in m/s (normal, clipped at 0.3; stairs 0.6 down / 0.4 up, older adults
+0.3 down), pre-movement and notice delays in s (lognormal: median, sigma). `knows_nearest_p` is the chance a persona also
 knows the exit nearest its spawn room besides the one it entered by.
 """
 
@@ -25,6 +25,9 @@ class Persona:
     sign_follow_p: float
     social_threshold: int  # people seen moving that make this persona go early
     color: str
+    stair_down: float = 0.6  # m/s along the stair
+    stair_up: float = 0.4
+    uses_stairs: bool = True  # False: waits at the stair landing (refuge) for a helper
 
 
 PERSONAS: dict[str, Persona] = {p.name: p for p in [
@@ -32,9 +35,9 @@ PERSONAS: dict[str, Persona] = {p.name: p for p in [
     Persona("regular", 1.34, 0.26, 60, 0.7, 6, False, 1.0, 0.5, 3, "#1565c0"),
     Persona("visitor", 1.34, 0.26, 90, 0.8, 8, False, 0.3, 0.3, 3, "#f9a825"),
     Persona("committed", 1.20, 0.2, 120, 0.8, 10, False, 0.3, 0.3, 5, "#6a1b9a"),
-    Persona("parent", 0.90, 0.2, 90, 0.8, 6, False, 1.0, 0.4, 4, "#ef6c00"),
-    Persona("older_adult", 0.80, 0.15, 120, 0.9, 10, False, 0.5, 0.3, 4, "#8d6e63"),
-    Persona("mobility_impaired", 0.60, 0.1, 120, 0.9, 10, False, 0.5, 0.3, 4, "#c62828"),
+    Persona("parent", 0.90, 0.2, 90, 0.8, 6, False, 1.0, 0.4, 4, "#ef6c00", 0.5, 0.35),
+    Persona("older_adult", 0.80, 0.15, 120, 0.9, 10, False, 0.5, 0.3, 4, "#8d6e63", 0.3, 0.25),
+    Persona("mobility_impaired", 0.60, 0.1, 120, 0.9, 10, False, 0.5, 0.3, 4, "#c62828", 0.3, 0.2, False),
     Persona("skeptic", 1.34, 0.26, 300, 1.0, 10, False, 1.0, 0.2, 99, "#455a64"),
 ]}
 
@@ -61,4 +64,5 @@ def sample_traits(p: Persona, rng: np.random.Generator) -> dict:
         "notice_s": round(float(p.notice_median * np.exp(rng.normal(0, 0.5))), 2),
         "sign_follow_p": p.sign_follow_p,
         "social_threshold": p.social_threshold,
+        "stair_down_mps": p.stair_down, "stair_up_mps": p.stair_up, "uses_stairs": p.uses_stairs,
     }

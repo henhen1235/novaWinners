@@ -1,13 +1,12 @@
-"""Navmesh graph, point location, A*, funnel and exit distance fields.
+"""Multi-level navmesh graph, point location, A*, funnel and exit distance fields.
 
-All distances in meters. Points are [x, z]. Triangles touching along a shared
+All distances in meters. Points are [x, z] plus a level index. Triangles touching along a shared
 edge are neighbours; vertices are merged at 1 mm so separately indexed copies
 still connect.
 """
 
 from __future__ import annotations
 
-import heapq
 import math
 
 import numpy as np
@@ -16,38 +15,72 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points, unary_union
+from typing import NamedTuple
 
 INF = math.inf
 MAX_EDGE_M = 2.0  # refine coarse meshes so door and room hazards stay local
+DEFAULT_STAIR_WIDTH_M = 1.2
+
+
+class Link(NamedTuple):
+    """A directed level-to-level connection (stairs, ramp) between two triangles."""
+
+    id: str
+    kind: str
+    a_pt: np.ndarray
+    b_pt: np.ndarray
+    a_lv: int
+    b_lv: int
+    length_m: float  # walked length along the stair
+    cost_mult: float
+    down: bool
+    width_m: float
+
+
+class Waypoint(NamedTuple):
+    """Next point to reach on level `lv`; `link` set means: get there by taking that link."""
+
+    pt: np.ndarray
+    lv: int
+    link: Link | None = None
 
 
 class NavMesh:
-    """Triangle graph of one level. `mult` holds per-triangle entry cost multipliers."""
+    """Triangle graph over all levels plus level links. `mult` holds per-triangle entry costs.
 
-    def __init__(self, scene: dict, level: str | None = None) -> None:
+    Levels are referred to by index into `level_ids`. Triangles of one level
+    connect through shared edges; levels connect only through links.
+    """
+
+    def __init__(self, scene: dict) -> None:
         nav = scene["navmesh"]
-        self.level = level or scene["levels"][0]["id"]
-        keep = [i for i, lv in enumerate(nav["triangle_level"]) if lv == self.level]
-        raw = np.asarray(nav["vertices"], dtype=float)[:, [0, 2]]
-        key = np.round(raw, 3)
-        _, inverse = np.unique(key, axis=0, return_inverse=True)
+        self.level_ids = [lv["id"] for lv in scene["levels"]]
+        self.elev = [float(lv["elevation_m"]) for lv in scene["levels"]]
+        lv_index = {lid: i for i, lid in enumerate(self.level_ids)}
+        raw3 = np.asarray(nav["vertices"], dtype=float)
+        _, inverse = np.unique(np.round(raw3, 3), axis=0, return_inverse=True)
         uniq = np.zeros((inverse.max() + 1, 2))
-        uniq[inverse.ravel()] = raw
-        self.verts = uniq
-        self.tris = np.asarray(nav["triangles"], dtype=int)[keep]
-        self.tris = inverse.ravel()[self.tris]
-        self.verts, self.tris = refine(self.verts, self.tris, MAX_EDGE_M)
+        uniq[inverse.ravel()] = raw3[:, [0, 2]]
+        tris = inverse.ravel()[np.asarray(nav["triangles"], dtype=int)]
+        tri_lv = np.array([lv_index.get(lv, 0) for lv in nav["triangle_level"]], dtype=int)
+        self.verts, self.tris, self.tri_level = refine(uniq, tris, tri_lv, MAX_EDGE_M)
         self.centroids = self.verts[self.tris].mean(axis=1)
         self.polys = [Polygon(self.verts[t]) for t in self.tris]
-        self.tree = shapely.STRtree(self.polys)
+        self.lv_tris = [np.flatnonzero(self.tri_level == i) for i in range(len(self.level_ids))]
+        self.lv_tree = [shapely.STRtree([self.polys[t] for t in idx]) for idx in self.lv_tris]
+        self.walk, self.walk_los, self.walk_move = [], [], []
+        for lid in self.level_ids:
+            polys = [Polygon(p["exterior"], p["holes"]) for p in scene["walkable"].get(lid, {"polygons": []})["polygons"]]
+            w = unary_union(polys) if polys else Polygon()
+            # funnel paths run along edges; the 2 cm move tolerance absorbs float error
+            for lst, g in ((self.walk, w), (self.walk_los, w.buffer(0.05)), (self.walk_move, w.buffer(0.02))):
+                shapely.prepare(g)
+                lst.append(g)
         self._build_adjacency()
-        polys = [Polygon(p["exterior"], p["holes"]) for p in scene["walkable"][self.level]["polygons"]]
-        self.walk = unary_union(polys)
-        self.walk_los = self.walk.buffer(0.05)
-        self.walk_move = self.walk.buffer(0.02)  # funnel paths run along edges; absorb float error
-        shapely.prepare(self.walk)
-        shapely.prepare(self.walk_move)
-        shapely.prepare(self.walk_los)
+        self.links: dict[tuple[int, int], Link] = {}
+        for link in _scene_links(scene, self):
+            self._add_link(link)
+        self._build_edges()
         self.mult = np.ones(len(self.tris))
 
     def _build_adjacency(self) -> None:
@@ -64,95 +97,150 @@ class NavMesh:
                 self.neighbors[ti].append(other)
                 self.neighbors[other].append(ti)
                 self.portals[(ti, other)] = self.portals[(other, ti)] = (int(a), int(b))
-        pairs = np.array([p for p in self.portals], dtype=int).reshape(-1, 2)
-        self.edge_src, self.edge_dst = pairs[:, 0], pairs[:, 1]
-        self.edge_len = np.linalg.norm(self.centroids[self.edge_src] - self.centroids[self.edge_dst], axis=1)
-        self.edge_len = np.maximum(self.edge_len, 1e-4)
+
+    def _add_link(self, link: Link) -> None:
+        ta = int(self.locate(link.a_pt[None], link.a_lv)[0])
+        tb = int(self.locate(link.b_pt[None], link.b_lv)[0])
+        if ta == tb or (ta, tb) in self.portals:
+            return
+        self.links[(ta, tb)] = link
+        self.neighbors[ta].append(tb)
+
+    def _build_edges(self) -> None:
+        pairs = list(self.portals) + list(self.links)
+        arr = np.array(pairs, dtype=int).reshape(-1, 2)
+        self.edge_src, self.edge_dst = arr[:, 0], arr[:, 1]
+        lens = np.linalg.norm(self.centroids[self.edge_src] - self.centroids[self.edge_dst], axis=1)
+        for k, (i, j) in enumerate(pairs[len(self.portals):], start=len(self.portals)):
+            ln = self.links[(i, j)]
+            lens[k] = ln.length_m * ln.cost_mult
+        self.edge_len = np.maximum(lens, 1e-4)
+        self.edge_stair = np.array([""] * len(self.portals) + [self.links[k].id for k in pairs[len(self.portals):]])
+        self.stair_mult: dict[str, float] = {}  # hazard multiplier per stair id (inf = blocked)
+
+    def walk_len(self, i: int, j: int) -> float:
+        """Metres walked going from triangle i to neighbour j (centroids, or the link length)."""
+        ln = self.links.get((i, j))
+        return ln.length_m if ln else float(np.linalg.norm(self.centroids[i] - self.centroids[j]))
 
     # ---- point queries -------------------------------------------------
-    def locate(self, pts: np.ndarray) -> np.ndarray:
-        """Triangle index for each [x, z] point; nearest triangle when outside the mesh."""
+    def locate(self, pts: np.ndarray, lv: int | np.ndarray = 0) -> np.ndarray:
+        """Global triangle index for each [x, z] point on its level; nearest triangle when off-mesh."""
         pts = np.atleast_2d(pts)
-        geoms = shapely.points(pts)
+        lvs = np.broadcast_to(np.asarray(lv, dtype=int), (len(pts),))
         out = np.full(len(pts), -1, dtype=int)
-        hit_pt, hit_tri = self.tree.query(geoms, predicate="intersects")
-        out[hit_pt[::-1]] = hit_tri[::-1]  # first hit wins
-        miss = np.flatnonzero(out < 0)
-        if len(miss):
-            near = self.tree.query_nearest(geoms[miss], return_distance=False, all_matches=False)
-            out[miss[near[0]]] = near[1]
+        for li in np.unique(lvs):
+            rows = np.flatnonzero(lvs == li)
+            geoms = shapely.points(pts[rows])
+            tree, idx = self.lv_tree[li], self.lv_tris[li]
+            hit_pt, hit_tri = tree.query(geoms, predicate="intersects")
+            local = np.full(len(rows), -1, dtype=int)
+            local[hit_pt[::-1]] = hit_tri[::-1]  # first hit wins
+            miss = np.flatnonzero(local < 0)
+            if len(miss):
+                near = tree.query_nearest(geoms[miss], return_distance=False, all_matches=False)
+                local[miss[near[0]]] = near[1]
+            out[rows] = idx[local]
         return out
 
-    def is_walkable(self, pts: np.ndarray) -> np.ndarray:
-        """Bool per [x, z] point: inside the walkable area (2 cm tolerance)."""
+    def is_walkable(self, pts: np.ndarray, lv: int | np.ndarray = 0) -> np.ndarray:
+        """Bool per [x, z] point: inside its level's walkable area (2 cm tolerance)."""
         pts = np.atleast_2d(pts)
-        return shapely.intersects_xy(self.walk_move, pts[:, 0], pts[:, 1])
+        lvs = np.broadcast_to(np.asarray(lv, dtype=int), (len(pts),))
+        out = np.zeros(len(pts), dtype=bool)
+        for li in np.unique(lvs):
+            rows = lvs == li
+            out[rows] = shapely.intersects_xy(self.walk_move[li], pts[rows, 0], pts[rows, 1])
+        return out
 
-    def snap(self, pt: list[float] | np.ndarray, inset_m: float = 0.02) -> np.ndarray:
-        """Nearest walkable point to `pt`, pulled `inset_m` inward when it was outside."""
+    def snap(self, pt: list[float] | np.ndarray, lv: int = 0, inset_m: float = 0.02) -> np.ndarray:
+        """Nearest walkable point on level lv to `pt`, pulled `inset_m` inward when it was outside."""
         p = Point(pt)
-        if self.walk.contains(p):
+        walk = self.walk[lv]
+        if walk.is_empty or walk.contains(p):
             return np.asarray(pt, dtype=float)
-        q = np.array(nearest_points(self.walk, p)[0].coords[0])
-        c = self.centroids[self.locate(q[None])[0]]
+        q = np.array(nearest_points(walk, p)[0].coords[0])
+        c = self.centroids[self.locate(q[None], lv)[0]]
         d = c - q
         n = np.linalg.norm(d)
         return q + d / n * min(inset_m, n) if n > 0 else q
 
-    def line_of_sight(self, src: np.ndarray, dsts: np.ndarray) -> np.ndarray:
-        """Bool per destination: segment src->dst stays on (slightly buffered) walkable."""
+    def line_of_sight(self, src: np.ndarray, dsts: np.ndarray, lv: int = 0) -> np.ndarray:
+        """Bool per destination: segment src->dst stays on level lv's (slightly buffered) walkable."""
         dsts = np.atleast_2d(dsts)
         if len(dsts) == 0:
             return np.zeros(0, dtype=bool)
         coords = np.stack([np.broadcast_to(src, dsts.shape), dsts], axis=1)
         same = np.all(np.abs(coords[:, 0] - coords[:, 1]) < 1e-6, axis=1)
         coords[same, 1] += 1e-4
-        return shapely.covers(self.walk_los, shapely.linestrings(coords))
+        return shapely.covers(self.walk_los[lv], shapely.linestrings(coords))
 
-    def clear_segments(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-        """Bool per row: straight move a[i] -> b[i] stays walkable (same 2 cm tolerance as moves)."""
+    def clear_segments(self, a: np.ndarray, b: np.ndarray, lv: np.ndarray) -> np.ndarray:
+        """Bool per row: straight move a[i] -> b[i] stays walkable on level lv[i]."""
+        out = np.zeros(len(a), dtype=bool)
         if len(a) == 0:
-            return np.zeros(0, dtype=bool)
+            return out
         coords = np.stack([a, b], axis=1).copy()
         same = np.all(np.abs(coords[:, 0] - coords[:, 1]) < 1e-6, axis=1)
         coords[same, 1] += 1e-4
-        return shapely.covers(self.walk_move, shapely.linestrings(coords))
+        lines = shapely.linestrings(coords)
+        for li in np.unique(lv):
+            rows = lv == li
+            out[rows] = shapely.covers(self.walk_move[li], lines[rows])
+        return out
 
     # ---- search --------------------------------------------------------
     def step_cost(self, i: int, j: int) -> float:
         """Cost of moving from triangle i into neighbour j (meters times j's multiplier)."""
+        ln = self.links.get((i, j))
+        if ln:
+            return ln.length_m * ln.cost_mult * self.stair_mult.get(ln.id, 1.0) * self.mult[j]
         return float(np.linalg.norm(self.centroids[i] - self.centroids[j])) * self.mult[j]
 
-    def astar(self, start: int, goal: int) -> list[int] | None:
-        """Triangle corridor from start to goal over centroids, or None when unreachable."""
-        h = lambda t: float(np.linalg.norm(self.centroids[t] - self.centroids[goal]))  # noqa: E731
-        best = {start: 0.0}
-        came: dict[int, int] = {}
-        heap = [(h(start), start)]
-        while heap:
-            _, cur = heapq.heappop(heap)
-            if cur == goal:
-                path = [cur]
-                while cur in came:
-                    cur = came[cur]
-                    path.append(cur)
-                return path[::-1]
-            for nb in self.neighbors[cur]:
-                g = best[cur] + self.step_cost(cur, nb)
-                if g < best.get(nb, INF):
-                    best[nb], came[nb] = g, cur
-                    heapq.heappush(heap, (g + h(nb), nb))
-        return None
-
-    def distance_field(self, seed: int) -> tuple[np.ndarray, np.ndarray]:
-        """Cost-to-go from every triangle to `seed` and the next triangle toward it (-1 at seed)."""
+    def _weights(self, use_links: bool) -> np.ndarray:
+        """Directed edge costs: base length times the entered triangle's and the stair's multipliers."""
         w = self.edge_len * self.mult[self.edge_dst]
-        ok = np.isfinite(w)
-        n = len(self.tris)
+        if not use_links:
+            return np.where(self.edge_stair != "", INF, w)
+        for sid, m in self.stair_mult.items():
+            w = np.where(self.edge_stair == sid, w * m, w)
+        return w
+
+    def _graph(self, use_links: bool, reverse: bool) -> csr_matrix:
+        key = (use_links, reverse, self.mult.tobytes(), tuple(sorted(self.stair_mult.items())))
+        cache = getattr(self, "_graph_cache", {})
+        if key not in cache:
+            w = self._weights(use_links)
+            ok = np.isfinite(w)
+            src, dst = (self.edge_dst, self.edge_src) if reverse else (self.edge_src, self.edge_dst)
+            n = len(self.tris)
+            cache = {k: v for k, v in cache.items() if k[2:] == key[2:]}  # drop stale cost versions
+            cache[key] = csr_matrix((w[ok], (src[ok], dst[ok])), shape=(n, n))
+            self._graph_cache = cache
+        return cache[key]
+
+    def astar(self, start: int, goal: int, use_links: bool = True) -> list[int] | None:
+        """Cheapest triangle corridor from start to goal, or None when unreachable.
+
+        ponytail: one-to-all Dijkstra in scipy (C) instead of a Python A*; same corridor, 20x faster here.
+        """
+        if start == goal:
+            return [start]
+        dist, pred = dijkstra(self._graph(use_links, False), indices=start, return_predecessors=True)
+        if not np.isfinite(dist[goal]):
+            return None
+        path = [goal]
+        while path[-1] != start:
+            path.append(int(pred[path[-1]]))
+        return path[::-1]
+
+    def distance_field(self, seed: int, use_links: bool = True) -> tuple[np.ndarray, np.ndarray]:
+        """Cost-to-go from every triangle to `seed` and the next triangle toward it (-1 at seed).
+
+        use_links=False keeps routes on one level (people who cannot use stairs).
+        """
         # Reverse edges: distances from seed in the transpose are distances to seed.
-        g = csr_matrix((w[ok], (self.edge_dst[ok], self.edge_src[ok])), shape=(n, n))
-        dist, pred = dijkstra(g, indices=seed, return_predecessors=True)
-        return dist, pred
+        return dijkstra(self._graph(use_links, True), indices=seed, return_predecessors=True)
 
     def corridor(self, start: int, nxt: np.ndarray) -> list[int]:
         """Follow a field's next-triangle pointers from start to the seed."""
@@ -162,7 +250,7 @@ class NavMesh:
         return path
 
     def funnel(self, start: np.ndarray, goal: np.ndarray, corridor: list[int]) -> list[np.ndarray]:
-        """String-pull a triangle corridor into waypoints (simple stupid funnel algorithm)."""
+        """String-pull a same-level triangle corridor into points (simple stupid funnel algorithm)."""
         portals = [(start, start)]
         for a, b in zip(corridor[:-1], corridor[1:]):
             pa, pb = self.portals[(a, b)]
@@ -173,22 +261,70 @@ class NavMesh:
         portals.append((goal, goal))
         return _string_pull(portals)
 
-    def find_path(self, a: np.ndarray, b: np.ndarray) -> list[np.ndarray] | None:
-        """Smooth waypoints from a to b (A* corridor + funnel), or None when unreachable."""
-        ta, tb = self.locate(np.array([a, b]))
-        corr = self.astar(int(ta), int(tb))
-        return None if corr is None else self.funnel(np.asarray(a, float), np.asarray(b, float), corr)
+    def waypoints(self, start: np.ndarray, goal: np.ndarray, corridor: list[int]) -> list[Waypoint]:
+        """Waypoints after `start` along a corridor that may cross levels through links."""
+        out: list[Waypoint] = []
+        seg, src = [corridor[0]], np.asarray(start, float)
+        for a, b in zip(corridor[:-1], corridor[1:]):
+            link = self.links.get((a, b))
+            if link is None:
+                seg.append(b)
+                continue
+            lv = int(self.tri_level[a])
+            out += [Waypoint(p, lv) for p in self.funnel(src, link.a_pt, seg)[1:]]
+            out.append(Waypoint(link.b_pt, link.b_lv, link))
+            seg, src = [b], link.b_pt
+        lv = int(self.tri_level[corridor[-1]])
+        out += [Waypoint(p, lv) for p in self.funnel(src, np.asarray(goal, float), seg)[1:]]
+        return out
 
-    def tris_in(self, geom: Polygon | LineString) -> np.ndarray:
-        """Triangles whose area intersects `geom` (a room polygon or door segment)."""
-        return self.tree.query(geom, predicate="intersects")
+    def find_path(self, a: np.ndarray, b: np.ndarray, lv_a: int = 0, lv_b: int | None = None) -> list[Waypoint] | None:
+        """Waypoints from a (level lv_a) to b (level lv_b), A* corridor + funnel; None when unreachable."""
+        ta = int(self.locate(np.asarray(a)[None], lv_a)[0])
+        tb = int(self.locate(np.asarray(b)[None], lv_a if lv_b is None else lv_b)[0])
+        corr = self.astar(ta, tb)
+        return None if corr is None else [Waypoint(np.asarray(a, float), lv_a)] + self.waypoints(a, b, corr)
 
-    def tris_with_centroid_in(self, poly: Polygon) -> np.ndarray:
-        """Triangles whose centroid lies inside `poly`."""
-        return np.flatnonzero(shapely.contains_xy(poly, self.centroids[:, 0], self.centroids[:, 1]))
+    def tris_in(self, geom: Polygon | LineString, lv: int) -> np.ndarray:
+        """Triangles of level lv whose area intersects `geom` (a room polygon or door segment)."""
+        return self.lv_tris[lv][self.lv_tree[lv].query(geom, predicate="intersects")]
+
+    def tris_with_centroid_in(self, poly: Polygon, lv: int) -> np.ndarray:
+        """Triangles of level lv whose centroid lies inside `poly`."""
+        idx = self.lv_tris[lv]
+        return idx[shapely.contains_xy(poly, self.centroids[idx, 0], self.centroids[idx, 1])]
 
 
-def refine(verts: np.ndarray, tris: np.ndarray, max_edge: float) -> tuple[np.ndarray, np.ndarray]:
+def _scene_links(scene: dict, nav: "NavMesh") -> list[Link]:
+    """Directed links from scene.links (or from scene.stairs when there are no links)."""
+    lv = {lid: i for i, lid in enumerate(nav.level_ids)}
+    stairs = scene.get("stairs", [])
+    raw = [(ln["id"], ln["type"], ln["from"], ln["to"], float(ln.get("cost_multiplier", 1.0)),
+            bool(ln.get("bidirectional", True))) for ln in scene.get("links", [])]
+    if not raw:
+        raw = [(st["id"], "stairs", {"level": st["from_level"], "position": st["bottom"]},
+                {"level": st["to_level"], "position": st["top"]}, 2.0, st.get("direction", "both") == "both")
+               for st in stairs]
+    out = []
+    for lid, kind, fa, fb, mult, both in raw:
+        if fa["level"] not in lv or fb["level"] not in lv:
+            continue
+        a, b = np.asarray(fa["position"], float), np.asarray(fb["position"], float)
+        la, lb = lv[fa["level"]], lv[fb["level"]]
+        dy = abs(nav.elev[la] - nav.elev[lb])
+        d2 = float(np.linalg.norm(a - b))
+        length = max(math.hypot(d2, dy), 2.0 * dy)  # stairs are about 30 degrees
+        st = next((s for s in stairs if min(np.linalg.norm(np.asarray(s["bottom"]) - a),
+                                             np.linalg.norm(np.asarray(s["top"]) - a)) < 0.75), None)
+        sid, width = (st["id"], float(st["width_m"])) if st else (lid, DEFAULT_STAIR_WIDTH_M)
+        out.append(Link(sid, kind, a, b, la, lb, length, mult, nav.elev[la] > nav.elev[lb], width))
+        if both:
+            out.append(Link(sid, kind, b, a, lb, la, length, mult, nav.elev[lb] > nav.elev[la], width))
+    return out
+
+
+def refine(verts: np.ndarray, tris: np.ndarray, tags: np.ndarray,
+           max_edge: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Split every edge longer than max_edge (m) at its midpoint until none remain.
 
     Splits are decided per edge, so both triangles sharing an edge agree and the
@@ -196,6 +332,7 @@ def refine(verts: np.ndarray, tris: np.ndarray, max_edge: float) -> tuple[np.nda
     """
     vs = [tuple(v) for v in verts]
     ts = [tuple(int(i) for i in t) for t in tris]
+    tg = [int(x) for x in tags]
     for _ in range(12):
         mid: dict[tuple[int, int], int] = {}
         for t in ts:
@@ -206,8 +343,9 @@ def refine(verts: np.ndarray, tris: np.ndarray, max_edge: float) -> tuple[np.nda
                     vs.append(((vs[a][0] + vs[b][0]) / 2, (vs[a][1] + vs[b][1]) / 2))
         if not mid:
             break
-        ts = [nt for t in ts for nt in _split(t, mid)]
-    return np.asarray(vs, dtype=float), np.asarray(ts, dtype=int)
+        kids = [(nt, g) for t, g in zip(ts, tg) for nt in _split(t, mid)]
+        ts, tg = [k[0] for k in kids], [k[1] for k in kids]
+    return np.asarray(vs, dtype=float), np.asarray(ts, dtype=int), np.asarray(tg, dtype=int)
 
 
 def _split(t: tuple[int, int, int], mid: dict[tuple[int, int], int]) -> list[tuple[int, int, int]]:

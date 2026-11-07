@@ -12,7 +12,8 @@ blocked and prefers the exit they came in by.
 
 from __future__ import annotations
 
-FAMILIAR_BONUS_S = 15.0  # how much longer a route to the entry exit may be and still win
+FAMILIAR_BONUS_S = 15.0
+MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP")  # how much longer a route to the entry exit may be and still win
 
 
 def _blocked_beliefs(view: dict) -> set[str]:
@@ -32,8 +33,16 @@ def _go_reason(view: dict) -> tuple[str | None, list[str]]:
     moving = [p for p in per if p["kind"] == "people_moving"]
     n_moving = max((p["count"] for p in moving), default=0)
     alarm = [p["id"] for p in per if p["kind"] == "alarm"]
+    official = [p["id"] for p in per if p["kind"] == "message" and p.get("official")]
     if hazard:
         return "hazard", hazard
+    if a.get("carrying") or tr.get("activity") in MOVING:
+        return "already_leaving", alarm
+    if official:
+        return "official", official
+    needs = [p["id"] for p in per if p["kind"] == "needs_help"]
+    if needs and a["persona"] == "staff":
+        return "help_needed", needs
     if a["persona"] == "skeptic":
         if len(urged) >= 2:
             return "urged", urged
@@ -73,6 +82,10 @@ def _say(view: dict, opt: dict, reason: str, blocked: set[str]) -> str | None:
     return None
 
 
+def _eta(o: dict, speed: float) -> float:
+    return o.get("eta_s", o.get("route_m", 0.0) / speed + o.get("queue_s", 0.0))
+
+
 def _pick_exit(view: dict, blocked: set[str]) -> dict | None:
     a = view["agent"]
     speed = max(a["traits"]["speed_mps"], 0.1)
@@ -82,9 +95,33 @@ def _pick_exit(view: dict, blocked: set[str]) -> dict | None:
     def score(o: dict) -> float:
         bonus = FAMILIAR_BONUS_S if o["exit"] == a.get("entry_exit") and a["persona"] != "staff" else 0.0
         hazard_s = 60.0 if o.get("through_hazard") else 0.0
-        return o["route_m"] / speed + o.get("queue_s", 0.0) + hazard_s - bonus
+        return _eta(o, speed) + hazard_s - bonus
 
     return min(pool, key=score) if pool else None
+
+
+def _pick_stair(view: dict) -> dict | None:
+    """Best open stair: down before up, then shortest eta; smoky stairs cost an extra minute."""
+    speed = max(view["agent"]["traits"]["speed_mps"], 0.1)
+    pool = [o for o in view["options"] if o["action"] == "TAKE_STAIRS" and not o.get("blocked")]
+    return min(pool, key=lambda o: (o.get("direction") != "down", _eta(o, speed) + (60 if o.get("smoke") else 0)),
+               default=None)
+
+
+def _nearest(view: dict, action: str) -> dict | None:
+    return min((o for o in view["options"] if o["action"] == action), key=lambda o: o.get("route_m", 0), default=None)
+
+
+def _pace(view: dict, reason: str) -> str:
+    if reason == "hazard" or view["agent"].get("carrying"):
+        return "hurry" if reason == "hazard" else "brisk"
+    return "calm" if view["agent"]["persona"] == "skeptic" else "brisk"
+
+
+def _result(view: dict, opt: dict, why: str, evidence: list[str], go: bool, say: str | None, pace: str) -> dict:
+    rec = _record(view, opt["id"], why, evidence, go)
+    rec["decision"]["pace"] = pace
+    return {"choice": opt["id"], "say": say, "pace": pace, "record": rec}
 
 
 def decide(view: dict) -> dict:
@@ -94,23 +131,31 @@ def decide(view: dict) -> dict:
     if reason is None:
         act = "SEEK_INFO" if view["agent"]["persona"] in ("skeptic", "visitor") else "CONTINUE_TASK"
         choice = opts.get(act) or view["options"][0]
-        return {"choice": choice["id"], "say": None,
-                "record": _record(view, choice["id"], "Not sure it is real yet; waiting for more cues.", evidence, False)}
+        return _result(view, choice, "Not sure it is real yet; waiting for more cues.", evidence, False, None, "calm")
+    pace = _pace(view, reason)
+    help_opt = _nearest(view, "HELP")
+    if help_opt and view["agent"]["persona"] == "staff":
+        return _result(view, help_opt, f"{help_opt['target']} cannot use the stairs; I go and help.", evidence, True,
+                       "I'm coming to help you.", pace)
     blocked = _blocked_beliefs(view)
     follow = opts.get("FOLLOW")
     if reason == "social" and follow and follow.get("exit") not in blocked:
-        return {"choice": follow["id"], "say": None,
-                "record": _record(view, follow["id"], "Others around me are leaving, so I follow them.", evidence, True)}
+        return _result(view, follow, "Others around me are leaving, so I follow them.", evidence, True, None, pace)
     if follow and follow.get("exit") in blocked:
         follow = None
-    opt = _pick_exit(view, blocked) or follow or opts.get("SEEK_INFO") or view["options"][0]
-    why = f"Leaving by {opt.get('exit', 'whatever way I can')} ({reason})."
-    return {"choice": opt["id"], "say": _say(view, opt, reason, blocked) if opt.get("exit") else None,
-            "record": _record(view, opt["id"], why, evidence, True)}
+    opt = _pick_exit(view, blocked) or _pick_stair(view)
+    if opt is None and _nearest(view, "GO_TO_REFUGE"):
+        opt = _nearest(view, "GO_TO_REFUGE")
+        return _result(view, opt, "I cannot take the stairs; I wait at the landing for help.", evidence, True,
+                       "I need help on the stairs!", "brisk")
+    opt = opt or follow or opts.get("SEEK_INFO") or view["options"][0]
+    why = f"{opt['action']} {opt.get('exit') or opt.get('stair') or ''} ({reason}).".replace("  ", " ")
+    say = _say(view, opt, reason, blocked) if opt.get("exit") else None
+    return _result(view, opt, why, evidence, True, say, pace)
 
 
 def baseline_decide(view: dict) -> dict:
     """Shortest open route to any exit, no delay, no beliefs."""
     evac = [o for o in view["options"] if o["action"] == "EVACUATE"]
     opt = min(evac, key=lambda o: o["route_m"]) if evac else view["options"][0]
-    return {"choice": opt["id"], "say": None, "record": _record(view, opt["id"], "Shortest path.", [], True)}
+    return _result(view, opt, "Shortest path.", [], True, None, "brisk")

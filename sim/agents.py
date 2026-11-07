@@ -32,7 +32,16 @@ class Agent:
     state: str = "waiting"
     action: str = "CONTINUE_TASK"
     target_exit: str | None = None
-    waypoints: list[np.ndarray] = field(default_factory=list)
+    target_stair: str | None = None  # TAKE_STAIRS / GO_TO_REFUGE target
+    waypoints: list = field(default_factory=list)  # sim.navmesh.Waypoint
+    stair: dict | None = None  # in-progress stair traversal
+    helper: str | None = None  # id of the agent carrying this one
+    helping: str | None = None  # id of the agent this one is going to help or carrying
+    carrying: bool = False
+    pace: str = "brisk"
+    hold: bool = False  # stopped until the next decision applies (landing, smoky or crowded stair)
+    stair_asked: list = field(default_factory=list)  # (stair id, level) already asked about
+    last_speech_trigger_t: float = -1e9
     cue_t: float | None = None
     first_move_t: float | None = None
     exit_t: float | None = None
@@ -58,14 +67,19 @@ def _choice(rng: np.random.Generator, dist: dict[str, float]) -> str:
     return keys[int(rng.choice(len(keys), p=w / w.sum()))] if w.sum() > 0 else keys[0]
 
 
+def _exit_level(world: World) -> int:
+    return next(iter(world.exits.values())).lv
+
+
 def _entry_weights(world: World) -> dict[str, float]:
     """Entry exit prior: exits labeled main/entrance are three times as likely."""
     return {eid: 3.0 if any(k in ex.label.lower() for k in ("main", "entrance", "entry")) else 1.0
             for eid, ex in world.exits.items()}
 
 
-def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = False) -> tuple[list[Agent], np.ndarray]:
-    """Create agents and their start positions (N, 2) from scenario occupant groups."""
+def spawn(world: World, occupants: list[dict], seed: int,
+          omniscient: bool = False) -> tuple[list[Agent], np.ndarray, np.ndarray]:
+    """Create agents, start positions (N, 2) and level indices (N,) from scenario occupant groups."""
     root = np.random.SeedSequence(seed)
     place_rng = np.random.default_rng(root.spawn(1)[0])
     total = sum(int(g.get("count", 0)) for g in occupants)
@@ -73,6 +87,7 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
     agent_seqs = root.spawn(total + 1)[1:]
     agents: list[Agent] = []
     pos: list[np.ndarray] = []
+    lvs: list[int] = []
     entry_w = _entry_weights(world)
     for g in occupants:
         where = g.get("where") or {}
@@ -85,10 +100,11 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
             rng = np.random.default_rng(agent_seqs[row])
             persona = resolve(_choice(rng, g.get("personas") or {"regular": 1.0}))
             model = _choice(rng, g.get("models") or {"rule-based": 1.0})
-            p = _spawn_point(world, room, where, place_rng, pos)
-            r = room or world.room_at(p)
-            tri = int(world.nav.locate(p[None])[0])
-            entry = _choice(rng, entry_w)
+            lv = world.room_lv[room] if room else world.lv_index.get(where.get("level"), _exit_level(world))
+            p = _spawn_point(world, room, lv, where, place_rng, [q for q, l in zip(pos, lvs) if l == lv])
+            r = room or world.room_at(p, lv)
+            tri = int(world.nav.locate(p[None], lv)[0])
+            entry = g.get("familiar_exit") if g.get("familiar_exit") in world.exits else _choice(rng, entry_w)
             nearest = min(world.exits, key=lambda e: world.route_m(e, tri))
             if persona.knows_all or omniscient:
                 known = list(world.exits)
@@ -99,10 +115,11 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
                 traits.update(premove_s=0.0, notice_s=0.0)
             agents.append(Agent(f"a_{row + 1:0{width}d}", row, persona.name, model, traits, rng, r, entry, known))
             pos.append(p)
-    return agents, np.asarray(pos, dtype=float).reshape(-1, 2)
+            lvs.append(lv)
+    return agents, np.asarray(pos, dtype=float).reshape(-1, 2), np.asarray(lvs, dtype=int)
 
 
-def _spawn_point(world: World, room: str | None, where: dict, rng: np.random.Generator,
+def _spawn_point(world: World, room: str | None, lv: int, where: dict, rng: np.random.Generator,
                  taken: list[np.ndarray], tries: int = 20) -> np.ndarray:
     """Random walkable point in the room (or near `where.point`), avoiding overlap when possible."""
     best = None
@@ -110,16 +127,16 @@ def _spawn_point(world: World, room: str | None, where: dict, rng: np.random.Gen
         if room is not None:
             p = world.room_point(room, rng)
         elif "point" in where:
-            p = world.nav.snap(np.asarray(where["point"], float) + rng.normal(0, 1.0, 2))
+            p = world.nav.snap(np.asarray(where["point"], float) + rng.normal(0, 1.0, 2), lv)
         else:
-            x0, z0, x1, z1 = world.nav.walk.bounds
+            x0, z0, x1, z1 = world.nav.walk[lv].bounds
             p = rng.uniform([x0, z0], [x1, z1])
-            if not world.nav.is_walkable(p[None])[0]:
+            if not world.nav.is_walkable(p[None], lv)[0]:
                 continue
         best = p
         if not taken or np.min(np.linalg.norm(np.asarray(taken) - p, axis=1)) >= 0.5:
             return p
-    return best if best is not None else world.nav.snap(world.nav.centroids[0])
+    return best if best is not None else world.nav.snap(world.nav.centroids[world.nav.lv_tris[lv][0]], lv)
 
 
 PERSONA_COLORS = {name: p.color for name, p in PERSONAS.items()}

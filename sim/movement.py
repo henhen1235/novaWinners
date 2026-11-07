@@ -14,12 +14,16 @@ AGENT_RADIUS_M = 0.25
 SEPARATION_GAIN = 0.5  # fraction of the overlap removed per tick
 
 
-def separation(pos: np.ndarray) -> np.ndarray:
-    """Push apart every pair closer than two radii; returns a displacement per agent (m)."""
+LEVEL_OFFSET_M = 1e5  # separates levels in the KD-tree so floors never push each other
+
+
+def separation(pos: np.ndarray, lv: np.ndarray) -> np.ndarray:
+    """Push apart every same-level pair closer than two radii; returns a displacement per agent (m)."""
     out = np.zeros_like(pos)
     if len(pos) < 2:
         return out
-    pairs = cKDTree(pos).query_pairs(2 * AGENT_RADIUS_M, output_type="ndarray")
+    keyed = pos + np.column_stack([lv * LEVEL_OFFSET_M, np.zeros(len(lv))])
+    pairs = cKDTree(keyed).query_pairs(2 * AGENT_RADIUS_M, output_type="ndarray")
     if len(pairs) == 0:
         return out
     d = pos[pairs[:, 0]] - pos[pairs[:, 1]]
@@ -45,22 +49,27 @@ def crosses(p0: np.ndarray, p1: np.ndarray, door: DoorState) -> np.ndarray:
     return (o1 * o2 < 0) & (o3 * o4 < 0)
 
 
-def resolve_moves(world: World, pos: np.ndarray, step: np.ndarray, pushable: np.ndarray) -> tuple[np.ndarray, np.ndarray, list[tuple[int, str]]]:
+HURRY_FRICTION_TOKENS = 0.05  # a hurrying person refused at a door jostles and slows the flow a bit
+
+
+def resolve_moves(world: World, pos: np.ndarray, lv: np.ndarray, step: np.ndarray, pushable: np.ndarray,
+                  hurry: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, list[tuple[int, str]]]:
     """Combine seek step and separation, keep walkable, gate door crossings by flow tokens.
 
+    `pushable` is 0 for agents that must not move (on a stair, carried).
     Returns (new positions, denied mask, crossings as (agent row, door id)).
     """
-    sep = separation(pos) * pushable[:, None]
+    sep = separation(pos, lv) * pushable[:, None]
     new = pos + step + sep
-    bad = ~world.nav.is_walkable(new)
+    bad = ~world.nav.is_walkable(new, lv)
     if bad.any():
         new[bad] = pos[bad] + step[bad]
-        bad2 = bad & ~world.nav.is_walkable(new)
+        bad2 = bad & ~world.nav.is_walkable(new, lv)
         new[bad2] = pos[bad2]
     denied = np.zeros(len(pos), dtype=bool)
     passed: list[tuple[int, str]] = []
     for door in world.doors:
-        rows = np.flatnonzero(crosses(pos, new, door))
+        rows = np.flatnonzero(crosses(pos, new, door) & (lv == door.lv))
         if len(rows) == 0:
             continue
         mid = (door.a + door.b) / 2
@@ -70,4 +79,6 @@ def resolve_moves(world: World, pos: np.ndarray, step: np.ndarray, pushable: np.
             else:
                 new[r] = pos[r]
                 denied[r] = True
+                if hurry is not None and hurry[r]:
+                    door.bucket.tokens -= HURRY_FRICTION_TOKENS
     return new, denied, passed

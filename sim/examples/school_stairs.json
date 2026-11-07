@@ -1,0 +1,14 @@
+{"schema_version": "0.1", "scene": "fixtures/two_floor_school.scene.json", "seed": 42, "duration_s": 400,
+ "events": [
+  {"id": "ev_alarm", "type": "alarm_only", "t_start_s": 0, "at": {"room": "L1_corridor"}, "params": {}},
+  {"id": "ev_smoke", "type": "smoke", "t_start_s": 10, "at": {"room": "L2_stair_w"}, "params": {"block_after_s": 15}}
+ ],
+ "occupants": [
+  {"where": {"room": "L2_class_n1"}, "count": 8, "personas": {"regular": 0.8, "visitor": 0.2}},
+  {"where": {"room": "L2_class_s2"}, "count": 8, "personas": {"regular": 0.7, "older_adult": 0.3}},
+  {"where": {"room": "L2_class_n3"}, "count": 4, "personas": {"staff": 1.0}},
+  {"where": {"room": "L2_class_s1"}, "count": 1, "personas": {"mobility_impaired": 1.0}},
+  {"where": {"room": "L1_class_n2"}, "count": 8, "personas": {"regular": 0.6, "visitor": 0.4}}
+ ],
+ "assumptions": ["Smoke in the west stairwell (L2 side) from t=10 s blocks stair_01 at t=25 s.",
+                 "One wheelchair user on L2 waits at a stair landing for a warden."]}

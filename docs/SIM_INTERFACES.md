@@ -14,7 +14,7 @@ All files JSON (or JSONL); deterministic given (scene, scenario, seed, decision 
                 "models": {"google/gemini-2.5-flash-lite": 1.0}}],
  "assumptions": []}
 ```
-`at` is exactly one of {"room": id}, {"exit": id}, {"door": id}, {"point": [x, z], "level": id}.
+`at` is exactly one of {"room": id}, {"exit": id}, {"door": id}, {"point": [x, z], "level": id}. The sim also accepts {"stair": id}.
 Event semantics (minimum): fire/smoke make the event room and its doors high-cost then
 impassable after `params.block_after_s` (default 60); blocked_exit makes that exit
 impassable from t_start_s; rumor injects a message `params.text` claiming
@@ -44,14 +44,70 @@ reaction delay) so LLM latency never changes results; LLM outputs are recorded a
 {"meta": {"scene": "...", "scenario": "...", "seed": 42, "dt": 0.5, "duration_s": 300,
           "llm_calls": 0, "cost_usd": 0.0},
  "agents": [{"id": "a_01", "persona": "visitor", "model": "...", "color": "#..."}],
- "frames": [{"t": 0.0, "a": [["a_01", 3.2, 4.1, "moving|deciding|waiting|queued|exited|helping|hiding"]]}],
- "events": [{"t": 12.5, "kind": "decision|said|heard|exited|blocked|fire_spread|rumor",
+ "frames": [{"t": 0.0, "a": [["a_01", 3.2, 4.1, "moving|deciding|waiting|queued|exited|helping|hiding|waiting_at_refuge|carried", "L1"]]}],
+ "events": [{"t": 12.5, "kind": "decision|said|heard|exited|blocked|fire_spread|rumor|alarm|opened|waiting_at_refuge|helping",
              "agent": "a_01", "ref": "d_000012", "text": "..."}],
  "metrics": {"evacuated": 0, "total": 0, "t_last_exit_s": 0, "exit_usage": {"e_001": 0},
              "pre_movement_s": {"median": 0, "p90": 0}, "per_persona": {}}}
 ```
-Frames every 0.5 s (positions rounded to 1 cm). The decision log is written next to it as
+Frames every 0.5 s (positions rounded to 1 cm). Each frame entry is
+[id, x, z, state, level]; the level id is the 5th element (appended, so readers of the
+4-element form keep working). The sim stops writing frames once everyone has exited
+(meta.t_end_s). The decision log is written next to it as
 decisions.jsonl (one DecisionRecord per line, docs/AGENT_COGNITION.md).
+
+## What sim/ implements (sim/, read this before plugging in)
+
+CLI: `python -m sim run --scenario S [--scene scene.json] -o OUT --seed N [--decide cognition|pkg.mod:func] [--no-llm]`,
+`python -m sim baseline ...` (no delay, omniscient shortest path), `python -m sim compare OUT1 OUT2 ...`.
+OUT gets replay.json, decisions.jsonl, metrics.json. `--no-llm` sets NOVA_NO_LLM=1 and the run
+directory is in NOVA_RUN_DIR. If the decider module has `decide_batch(views) -> results`, the sim
+calls it once per tick with every agent deciding that tick (parallel LLM calls); otherwise `decide`.
+A result whose choice is not an option id, or an exception, falls back to the rule policy and the
+record's validation.status is "fallback".
+
+Levels: the navmesh, walkable, rooms, doors and exits are per level (triangle_level); stairs come
+from scene.links (type stairs, cost_multiplier, bidirectional) or scene.stairs. Stair speed is a
+persona trait (0.6 m/s down, 0.4 up; older adults 0.3 down), stair flow 1.1 persons/s per meter of
+stair width. Elevators are never used. People who cannot use stairs (mobility_impaired) are offered
+GO_TO_REFUGE and wait at the landing (state waiting_at_refuge) until a staff agent chooses HELP;
+the helper carries them (0.6 m/s level, 0.3 m/s stairs, state helping / carried).
+
+The decider owns the choices; the sim only executes walking, queuing and stopping. Decision
+triggers (`trigger.kind`): cue_noticed, premove_done, periodic (20 s waiting, 10 s seeking info),
+hazard_seen, path_blocked (exit or stair found blocked, route cut), route_changed (hazard costs
+changed; the agent keeps walking its old path until the decision applies), rumor_heard, heard
+(speech only when it is news for the listener or from staff/PA, at most once per 8 s per listener),
+door_reached, level_reached (every landing: the agent stops until the decision applies; keep going
+down or leave the stairwell), stair_smoke / stair_crowded (once per stair and floor, agent waits),
+help_request (staff, radio), picked_up (helper, after picking someone up).
+
+view.agent: id, persona, model, pos [x, z], level, room, known_exits, entry_exit, target_exit,
+target_stair, carrying (id or null), traits (speed_mps, premove_s, notice_s, sign_follow_p,
+social_threshold, stair_down_mps, stair_up_mps, uses_stairs, t_since_cue_s, activity, state, pace).
+
+view.percepts kinds: alarm, fire / smoke (where, level, dist_m), people_moving (count, toward),
+person (ref, persona, doing, state, toward, dist_m; up to 8 nearest in sight), message (from, text,
+urgent, official), exit_sign (ref, dist_m), stair (ref, direction, leads_to_level, on_stairs,
+waiting, smoke, blocked, dist_m), needs_help (staff only: ref, level).
+
+view.options (ids o1..): EVACUATE {exit, label, route_m, queue_s, eta_s, through_hazard, stair};
+TAKE_STAIRS {stair, direction, route_m, queue_s, eta_s, leads_to_level, blocked, smoke} (floors
+with no exit); GO_TO_REFUGE {stair, route_m, eta_s}; HELP {target, level, route_m, eta_s} (staff);
+FOLLOW {target, exit, route_m, eta_s}; SEEK_INFO; CONTINUE_TASK. route_m is meters, eta_s uses this
+agent's own brisk speed plus queue and stair time. Movement options carry "paces":
+["calm", "brisk", "hurry"]; the result may set "pace" at top level or in record.decision.pace
+(speed x0.85 / 1.0 / 1.25, capped by persona; hurrying people refused at a door slow its flow
+slightly). Missing or invalid pace means brisk.
+
+Scenario extras the sim reads: events open_exit {exit} and pa_announcement {params.text,
+params.claim} (official, urgent, reaches everyone); blocked_exit / fire / smoke can target a
+stair ({"stair": id} or a stairwell room); occupants[].familiar_exit sets the exit they came in by;
+`interventions: [{"type": "signage", "exit": id, "p": 0.8}]` makes each occupant know that exit
+with probability p. Wardens are occupants with persona staff. For programmatic drivers (loop/),
+`Sim(scene, scenario, seed, decider, hooks=[fn])` calls fn(sim) at the start of every tick.
+
+metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
 
 ## Viewer
 
