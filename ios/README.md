@@ -57,8 +57,47 @@ frame. Do not leave the app or lock the phone until you tap Finish.
 5. Tap Export. The files are written to Files > On My iPhone > RoomScanner >
    `scan-<time>/`.
 
-A large open area can fail with a scene size error; scan it as two or three
-"rooms" instead.
+The steps above are the Rooms mode (the switch at the top of the screen).
+RoomPlan is built for home-size rooms: in a large open hall it returns only a
+few small walls. Use Mesh mode for those.
+
+## Scan a large space in Mesh mode
+
+Mesh mode (the default) records the raw LiDAR mesh with ARKit scene
+reconstruction, like Polycam or Scaniverse, with no size limit.
+
+1. Pick Mesh at the top and tap Start. The reconstructed mesh is drawn over
+   the camera image as it grows, so you can see what is covered.
+2. Walk slowly, sweep floor to ceiling, go through every doorway. The status
+   line shows anchors, triangles, floor area covered (m^2) and elapsed time.
+   Pause stops the session; Start continues it in the same frame. Reset
+   throws the mesh away and starts again.
+3. Tap Export (it pauses first). The files go to Files > On My iPhone >
+   RoomScanner > `mesh-<time>/`. Tap "Share 2 files" to AirDrop them.
+
+Switching modes discards the other mode's unsaved scan.
+
+`mesh.ply` is binary little-endian, world coordinates in meters, gravity
+aligned with y up. Header:
+
+```
+ply
+format binary_little_endian 1.0
+comment rehearsal arkit mesh v1
+element vertex N
+property float x
+property float y
+property float z
+element face M
+property list uchar int vertex_indices
+property uchar classification
+end_header
+```
+
+Each face is a triangle (count byte 3, three int32 indices) followed by its
+ARMeshClassification raw value: 0 none, 1 wall, 2 floor, 3 ceiling, 4 table,
+5 seat, 6 window, 7 door. `scan_notes.json` has the usual keys plus
+`"mode": "mesh"`, `"frame": "arkit_world_gravity_y_up"` and `"triangles": M`.
 
 ## Exported files
 
