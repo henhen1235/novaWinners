@@ -10,6 +10,6 @@ Floors bottom to top: 1, 2, 3, 4, 5
 | 4 | 0.2032 | 0.20311-0.2034 | 122 | [-21.57, -20.06] | 150 | 0 |
 | 5 | 0.16931 | 0.1692-0.16939 | 128 | [-1.04, -7.37] | 159 | 0 |
 
-Rooms: 576. Doors: {'swing': 363, 'double': 55, 'opening': 462, 'inferred': 28}. Exits: 22. Stairs: 12. Left out (no path out): 34.
+Rooms: 633. Doors: {'swing': 419, 'double': 53, 'opening': 521, 'inferred': 17}. Exits: 22. Stairs: 12. Left out (no path out): 15.
 
-Validator: 273 warn LEAKY_WALL_SUSPECTED, 1 warn SCALE_LOW_CONFIDENCE, 108 warn UNKNOWN_SPACE_NEAR_DOOR
+Validator: 319 warn LEAKY_WALL_SUSPECTED, 1 warn SCALE_LOW_CONFIDENCE, 114 warn UNKNOWN_SPACE_NEAR_DOOR

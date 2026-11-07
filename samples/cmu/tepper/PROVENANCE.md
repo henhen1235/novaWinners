@@ -17,7 +17,7 @@ No CMU drawing, raster or PDF is in this folder or anywhere in the repo.
 
 ## How it was made
 
-`python -m tools.tepper_to_scene data/cmu/raw/tepper -o samples/cmu/tepper`
+`python -m ingest_plans data/cmu/raw/tepper --config tepper -o samples/cmu/tepper`
 
 - Scale per floor: median of sqrt(labeled sf x 0.092903 / traced A-AREA area) over every room of
   50 sf or more. meta.scale_method is "manual"; the real method is recorded as
@@ -38,8 +38,9 @@ No CMU drawing, raster or PDF is in this folder or anywhere in the repo.
 - Rooms: A-AREA faces with a room-number label; corridors are the space left inside the gross
   outline after rooms are cut out (strips under 0.9 m are wall). Atrium voids (FICM 070.1) and
   shafts (VPN*) are not floor.
-- Types: hatch color under the room mapped to the chart's FICM codes; some colors carry several
-  codes, so `type` is approximate. Candidates are kept in extensions.tepper.rooms.
+- Types: hatch color under the room (the Type sheet is registered to the Base sheet on the wall
+  layer, since it draws the plan at its own scale) mapped to the floor's FICM key; some colors
+  carry several codes, so `type` is approximate. Candidates are kept in extensions.tepper.rooms.
 - Doors: A-DOOR symbols placed on the wall strip between the two spaces they touch ("outside" when
   the strip faces the exterior); wall-less boundaries between area polygons become "opening" doors.
   Rooms still cut off get an inferred 0.9 m door on their longest wall shared with a reachable

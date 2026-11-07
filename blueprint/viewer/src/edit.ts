@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import type { SceneDoc, ViewerContext } from "./context";
 import "./edit.css";
+import { locate, onMesh, type Nav } from "./nav";
 import { canonicalPersona } from "./people";
 
 type At = { room?: string; exit?: string; door?: string; stair?: string; point?: number[]; level?: string };
@@ -22,7 +23,7 @@ type Tool = "fire" | "smoke" | "block" | "rumor" | "pa" | "open" | "type" | "peo
 const TOOLS: [Tool, string, string][] = [
   ["fire", "Fire", "Start a fire in the room you click"],
   ["smoke", "Smoke", "Fill the room you click with smoke"],
-  ["block", "Block", "Block the nearest exit, door or stair"],
+  ["block", "Block", "Block the spot you click"],
   ["open", "Open exit", "Open the nearest exit"],
   ["rumor", "Rumor", "Start a rumor where you click"],
   ["pa", "PA", "Play a PA announcement"],
@@ -32,7 +33,7 @@ const TOOLS: [Tool, string, string][] = [
 const HINTS: Record<Tool, string> = {
   fire: "Click a room to start a fire.",
   smoke: "Click a room to fill it with smoke.",
-  block: "Click near an exit, door or stair to block it.",
+  block: "Click the floor where people should not walk. The block stays on that floor, under the cursor.",
   open: "Click near an exit to open it.",
   rumor: "Edit the rumor, then click where it starts.",
   pa: "Edit the announcement, then click anywhere on the plan.",
@@ -100,6 +101,12 @@ export function getDraft() {
   return { events: [...draft.events], occupants: [...draft.occupants] };
 }
 
+let hidePlaced: () => void = () => {};
+/** Remove the white placement dots once the simulation is drawing the people itself. */
+export function clearPlacedPeople() {
+  hidePlaced();
+}
+
 // ---- geometry helpers ----
 function inside(poly: number[][], x: number, z: number) {
   let hit = false;
@@ -111,6 +118,17 @@ function inside(poly: number[][], x: number, z: number) {
 }
 const centroid = (poly: number[][]) => poly.reduce((s, p) => [s[0] + p[0] / poly.length, s[1] + p[1] / poly.length], [0, 0]);
 
+/** The click, or the nearest walkable point on the same floor when the cursor is just off the mesh. */
+function walkableHit(nav: Nav, hit: Hit): Hit | null {
+  const p: [number, number] = [hit.x, hit.z];
+  if (onMesh(nav, p, hit.level, 0.75)) return hit;
+  const tri = locate(nav, p, hit.level);
+  if (tri < 0) return null;
+  const [x, z] = nav.centroids[tri];
+  if (Math.hypot(x - hit.x, z - hit.z) > 2.5) return null;
+  return { level: hit.level, x, z };
+}
+
 function roomAt(doc: SceneDoc, hit: Hit) {
   return doc.rooms.find((room) => room.level === hit.level && room.type !== "outside" && inside(room.polygon, hit.x, hit.z));
 }
@@ -118,9 +136,8 @@ function roomAt(doc: SceneDoc, hit: Hit) {
 /** Nearest exit (and, unless exitsOnly, door or stair) to the hit on its level. */
 function nearestTarget(doc: SceneDoc, hit: Hit, exitsOnly: boolean): { at: At; name: string; dist: number } | null {
   const exitDoors = new Set(doc.exits.map((exit) => exit.door_id));
-  // Upper floors often have no exits of their own; then any exit in plan distance (the way out downstairs).
-  const sameLevel = doc.exits.filter((exit) => exit.level === hit.level);
-  const options: { at: At; name: string; p: number[] }[] = (sameLevel.length ? sameLevel : doc.exits)
+  const options: { at: At; name: string; p: number[] }[] = doc.exits
+    .filter((exit) => exit.level === hit.level)
     .map((exit) => ({ at: { exit: exit.id }, name: exit.label, p: exit.position }));
   if (!exitsOnly) {
     for (const door of doc.doors) {
@@ -186,7 +203,7 @@ export function startEdit(context: ViewerContext) {
   section.className = "edit";
   section.setAttribute("aria-labelledby", "edit-title");
   section.innerHTML = `
-    <h2 id="edit-title">Edit scenario</h2>
+    <details class="edit-collapse"><summary><h2 id="edit-title">Change the scenario</h2></summary>
     <div class="views edit-tools" role="group" aria-label="Edit tools">
       ${TOOLS.map(([id, name, title]) => `<button type="button" data-tool="${id}" aria-pressed="false" title="${title}">${name}</button>`).join("")}
     </div>
@@ -216,7 +233,7 @@ export function startEdit(context: ViewerContext) {
         </div>
         <p id="pop-floors" class="edit-hint" aria-live="polite"></p>
       </fieldset>
-      <details open><summary>Traits</summary>
+      <details><summary>More traits</summary>
         ${TRAITS.map(([key, name, min, max, step, value]) => slider(key, name, min, max, step, value)).join("")}
         ${OCEAN.map(([key, name]) => slider(`ocean-${key}`, `${name} (${key})`, 0, 1, 0.05, 0.5)).join("")}
       </details>
@@ -231,10 +248,25 @@ export function startEdit(context: ViewerContext) {
     <h3>Changes</h3>
     <p class="edit-empty" id="edit-empty">No changes yet.</p>
     <ol id="edit-list" class="edit-list"></ol>
-    <button id="edit-download" type="button" class="edit-download">Download scenario.json</button>`;
-  const routeSection = document.querySelector("aside section.route");
-  if (routeSection) routeSection.before(section);
-  else document.querySelector("aside")?.append(section);
+    <button id="edit-download" type="button" class="edit-download">Download scenario.json</button>
+    </details>`;
+  // Findings come first; changing the scenario is the last thing in the rail. It starts open when there
+  // is nothing to watch (no replay) or in a live run, and the header's "Add an event" opens it from anywhere.
+  document.querySelector("aside")?.append(section);
+  const fold = section.querySelector<HTMLDetailsElement>(".edit-collapse")!;
+  const query = new URLSearchParams(location.search);
+  fold.open = !query.get("replay") || query.has("live");
+  const opener = document.createElement("button");
+  opener.id = "add-event";
+  opener.type = "button";
+  opener.className = "add-event";
+  opener.textContent = "Add an event";
+  opener.addEventListener("click", () => {
+    fold.open = true;
+    section.scrollIntoView({ block: "start", behavior: "smooth" });
+    section.querySelector<HTMLButtonElement>("[data-tool]")?.focus();
+  });
+  document.querySelector("header .floor-views, header .camera-views")?.before(opener);
 
   const $ = <T extends Element>(selector: string) => section.querySelector<T>(selector)!;
   const hint = $<HTMLParagraphElement>("#edit-hint");
@@ -286,16 +318,23 @@ export function startEdit(context: ViewerContext) {
   function buildEvent(type: string, hit: Hit, text?: string): { event: ScenarioEvent; note: string } | { error: string } {
     let at: At;
     let note = "";
-    if (type === "blocked_exit" || type === "open_exit") {
-      const target = nearestTarget(doc, hit, type === "open_exit");
-      if (!target) return { error: `No ${type === "open_exit" ? "exit" : "exit, door or stair"} on ${levelName(hit.level)}.` };
+    const params: Record<string, unknown> = {};
+    if (type === "blocked_exit") {
+      const spot = walkableHit(context.nav, hit);
+      if (!spot) return { error: `That click is not on a walkable part of ${levelName(hit.level)}.` };
+      at = { point: [round(spot.x), round(spot.z)], level: spot.level };
+      params.radius_m = 2.2;
+      const room = roomAt(doc, spot);
+      note = room ? ` in ${room.name}` : "";
+    } else if (type === "open_exit") {
+      const target = nearestTarget(doc, hit, true);
+      if (!target || target.dist > 8) return { error: `Click the exit on ${levelName(hit.level)} you want to open.` };
       at = target.at;
       note = ` (${target.dist.toFixed(1)} m from the click)`;
     } else {
       const room = roomAt(doc, hit);
       at = room ? { room: room.id } : { point: [round(hit.x), round(hit.z)], level: hit.level };
     }
-    const params: Record<string, unknown> = {};
     if (type === "rumor" || type === "pa_announcement") {
       params.text = text?.trim() || MESSAGE_DEFAULT[type === "rumor" ? "rumor" : "pa"];
       if (type === "rumor") params.radius_m = 8;
@@ -353,10 +392,16 @@ export function startEdit(context: ViewerContext) {
       ocean: Object.fromEntries(OCEAN.map(([key]) => [key, round(value(`ocean-${key}`) * 2 - 1)])),
     };
   }
+  function variedTraits() {
+    const base = traits();
+    const spread = 0.82 + Math.random() * 0.36;
+    const speed = Math.min(2, Math.max(0.3, Number(base.speed_mps) * spread));
+    return { ...base, speed_mps: Math.round(speed * 100) / 100 };
+  }
   function placePeople(points: Hit[]) {
     const who = persona.value;
-    const shared = { count: 1, personas: { [who]: 1.0 }, traits: traits() };
-    const occupants: Occupant[] = points.map((p) => ({ where: { point: [round(p.x), round(p.z)], level: p.level }, ...shared }));
+    const shared = { count: 1, personas: { [who]: 1.0 } };
+    const occupants: Occupant[] = points.map((p) => ({ where: { point: [round(p.x), round(p.z)], level: p.level }, ...shared, traits: variedTraits() }));
     const name = PERSONAS.find((p) => p[0] === who)?.[1].toLowerCase() ?? who;
     const label = `${points.length === 1 ? "1 person" : `${points.length} people`} (${name}) on ${levelName(points[0].level)}`;
     commit({ label, occupants, people: points.map((p) => ({ ...p, persona: who })) });
@@ -377,7 +422,9 @@ export function startEdit(context: ViewerContext) {
   /** Flat marker at the click (so events in one room do not stack on its label) or at the snapped target. */
   function eventMarker(event: ScenarioEvent, hit?: Hit) {
     const snapped = event.at.exit || event.at.door || event.at.stair;
-    const where = (!snapped && hit) || atPosition(doc, event.at);
+    const where = event.at.point && event.at.level
+      ? { level: event.at.level, x: event.at.point[0], z: event.at.point[1] }
+      : (!snapped && hit) || atPosition(doc, event.at);
     if (!where) return undefined;
     const group = new THREE.Group();
     const add = (geometry: THREE.BufferGeometry, material: THREE.Material, y = 0, turn = 0) => {
@@ -387,12 +434,17 @@ export function startEdit(context: ViewerContext) {
       mesh.renderOrder = 20;
       group.add(mesh);
     };
-    if (event.type === "fire") { add(discGeometry, materials.hazard); add(ringGeometry, materials.hazardBright, 0.001); }
+    if (event.type === "fire") {
+      add(discGeometry, materials.hazard);
+      add(ringGeometry, materials.hazardBright, 0.001);
+      group.scale.setScalar(8);
+    }
     else if (event.type === "smoke") { add(discGeometry, materials.smoke); add(ringGeometry, materials.ground, 0.001); }
     else if (event.type === "blocked_exit") {
       // Hatching, not color alone: a crossed ring reads as blocked in grayscale too.
       add(discGeometry, materials.ground); add(ringGeometry, materials.hazardBright, 0.001);
       add(barGeometry, materials.hazardBright, 0.002, Math.PI / 4); add(barGeometry, materials.hazardBright, 0.002, -Math.PI / 4);
+      group.scale.setScalar(Number(event.params.radius_m) || 1);
     } else if (event.type === "open_exit") { add(discGeometry, materials.ground); add(ringGeometry, materials.exit, 0.001); }
     else if (event.type === "pa_announcement") { add(ringGeometry, materials.drafting); add(discGeometry.clone().scale(0.4, 1, 0.4), materials.drafting); }
     else { add(ringGeometry, materials.warn); add(discGeometry.clone().scale(0.4, 1, 0.4), materials.warn); }
@@ -456,6 +508,13 @@ export function startEdit(context: ViewerContext) {
       clouds.set(level, cloud);
     }
   }
+  hidePlaced = () => {
+    for (const cloud of clouds.values()) {
+      cloud.removeFromParent();
+      cloud.geometry.dispose();
+    }
+    clouds.clear();
+  };
   /** Dots for occupants given by room (server results): random points in the room polygon. */
   function peopleFor(occupant: Occupant): Person[] {
     const who = Object.entries(occupant.personas ?? {}).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "regular";

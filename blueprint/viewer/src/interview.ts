@@ -10,6 +10,9 @@ export type DecisionRecord = {
   t_s: number;
   tick?: number;
   model?: string;
+  say?: string | null;
+  source?: "model" | "rule";
+  action?: string;
   emotion?: Record<string, number>;
   decision?: { action?: string; exit?: string; reasons?: Reason[]; padm?: { why?: string } };
 };
@@ -143,24 +146,59 @@ async function ask(question: string) {
   }
 }
 
+function sourceLine(record: DecisionRecord) {
+  const model = record.model?.includes("/") ? record.model : "";
+  const fromModel = record.source === "model" || Boolean(model);
+  return fromModel ? `Model · ${model || "its own call"}` : "Rules · no model call for this decision";
+}
+
+function thought(record: DecisionRecord | undefined) {
+  const box = $("#iv-thought");
+  if (!record) {
+    box.replaceChildren(el("p", "iv-empty", "No decision yet. It is still waiting to choose."));
+    return;
+  }
+  const why = record.decision?.padm?.why || record.action || "Chose without a written reason.";
+  const source = el("p", record.source === "model" || record.model?.includes("/") ? "iv-source model" : "iv-source", sourceLine(record));
+  box.replaceChildren(source, el("p", "", why));
+  if (record.say) box.append(el("p", "iv-say", `“${record.say}”`));
+  if (record.decision?.reasons?.length) box.append(reasonList(record.decision.reasons));
+}
+
 function drawTimeline(player: Player, run: Run, agentId: string) {
   const list = $("#iv-timeline");
   const items: { t: number; element: HTMLElement }[] = [];
   list.replaceChildren();
-  for (const event of run.doc.events.filter((item) => item.agent === agentId)) {
-    const item = el("li", `feed-${event.kind}`);
+  const rows: { t: number; title: string; detail?: string; say?: string | null; source?: string }[] = [];
+  for (const record of run.decisions.filter((item) => item.agent_id === agentId)) {
+    rows.push({
+      t: record.t_s,
+      title: record.action || "Decided",
+      detail: record.decision?.padm?.why,
+      say: record.say,
+      source: sourceLine(record),
+    });
+  }
+  for (const event of run.doc.events.filter((item) => item.agent === agentId && item.kind !== "decision")) {
+    rows.push({ t: event.t, title: event.text ?? event.kind });
+  }
+  rows.sort((a, b) => a.t - b.t);
+  for (const row of rows) {
+    const item = el("li");
     const button = el("button");
     button.type = "button";
-    button.append(el("time", "", `${event.t.toFixed(1)} s`), el("span", "what", event.text ?? event.kind));
-    button.addEventListener("click", () => player.seek(event.t));
+    button.append(el("time", "", `${row.t.toFixed(1)} s`), el("span", "what", row.title));
+    button.addEventListener("click", () => player.seek(row.t));
     item.append(button);
-    const record = event.kind === "decision" ? run.decisions.find((d) => d.record_id === event.ref) : undefined;
-    if (record?.decision?.reasons?.length) item.append(reasonList(record.decision.reasons));
-    else if (record?.decision?.padm?.why) item.append(el("p", "iv-why", `Said at the time: ${record.decision.padm.why}`));
+    if (row.source) item.append(el("p", "iv-why", row.source));
+    if (row.detail) item.append(el("p", "iv-why", row.detail));
+    if (row.say) item.append(el("p", "iv-why", `Said: ${row.say}`));
     list.append(item);
-    items.push({ t: event.t, element: item });
+    items.push({ t: row.t, element: item });
   }
-  if (!items.length) list.append(el("li", "iv-empty", "No events for this occupant in the replay."));
+  if (!items.length) list.append(el("li", "iv-empty", "Nothing recorded for this person yet."));
+  const latest = run.decisions.filter((item) => item.agent_id === agentId).pop();
+  thought(latest);
   return items;
 }
 
@@ -168,11 +206,27 @@ export function openInterview(player: Player, run: Run, agent: number, onClose: 
   const info = run.doc.agents[agent];
   $("#iv-title").textContent = info.id;
   const persona = info.persona.replace(/_/g, " ");
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${info.model ?? "model not recorded"}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  const speed = typeof info.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
+  const model = info.model?.includes("/") ? `decided by ${info.model}` : "waiting for its own model call";
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
   $("#iv-answer").replaceChildren();
   const items = drawTimeline(player, run, info.id);
   current = { player, run, agent, onClose, items };
-  $("#interview").hidden = false;
+  $("#iv-body").hidden = false;
+  $<HTMLButtonElement>("#iv-close").hidden = false;
+  updateInterview(player.time());
+}
+
+/** Rebuild the open log after live decisions arrive. */
+export function refreshInterview() {
+  if (!current) return;
+  const { player, run, agent } = current;
+  const info = run.doc.agents[agent];
+  const persona = (info?.persona ?? "person").replace(/_/g, " ");
+  const speed = typeof info?.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
+  const model = info?.model?.includes("/") ? `decided by ${info.model}` : "waiting for its own model call";
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  current.items = drawTimeline(player, run, info.id);
   updateInterview(player.time());
 }
 
@@ -185,6 +239,7 @@ export function updateInterview(t: number) {
   // Latest recorded emotion at or before t.
   const id = run.doc.agents[agent].id;
   const record = run.decisions.filter((item) => item.agent_id === id && item.t_s <= t).pop();
+  thought(record);
   const emotion = $("#iv-emotion");
   if (!record?.emotion) emotion.replaceChildren(el("p", "iv-empty", run.decisions.length ? "No decision recorded yet." : "No decisions.jsonl next to this replay."));
   else {
@@ -214,7 +269,10 @@ export function updateInterview(t: number) {
 }
 
 $("#iv-close").addEventListener("click", () => {
-  $("#interview").hidden = true;
+  $("#iv-body").hidden = true;
+  $<HTMLButtonElement>("#iv-close").hidden = true;
+  $("#iv-title").textContent = "This person";
+  $("#iv-who").textContent = "Click a person to read why they are moving.";
   current?.onClose();
   current = null;
 });

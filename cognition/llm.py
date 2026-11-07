@@ -11,6 +11,7 @@ import os
 import ssl
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -19,10 +20,17 @@ import certifi
 REPO = Path(__file__).resolve().parents[1]
 CACHE = REPO / "data" / "llm_cache" / "cognition"
 URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "google/gemini-2.5-flash-lite"
+DEFAULT_MODEL = "openai/gpt-oss-120b"
 _CTX = ssl.create_default_context(cafile=certifi.where())
 _LOCK = threading.Lock()
 STATS = {"calls": 0, "cached": 0, "cost_usd": 0.0, "latency_ms": [], "errors": 0}
+_BILLING_STOPPED = False
+
+
+def _stop_for_billing() -> None:
+    """One 402 means the wallet is empty. Later calls in this process must not keep hitting the API."""
+    global _BILLING_STOPPED
+    _BILLING_STOPPED = True
 
 
 def _key() -> str | None:
@@ -104,12 +112,20 @@ def chat(messages: list[dict], model: str = DEFAULT_MODEL, temperature: float = 
     key = _key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set")
+    if _BILLING_STOPPED:
+        raise RuntimeError("OpenRouter returned 402; model calls are paused until the server restarts")
     req = urllib.request.Request(URL, json.dumps(body).encode(),
                                  {"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     t0 = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=timeout, context=_CTX) as r:
             resp = json.load(r)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 402:
+            _stop_for_billing()
+        with _LOCK:
+            STATS["errors"] += 1
+        raise
     except Exception:
         with _LOCK:
             STATS["errors"] += 1
@@ -133,9 +149,14 @@ async def achat(client, messages: list[dict], model: str = DEFAULT_MODEL, temper
     key = _key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set")
+    if _BILLING_STOPPED:
+        raise RuntimeError("OpenRouter returned 402; model calls are paused until the server restarts")
     t0 = time.perf_counter()
     try:
         r = await client.post(URL, json=body, timeout=timeout, headers={"Authorization": f"Bearer {key}"})
+        if r.status_code == 402:
+            _stop_for_billing()
+            raise RuntimeError("402 Payment Required")
         if r.status_code == 429:
             raise RateLimited(float(r.headers.get("retry-after") or 1.0))
         r.raise_for_status()

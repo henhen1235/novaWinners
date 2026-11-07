@@ -46,22 +46,24 @@ def find_sheets(inputs: list[Path]) -> tuple[dict[str, dict], list[Path]]:
     """floor id -> {"base", "type"} and the color-key PDFs, from file names."""
     pdfs = [p for i in inputs for p in (sorted(i.glob("*.pdf")) if i.is_dir() else [i])]
     sheets: dict[str, dict] = {}
-    charts = []
+    charts: dict[str, Path] = {}
     for p in pdfs:
         m = SHEET.search(p.name)
         if not m:
             raise ValueError(f"{p.name}: expected <BLDG>-<floor>-ESIM-<Base|Type|TypeChart>.pdf")
-        kind = m["kind"].lower()
+        kind, floor = m["kind"].lower(), m["floor"].upper()
         if kind == "typechart":
-            charts.append(p)
+            charts[floor] = p
         else:
-            sheets.setdefault(m["floor"].upper(), {"base": None, "type": None})[kind] = p
+            sheets.setdefault(floor, {"base": None, "type": None, "chart": None})[kind] = p
+    for floor, p in charts.items():
+        if floor in sheets:
+            sheets[floor]["chart"] = p
     missing = [f for f, s in sheets.items() if s["base"] is None]
     if missing:
         raise ValueError(f"no Base sheet for floor(s) {missing}")
-    if not charts:  # the Type sheets print the same color key
-        charts = [s["type"] for s in sheets.values() if s["type"]]
-    return sheets, charts
+    # Without TypeChart sheets the Type sheets print the color key themselves.
+    return sheets, list(charts.values()) or [s["type"] for s in sheets.values() if s["type"]]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -148,6 +148,39 @@ def _labels(page: fitz.Page, leaders: list[LineString], room_re: re.Pattern) -> 
     return out
 
 
+def _sheet_transform(src: list[dict], dst: list[dict]) -> list[float]:
+    """Affine [a, b, d, e, xoff, yoff] taking `src` sheet coordinates to `dst`'s. The Type sheet
+    draws the same plan at its own scale and position (it makes room for the color key), so
+    match the bounding boxes of the wall layer, which both sheets carry unchanged."""
+    def bounds(ds):
+        rs = [d["rect"] for d in ds if d.get("layer") == "ARCH|A-WALL"]
+        return (min(r.x0 for r in rs), min(r.y0 for r in rs), max(r.x1 for r in rs), max(r.y1 for r in rs)) if rs else None
+    a, b = bounds(src), bounds(dst)
+    if a is None or b is None:
+        return [1, 0, 0, 1, 0, 0]
+    k = ((b[2] - b[0]) / (a[2] - a[0]) + (b[3] - b[1]) / (a[3] - a[1])) / 2
+    return [k, 0, 0, k, b[0] - a[0] * k, b[1] - a[1] * k]
+
+
+def _colored_by_department(type_pdf: Path | None) -> bool:
+    """Some "Type" sheets are colored by department, not space type: their colors mean nothing here."""
+    return bool(type_pdf) and "DEPARTMENT" in fitz.open(type_pdf)[0].get_text()
+
+
+def _borrow_types(floors: dict, keys: dict) -> None:
+    """Rooms on a floor without a space-type key take the color and codes of the room in the
+    same position on the nearest floor that has one (same number minus the floor digit)."""
+    order = list(floors)
+    for f in [f for f in order if not keys[f]]:
+        for num, r in floors[f]["rooms"].items():
+            k = _floor_key(num, f)
+            for g in sorted((g for g in order if keys[g]), key=lambda g: abs(order.index(g) - order.index(f))):
+                twin = next((t for n, t in floors[g]["rooms"].items() if _floor_key(n, g) == k), None) if k else None
+                if twin and twin["color"]:
+                    r["color"], r["ficm"], r["key_floor"] = twin["color"], twin["ficm"], g
+                    break
+
+
 def _shell(gross: list[Polygon], faces: list[Polygon], m_per_pt: float) -> Polygon:
     """Building outline in PDF units: the largest gross-area polygon when the rooms fill most of
     it, else the rooms closed over their walls. Some sheets draw the gross line open (no polygon)
@@ -197,7 +230,9 @@ def read_floor(base_pdf: Path, type_pdf: Path | None, colors: dict, cfg: Config)
     shell = _shell(gross, faces, m_per_pt)
 
     # Type: majority hatch color inside each room on the Type sheet.
-    fills = [(box(*d["rect"]), _rgb(d["fill"])) for d in (fitz.open(type_pdf)[0].get_drawings() if type_pdf else [])
+    type_drawings = fitz.open(type_pdf)[0].get_drawings() if type_pdf else []
+    to_base = _sheet_transform(type_drawings, drawings)
+    fills = [(shapely.affinity.affine_transform(box(*d["rect"]), to_base), _rgb(d["fill"])) for d in type_drawings
              if d.get("fill") and d.get("layer") == "A-SPAC-PATT"]
     tree = shapely.STRtree([p for p, _ in fills])
     for r in rooms.values():
@@ -592,8 +627,13 @@ def build(sheets: dict[str, dict], charts: list[Path], cfg: Config, generated_by
     """sheets: floor id -> {"base": Path, "type": Path | None}, already in bottom-to-top order.
     charts: PDFs carrying the hatch color key (TypeChart sheets, else the Type sheets)."""
     FLOORS = list(sheets)
-    colors = legend(charts)
-    floors = {f: read_floor(sh["base"], sh.get("type"), colors, cfg) for f, sh in sheets.items()}
+    shared = legend(charts)
+    # Charts number their colors per floor, so prefer the floor's own key (its TypeChart, or the
+    # key printed on its Type sheet) and fall back to all keys merged.
+    keys = {f: legend([sh["chart"]] if sh.get("chart") else [sh["type"]] if sh.get("type") else []) or
+            ({} if _colored_by_department(sh.get("type")) else shared) for f, sh in sheets.items()}
+    floors = {f: read_floor(sh["base"], sh.get("type"), keys[f], cfg) for f, sh in sheets.items()}
+    _borrow_types(floors, keys)
     align = _align(floors, FLOORS, cfg)
     lid = {f: f"L{f}" for f in FLOORS}
     ground = cfg.ground_floor if cfg.ground_floor in FLOORS else next((f for f in FLOORS if f.isdigit()), FLOORS[0])
@@ -611,7 +651,7 @@ def build(sheets: dict[str, dict], charts: list[Path], cfg: Config, generated_by
                 continue  # atrium voids and shafts are not floor
             rid = f"r_{num}"
             spaces[rid] = _tf(r["poly"], t)
-            info[rid] = {"number": num, "type": room_type(num, r, t[0], colors, cfg), "sf": r["sf"],
+            info[rid] = {"number": num, "type": room_type(num, r, t[0], keys[r.get("key_floor", f)], cfg), "sf": r["sf"],
                          "ficm": r["ficm"], "color": r["color"], "stair": is_stair(num, r, t[0], cfg)}
         # A-AREA faces with no label are mostly circulation (corridors are often unnumbered).
         for i, poly in enumerate(sorted(fd["unlabeled"], key=lambda p: (p.bounds[0], p.bounds[1])), 1):

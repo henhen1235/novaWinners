@@ -123,7 +123,8 @@ def summarize(sim: Sim, body: dict, n_original: int | None, wall_s: float) -> di
     misled_recs = [r for r in recs if r["agent_id"] in set(misled)]
     strag_recs = [r for r in recs if r["agent_id"] in {a.id for a in strag}]
     return {
-        "t95_s": t95, "t95_reached": t95 is not None, "t90_s": t90, "duration_s": sim.duration,
+        "t95_s": t95, "t95_reached": t95 is not None, "t90_s": t90,
+        "t_last_s": round(times[-1], 1) if times else None, "duration_s": sim.duration,
         "evacuated": len(times), "total": n, "stragglers": len(strag), "misled_by_rumor": len(misled),
         "max_queue": max_q, "max_near_exit": exit_q, "exit_usage": m["exit_usage"],
         "pre_move_median_s": m["pre_movement_s"]["median"], "decisions": len(recs),

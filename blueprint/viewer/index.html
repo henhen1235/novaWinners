@@ -21,6 +21,7 @@
       <span class="wordmark">Rehearsal</span>
     </div>
     <span id="building" class="building">Loading scene</span>
+    <label id="scenario-pick" class="scenario-pick" hidden><span class="sr-only">Scenario</span><select id="scenario"></select></label>
     <div class="views floor-views" role="group" aria-label="Floor view">
       <button type="button" data-view="single" aria-pressed="false" title="One floor at a time">Single</button>
       <button type="button" data-view="side" aria-pressed="false" title="Every floor as a flat plan, side by side">Side by side</button>
@@ -54,43 +55,55 @@
       <input id="scrub" type="range" min="0" max="0" step="0.5" value="0" aria-label="Replay time" />
       <output id="clock">0.0 s</output>
     </div>
-    <section id="interview" class="interview" aria-labelledby="iv-title" hidden>
-      <div class="iv-head">
-        <div>
-          <h2 id="iv-title">Occupant</h2>
-          <p id="iv-who"></p>
-        </div>
-        <button id="iv-close" type="button" aria-label="Close interview">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
-        </button>
-      </div>
-      <dl class="iv-now">
-        <dt>State at <span id="iv-time">0.0 s</span></dt><dd id="iv-state"></dd>
-      </dl>
-      <div id="iv-emotion" class="iv-emotion"></div>
-      <h3>Timeline</h3>
-      <ol id="iv-timeline" class="iv-timeline"></ol>
-      <form id="iv-form" class="iv-form">
-        <label for="iv-question">Ask this occupant</label>
-        <textarea id="iv-question" rows="2" placeholder="Why didn't you take the other exit?"></textarea>
-        <button type="submit">Ask</button>
-      </form>
-      <div id="iv-answer" class="iv-answer" aria-live="polite"></div>
-    </section>
   </div>
   <aside>
     <section id="live" class="live" hidden>
-      <h2>Live run</h2>
+      <h2>Simulation</h2>
       <p id="live-status" class="live-status" aria-live="polite">Connecting</p>
       <div class="live-actions">
-        <button id="live-start" type="button" disabled>Start</button>
+        <button id="live-start" type="button" disabled>Start simulation</button>
         <button id="live-end" type="button" disabled>End and save replay</button>
       </div>
       <p id="live-result" class="live-result"></p>
     </section>
+    <section id="interview" class="interview" aria-labelledby="iv-title">
+      <div class="iv-head">
+        <div>
+          <h2 id="iv-title">This person</h2>
+          <p id="iv-who">Click a person to read why they are moving.</p>
+        </div>
+        <button id="iv-close" type="button" aria-label="Close interview" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+        </button>
+      </div>
+      <div id="iv-body" hidden>
+        <dl class="iv-now">
+          <dt>State at <span id="iv-time">0.0 s</span></dt><dd id="iv-state"></dd>
+        </dl>
+        <div id="iv-emotion" class="iv-emotion"></div>
+        <h3>Thinking</h3>
+        <div id="iv-thought" class="iv-thought"></div>
+        <h3>What they decided</h3>
+        <ol id="iv-timeline" class="iv-timeline"></ol>
+        <form id="iv-form" class="iv-form">
+          <label for="iv-question">Ask this occupant</label>
+          <textarea id="iv-question" rows="2" placeholder="Why didn't you take the other exit?"></textarea>
+          <button type="submit">Ask</button>
+        </form>
+        <div id="iv-answer" class="iv-answer" aria-live="polite"></div>
+      </div>
+    </section>
     <section id="run" class="run" hidden>
-      <h2>Run</h2>
+      <h2>Result</h2>
       <div id="counters" class="counters"></div>
+    </section>
+    <section id="inside" class="inside" hidden>
+      <h2 id="inside-title">Still inside</h2>
+      <ol id="inside-list" class="inside-list"></ol>
+    </section>
+    <section id="feed-section" hidden>
+      <h2>What happened</h2>
+      <ol id="feed" class="feed"></ol>
     </section>
     <section id="floors" hidden>
       <h2>Floors</h2>
@@ -103,10 +116,6 @@
         <button type="button" data-color="persona" aria-pressed="false">Persona</button>
       </div>
       <ul id="legend" class="legend"></ul>
-    </section>
-    <section id="feed-section" hidden>
-      <h2>Events</h2>
-      <ol id="feed" class="feed"></ol>
     </section>
     <section class="route">
       <h2>Route to nearest exit</h2>

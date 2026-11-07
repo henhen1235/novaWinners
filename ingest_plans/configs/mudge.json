@@ -1,10 +1,18 @@
 {
- "_comment": "Mudge House (CMU 050), a residence hall on a hillside. A is the basement below ground floor 1. Room numbers are wing letter + floor + two digits (C205A); floor A uses wing + number (C19). Stairs are found from the drawn treads.",
+ "_comment": "Mudge House (CMU 050), a residence hall on a hillside. A is the basement below ground floor 1. Room numbers are wing letter + floor + two digits (C205A); floor A uses wing + number (C19). Stairs are found from the drawn treads. On floors 2-3 the corridor color is shared with 315 office service in the key; it is corridor here. Floor 3's Type sheet is colored by department, so its rooms borrow types from the same rooms on floor 2.",
  "extends": "cmu",
  "name": "mudge_house",
  "ext_key": "mudge",
- "floors": ["A", "1", "2", "3"],
+ "floors": [
+  "A",
+  "1",
+  "2",
+  "3"
+ ],
  "floor_height_m": 3.4,
  "ceiling_m": 2.8,
- "room_number": "^[A-C]\\d{1,3}[A-H]?$"
+ "room_number": "^[A-C]\\d{1,3}[A-H]?$",
+ "color_types": {
+  "1.0,1.0,0.5": "corridor"
+ }
 }

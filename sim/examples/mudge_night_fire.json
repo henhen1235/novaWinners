@@ -1,0 +1,1569 @@
+{
+ "schema_version": "0.1",
+ "scene": "samples/cmu/mudge/scene.json",
+ "seed": 7,
+ "duration_s": 600,
+ "events": [
+  {
+   "id": "ev_alarm",
+   "type": "alarm_only",
+   "t_start_s": 0,
+   "at": {
+    "room": "r_A105"
+   },
+   "params": {}
+  },
+  {
+   "id": "ev_fire",
+   "type": "fire",
+   "t_start_s": 0,
+   "at": {
+    "room": "r_A105"
+   },
+   "params": {
+    "block_after_s": 60
+   }
+  }
+ ],
+ "occupants": [
+  {
+   "where": {
+    "room": "r_A101"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A201"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A202"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A209"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A210"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A211"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A213"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A215"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A216"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A301"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A302"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A305"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A307"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A309A"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A310"
+   },
+   "count": 1,
+   "personas": {
+    "mobility_impaired": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A310"
+   },
+   "count": 1,
+   "personas": {
+    "regular": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A311B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A313"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A315"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A316"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B1"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B10"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B101"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B102"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B103"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B104"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B105"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B106"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B107"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B108"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B109"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B110"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B111"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B112"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B113"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B114"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B115"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B116"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B117"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B118"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B2"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B201"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B202"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B203"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B204"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B205"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B206"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B207"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B208"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B209"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B210"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B211"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B212"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B213"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B214"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B215"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B216"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B217"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B218"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B3"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B301"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B302"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B303"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B304"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B305"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B306"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B307"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B308"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B309"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B310"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B311"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B312"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B313"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B314"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B315"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B316"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B317"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B318"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B4"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B5"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B6"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B7"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B8"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B9"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C10"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C101"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C102"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C103"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C104"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C105"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C106"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C107"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C108"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C109"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C11"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C110"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C111"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C112"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C113"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C114"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C115"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C116"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C117"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C118"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C12"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C13"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C14"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C15"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C16"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C17"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C18"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C201"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C202"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C203"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C204"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C205"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C206"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C207"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C208"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C209"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C210"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C211"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C212"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C213"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C214"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C215"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C216"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C217"
+   },
+   "count": 1,
+   "personas": {
+    "mobility_impaired": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_C217"
+   },
+   "count": 1,
+   "personas": {
+    "regular": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_C218"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C3"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C301"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C302"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C303"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C304"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C305"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C306"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C309"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C310"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C311B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C313"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C315"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C316"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C317"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C318"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C4"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C5"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C6"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C7"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C8"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C9"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B101"
+   },
+   "count": 1,
+   "personas": {
+    "staff": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A209A"
+   },
+   "count": 1,
+   "personas": {
+    "staff": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A100"
+   },
+   "count": 5,
+   "personas": {
+    "regular": 0.6,
+    "visitor": 0.4
+   }
+  }
+ ],
+ "assumptions": [
+  "Night, full occupancy: 2 residents in each of the 149 dorm rooms (sub-rooms with the same number, such as closets and suite parts, count as one room; residents are placed in its largest part; rooms whose largest part is under 5 m2 are skipped), two of them mobility-impaired (rooms A310 and C217), two RAs (staff), and 5 people in the floor 1 lounge (r_A100).",
+  "Fire starts in A105, the large first-floor common room by the front entrance, and makes it impassable after 60 s.",
+  "Exits are the floor 1 exterior doors only; basement A residents climb to floor 1."
+ ]
+}

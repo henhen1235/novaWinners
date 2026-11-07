@@ -49,6 +49,39 @@ def _state(a) -> str:
     return "deciding" if a.in_flight and a.state == "waiting" else a.state
 
 
+def _model_errors() -> int:
+    try:
+        from cognition import llm
+        return int(llm.STATS.get("errors", 0))
+    except Exception:
+        return 0
+
+
+def _public_logs(records: list[dict]) -> list[dict]:
+    """The clickable agent log: who decided, which model, and why. Not the full prompt."""
+    out = []
+    for rec in records:
+        dec = rec.get("decision") if isinstance(rec.get("decision"), dict) else {}
+        padm = dec.get("padm") if isinstance(dec.get("padm"), dict) else {}
+        chosen = next((o for o in rec.get("options") or [] if isinstance(o, dict) and o.get("id") == rec.get("choice")), {})
+        why = padm.get("why") or chosen.get("action") or ""
+        item = {
+            "record_id": rec.get("record_id"),
+            "agent_id": rec.get("agent_id"),
+            "t_s": rec.get("t_s"),
+            "model": rec.get("model"),
+            "persona": rec.get("persona"),
+            "say": rec.get("say"),
+            "source": "model" if rec.get("raw_output") else "rule",
+            "action": chosen.get("action") or "",
+            "decision": {"padm": {"why": why}, "reasons": dec.get("reasons") or []},
+        }
+        if isinstance(rec.get("emotion"), dict):
+            item["emotion"] = rec["emotion"]
+        out.append(item)
+    return out
+
+
 def _load(ref: str | dict) -> dict:
     return copy.deepcopy(ref) if isinstance(ref, dict) else json.loads(Path(ref).read_text())
 
@@ -91,6 +124,7 @@ class Session:
         self.sim = self._new_sim()
         self.sent_events = 0
         self.sent_agents = 0
+        self.sent_logs = 0
 
     def _new_sim(self, records: list[dict] | None = None, t: float = 0.0) -> Sim:
         run_id = f"{self.id}_b{self.branch_n}"
@@ -138,7 +172,7 @@ class Session:
         self.edits = [x for x in self.edits if x["t_s"] < t]  # earlier live edits replay at their ticks
         self.sim = self._new_sim(records, t)
         self.apply_edit(edit)
-        self.sent_events = self.sent_agents = 0
+        self.sent_events = self.sent_agents = self.sent_logs = 0
 
     def close_sim(self, write: bool) -> Path | None:
         if self.sim.async_dec is not None:
@@ -161,6 +195,7 @@ class Session:
     def _agents(self, start: int) -> list[dict]:
         from sim.agents import PERSONA_COLORS
         return [{"id": a.id, "persona": a.persona, "model": a.model, "color": PERSONA_COLORS.get(a.persona, "#888"),
+                 "speed": round(float(a.traits.get("speed_mps", 0)), 2),
                  "index": a.row} for a in self.sim.agents[start:]]
 
     async def send_updates(self, frame: bool) -> None:
@@ -171,6 +206,11 @@ class Session:
         if evs:
             await self.ws.send_json({"type": "events", "events": evs})
             self.sent_events = len(self.sim.replay_events)
+        if len(self.sim.records) > self.sent_logs:
+            batch = _public_logs(self.sim.records[self.sent_logs:])
+            self.sent_logs = len(self.sim.records)
+            if batch:
+                await self.ws.send_json({"type": "log", "records": batch})
         if frame:
             await self.ws.send_bytes(encode_frame(self.sim))
 
@@ -178,6 +218,8 @@ class Session:
         ad = self.sim.async_dec
         return {"type": "status", "t": self.sim.t, "tick": self.sim.tick, "speed": self.speed, "warp": warp,
                 "paused": self.paused, "ticks_per_s": round(tps, 2), "decisions": len(self.sim.records),
+                "llm_calls": self.sim.llm_calls, "cost_usd": round(self.sim.cost_usd, 6),
+                "model_errors": _model_errors(),
                 "evacuated": sum(a.exit_t is not None for a in self.sim.agents), "total": len(self.sim.agents),
                 "async": ad.summary() if ad else None, "pending": ad.pending() if ad else 0}
 
@@ -246,6 +288,18 @@ async def run_session(sess: Session) -> None:
             last_status, status_sim_t, ticks, t_rate = now, sess.sim.t, 0, now
 
 
+async def _guarded(sess: Session) -> None:
+    """Run the session loop; any crash is logged and reported to the client instead of dying silently."""
+    try:
+        await run_session(sess)
+    except Exception as exc:
+        log.exception("live session %s crashed", sess.id)
+        try:
+            await sess.ws.send_json({"type": "error", "for": "session", "errors": [f"{type(exc).__name__}: {exc}"]})
+        except Exception:  # the socket may be gone too
+            pass
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
@@ -265,7 +319,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 except Exception as exc:  # bad paths or scenario: report, keep the socket
                     await ws.send_json({"type": "error", "for": "start", "errors": [str(exc)]})
                     continue
-                loop_task = asyncio.create_task(run_session(sess))
+                loop_task = asyncio.create_task(_guarded(sess))
             elif sess is not None:
                 sess.queue.append(msg)
                 if msg.get("type") == "end":
