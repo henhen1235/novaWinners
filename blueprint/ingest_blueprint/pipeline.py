@@ -19,7 +19,7 @@ from shapely.geometry import LineString, Point, Polygon
 from contract.validate_scene import validate
 from export.assemble import assemble_scene
 from geometry.rooms import attach_doors, faces_from_walls, label_faces, room_type_from_name
-from geometry.infer_doors import infer_doors, needs_inference
+from geometry.infer_doors import doors_from_arcs, infer_doors, needs_inference
 from geometry.stairs import align_levels, stair_room_indexes, tread_clusters
 from geometry.vectorize import snap_segments, split_gaps
 from ingest_blueprint.corrections import apply_corrections, manual_scale, scale_from_manual
@@ -93,7 +93,9 @@ def run(
                 walls, thin = [], []
                 if raster_faces:
                     scale, raster_faces, doors, raster_wall_m = _rescale_from_area_labels(page, scale, raster_faces, doors, raster_wall_m, notes)
-                if needs_inference(doors, raster_faces):
+                if raster_faces and page.door_arcs:
+                    doors = _merge_doors(doors, doors_from_arcs(raster_faces, _arcs_m(page, scale)))
+                if page.door_arcs or needs_inference(doors, raster_faces):
                     doors = infer_doors(raster_faces, doors)
                 if not raster_faces:
                     scale = _raster_door_scale(page)
@@ -191,6 +193,11 @@ def run(
     (out / "validator_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     exit_code = 1 if report["errors"] else 0
     return scene, exit_code
+
+
+def _arcs_m(page: PlanPage, scale: ScaleEstimate):
+    k = scale.px_per_m
+    return [((h[0] / k, h[1] / k), (m[0] / k, m[1] / k), r / k) for h, m, r in page.door_arcs]
 
 
 def _rescale_from_area_labels(page: PlanPage, scale: ScaleEstimate, faces, doors, wall_m: float, notes: dict):

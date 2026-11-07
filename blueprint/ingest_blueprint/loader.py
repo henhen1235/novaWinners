@@ -113,6 +113,7 @@ def _strokes(page) -> list[Stroke]:
     for drawing in page.get_drawings():
         width_px = float(drawing.get("width") or 0.0) * ZOOM
         color = _color(drawing.get("color"))
+        layer = drawing.get("layer") or ""
         for item in drawing.get("items", []):
             kind = item[0]
             if kind == "l":
@@ -122,10 +123,10 @@ def _strokes(page) -> list[Stroke]:
                 if key in seen or a == b:
                     continue
                 seen.add(key)
-                strokes.append(Stroke([a, b], width_px, color, False))
+                strokes.append(Stroke([a, b], width_px, color, False, layer))
             elif kind == "c":
                 points = _sample_cubic(item[1], item[2], item[3], item[4])
-                strokes.append(Stroke(points, width_px, color, True))
+                strokes.append(Stroke(points, width_px, color, True, layer))
             elif kind == "re":
                 rect = item[1]
                 corners = [
@@ -135,7 +136,7 @@ def _strokes(page) -> list[Stroke]:
                     (rect.x0 * ZOOM, rect.y1 * ZOOM),
                 ]
                 for start, end in zip(corners, corners[1:] + corners[:1]):
-                    strokes.append(Stroke([start, end], max(width_px, 1.0), color, False))
+                    strokes.append(Stroke([start, end], max(width_px, 1.0), color, False, layer))
     return strokes
 
 

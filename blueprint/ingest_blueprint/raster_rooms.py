@@ -56,7 +56,7 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
     if double_line:
         # The watershed splits each gap between a wall's two hairlines at its
         # centre, so faces already end on the centreline; the wall is that gap.
-        wall_px = _double_line_gap_px(labels, thick) + 1.0
+        wall_px = _double_line_gap_px(labels, thick, seal_px) + 1.0
     doors_px = _seam_doors(labels, thick, max_px=seal_px)
     widths = [width for width, _p1, _p2, _pair in doors_px if width >= seal_px * 0.4]
     if widths:
@@ -68,7 +68,7 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
     if not 15.0 <= px_per_m <= 500.0:
         px_per_m = 100.0
         confidence = 0.3
-    wall_m = max(0.1, wall_px / px_per_m)
+    wall_m = min(0.5, max(0.1, wall_px / px_per_m))
     faces, keep_labels = _label_faces(labels, thick, px_per_m, 0.0 if double_line else wall_m / 2.0)
     doors = []
     for width, p1, p2, pair in doors_px:
@@ -146,11 +146,16 @@ def _wall_thickness_px(thick: np.ndarray, ink: np.ndarray) -> float:
     return float(2.0 * np.median(ridge)) if ridge.size else 4.0
 
 
-def _double_line_gap_px(labels: np.ndarray, thick: np.ndarray) -> float:
-    """Twice the median ink clearance on room-room seams: the spacing of double-line walls."""
+def _double_line_gap_px(labels: np.ndarray, thick: np.ndarray, seal_px: float) -> float:
+    """Twice the median ink clearance on narrow seams: the spacing of double-line walls.
+
+    Only seams squeezed between ink count; open seams across a room say
+    nothing about walls. Single-line boundaries leave none, so 2 px.
+    """
 
     clearance = cv2.distanceTransform((thick == 0).astype(np.uint8), cv2.DIST_L2, 5)
     values = clearance[(labels == -1) & (thick == 0)]
+    values = values[values < seal_px / 4.0]
     return float(2.0 * np.median(values)) if values.size else 2.0
 
 

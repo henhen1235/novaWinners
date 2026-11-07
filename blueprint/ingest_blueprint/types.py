@@ -17,6 +17,7 @@ class Stroke:
     width_px: float
     color: tuple[float, float, float] | None
     is_curve: bool
+    layer: str = ""  # PDF optional-content (CAD layer) name, "" when untagged
 
 
 @dataclass
@@ -41,6 +42,8 @@ class PlanPage:
     strokes: list[Stroke]
     texts: list[TextSpan]
     dpi: float = 200.0
+    # Door swings read from a CAD door layer: (hinge_xy, arc_mid_xy, radius) in this page's pixels.
+    door_arcs: list[tuple[tuple[float, float], tuple[float, float], float]] = field(default_factory=list)
 
 
 @dataclass

@@ -77,6 +77,41 @@ def infer_doors(faces: list, doors: list[DoorOpening]) -> list[DoorOpening]:
     return list(doors) + added
 
 
+def doors_from_arcs(faces: list, arcs: list) -> list[DoorOpening]:
+    """Doors from CAD swing arcs: (hinge, arc midpoint, radius) in metres.
+
+    The hinge sits on a jamb, so the door lies on the shared wall nearest the
+    hinge (or on a face's outer wall: an exit), running one radius from the
+    hinge toward the side the arc swings over.
+    """
+
+    shared = _shared_walls(faces)
+    envelope = unary_union(faces).buffer(TOUCH_M).exterior if faces else None
+    doors: list[DoorOpening] = []
+    for hinge, middle, radius in arcs:
+        hinge_point, middle_point = Point(hinge), Point(middle)
+        reach = max(0.3, 0.5 * radius)
+        best = min(shared.values(), key=lambda line: line.distance(hinge_point), default=None)
+        is_exit = best is None or best.distance(hinge_point) > reach
+        if is_exit:
+            # Only a swing on the building's outer boundary is an exit; one facing a
+            # space that is not a room (unclosed circulation) is left to inference.
+            if envelope is None or envelope.distance(hinge_point) > reach + TOUCH_M:
+                continue
+            rings = [LineString(face.exterior.coords) for face in faces]
+            best = min(rings, key=lambda ring: ring.distance(hinge_point), default=None)
+            if best is None or best.distance(hinge_point) > reach:
+                continue
+        start = best.project(hinge_point)
+        end = start + radius if best.project(middle_point) >= start else start - radius
+        a = best.interpolate(start)
+        b = best.interpolate(min(max(end, 0.0), best.length))
+        door = DoorOpening((a.x, a.y), (b.x, b.y), a.distance(b), is_exit=is_exit)
+        if door.width_m >= 0.5 and all(Point(door.midpoint).distance(Point(other.midpoint)) > 0.5 for other in doors):
+            doors.append(door)
+    return doors
+
+
 def _shared_walls(faces: list) -> dict[tuple[int, int], LineString]:
     tree = STRtree(faces)
     shared: dict[tuple[int, int], LineString] = {}
