@@ -1,0 +1,4454 @@
+{
+ "schema_version": "0.1",
+ "scene": "samples/cmu/tepper/scene.json",
+ "seed": 42,
+ "duration_s": 900,
+ "events": [
+  {
+   "id": "ev_fire",
+   "type": "fire",
+   "t_start_s": 0,
+   "at": {
+    "room": "r_3500"
+   },
+   "params": {
+    "block_after_s": 60
+   }
+  },
+  {
+   "id": "ev_smoke",
+   "type": "smoke",
+   "t_start_s": 45,
+   "at": {
+    "room": "r_2902"
+   },
+   "params": {
+    "block_after_s": 30
+   }
+  }
+ ],
+ "occupants": [
+  {
+   "where": {
+    "room": "r_1012"
+   },
+   "count": 23,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1014"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1016"
+   },
+   "count": 30,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1019"
+   },
+   "count": 9,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1021"
+   },
+   "count": 5,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1024"
+   },
+   "count": 17,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1026"
+   },
+   "count": 5,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1029"
+   },
+   "count": 3,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1041"
+   },
+   "count": 8,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1101"
+   },
+   "count": 64,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1102"
+   },
+   "count": 65,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1106"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1110"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1113"
+   },
+   "count": 12,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1125"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1202"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1216"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1223"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1232"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1234"
+   },
+   "count": 3,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1235"
+   },
+   "count": 3,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1300"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1301"
+   },
+   "count": 7,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1303"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1307"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1308"
+   },
+   "count": 28,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1309"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1310"
+   },
+   "count": 23,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1316"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1317"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1318"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1319"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1403"
+   },
+   "count": 28,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_1409"
+   },
+   "count": 16,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2100"
+   },
+   "count": 40,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2107"
+   },
+   "count": 30,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2110"
+   },
+   "count": 29,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2112"
+   },
+   "count": 30,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2118"
+   },
+   "count": 20,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2119"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2120"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2201"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2202"
+   },
+   "count": 29,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2300"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2306"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2307"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2308"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2310"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2315"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2316"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2317"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2500"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2503"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2610"
+   },
+   "count": 20,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2611"
+   },
+   "count": 32,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2612"
+   },
+   "count": 20,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2613"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2701"
+   },
+   "count": 20,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2702"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2703"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2707"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_2708"
+   },
+   "count": 31,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3108"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3110"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3118"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3119"
+   },
+   "count": 29,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3131"
+   },
+   "count": 5,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3400"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3401"
+   },
+   "count": 9,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3402"
+   },
+   "count": 4,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3403"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3411"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3413"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3421"
+   },
+   "count": 3,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3500"
+   },
+   "count": 31,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3501"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3506"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3600"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3616"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3629"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3631"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3701"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3707"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3709"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3713"
+   },
+   "count": 6,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3713A"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3716"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3717"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_3801"
+   },
+   "count": 30,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4001"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4103"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4104"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4105"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4106"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4107"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4108"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4110"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4111"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4112"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4113"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4115"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4116"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4117"
+   },
+   "count": 7,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4118"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4119"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4120"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4121"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4122"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4123"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4124"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4125"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4126"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4136"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4137"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4140"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4141"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4201"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4202"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4203"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4204"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4206"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4207"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4208"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4209"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4210"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4211"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4212"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4213"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4214"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4215"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4216"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4217"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4218"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4219"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4221"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4222"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4223"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4224"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4225"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4226"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4227"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4228"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4229"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4230"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4241"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4242"
+   },
+   "count": 4,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4242A"
+   },
+   "count": 2,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4243"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4300"
+   },
+   "count": 2,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4303"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4401"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4402"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4405"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4406"
+   },
+   "count": 2,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4410"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4411"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4500"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4501"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4502"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4503"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4506"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4508"
+   },
+   "count": 7,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4511"
+   },
+   "count": 11,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_4513"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5001"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5003"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5101"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5102"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5103"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5104"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5105"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5106"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5107"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5108"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5110"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5111"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5112"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5113"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5115"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5116"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5117"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5118"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5119"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5120"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5121"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5122"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5123"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5124"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5125"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5126"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5127"
+   },
+   "count": 4,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5201"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5202"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5203"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5204"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5206"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5207"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5209"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5210"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5212"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5213"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5214"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5215"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5217"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5218"
+   },
+   "count": 2,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5219"
+   },
+   "count": 10,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5222"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5223"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5224"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5225"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5226"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5227"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5228"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5229"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5230"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5238"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5239"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5240"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5241"
+   },
+   "count": 23,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5242"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5243"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5244"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5300"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5309"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5400"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5401"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5500"
+   },
+   "count": 2,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5504"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5601"
+   },
+   "count": 34,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5610"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5700"
+   },
+   "count": 3,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5701"
+   },
+   "count": 23,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5704"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5705"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5707"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5708"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_5710"
+   },
+   "count": 20,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_024"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_025"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_029"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_031"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_036"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_037"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_038"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_040"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_041"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_045"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_046"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_047"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_2_052"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_3_004"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_3_009"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_3_012"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_001"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_006"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_007"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_008"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_009"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_010"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_014"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_016"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_023"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_4_029"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_001"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_004"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_012"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_013"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_014"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_018"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_020"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_021"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_025"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_030"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_031"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_036"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "u_5_041"
+   },
+   "count": 1,
+   "personas": {
+    "regular_employee": 0.72,
+    "first_time_visitor": 0.12,
+    "warden": 0.06,
+    "older_adult": 0.06,
+    "mobility_impaired": 0.04
+   },
+   "models": {
+    "google/gemini-2.5-flash-lite": 1.0
+   }
+  }
+ ],
+ "assumptions": [
+  "Busy weekday: 1200 occupants (about a third of the summed IBC design load of 3647) spread across rooms by occupant load with the office_day persona mix (scenario.populate, seed 42).",
+  "Fire in room 3500 on L3 at t=0, impassable after 60 s.",
+  "Smoke enters stairwell r_2902 (L2) at t=45 s and blocks it 30 s later.",
+  "populate: 1200 people, mode load, preset office_day, seed 42"
+ ]
+}
