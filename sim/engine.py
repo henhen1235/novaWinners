@@ -15,7 +15,7 @@ import numpy as np
 
 from sim import elevators, groups, perception, stairs
 from sim.agents import Agent, spawn
-from sim.movement import resolve_moves
+from sim.movement import crosses, resolve_moves
 from sim.navmesh import INF, Waypoint
 from sim.pace import resolve_pace
 from sim.policy import decide as default_decide
@@ -219,21 +219,125 @@ class Sim:
 
     def _block_exit(self, ev: Event) -> None:
         if ev.exit in self.world.exits:
-            self.world.exits[ev.exit].blocked = True
+            ex = self.world.exits[ev.exit]
+            ex.blocked = True
+            if ex.door_id:
+                self.world.block_door(ex.door_id)
             self.event("blocked", ref=ev.exit, text=f"exit {ev.exit} blocked")
-            if self.omniscient:
-                for a in self.active():
-                    self.trigger(a, "path_blocked", ev.exit)
+            self._divert_from_block(exit_id=ev.exit, door_id=ex.door_id or None)
         elif ev.stair:
             self.world.block_stair(ev.stair)
             self.event("blocked", ref=ev.stair, text=f"stair {ev.stair} blocked")
-            self._replan_all()
+            self._divert_from_block(stair_id=ev.stair)
         elif ev.door:
             self.world.block_door(ev.door)
             self.event("blocked", ref=ev.door, text=f"door {ev.door} blocked")
-            self._replan_all()
+            self._divert_from_block(door_id=ev.door)
+        elif ev.point is not None:
+            self._block_area(ev)
         else:
-            log.warning("blocked_exit %s: no exit or door to block", ev.id)
+            log.warning("blocked_exit %s: no exit, door, stair or point to block", ev.id)
+
+    def _block_area(self, ev: Event) -> None:
+        """Seal the walkable disc under the click, on that floor only."""
+        from shapely.geometry import Point
+
+        radius = float(ev.params.get("radius_m", 2.2))
+        center = np.asarray(ev.point, dtype=float)
+        area = Point(float(center[0]), float(center[1])).buffer(radius)
+        self.world.set_cost(self.world.nav.tris_in(area, ev.lv), INF)
+        doors = []
+        for door in self.world.doors:
+            if door.lv != ev.lv:
+                continue
+            mid = (door.a + door.b) / 2
+            reach = radius + float(np.linalg.norm(door.b - door.a)) / 2
+            if float(np.linalg.norm(mid - center)) <= reach:
+                self.world.block_door(door.id)
+                doors.append(door)
+        closed = None
+        for eid, ex in self.world.exits.items():
+            if ex.lv == ev.lv and float(np.linalg.norm(ex.goal - center)) <= radius:
+                ex.blocked = True
+                closed = eid
+                if ex.door_id:
+                    self.world.block_door(ex.door_id)
+        self.event("blocked", ref=ev.id, text="passage blocked where you clicked")
+        for a in self.active():
+            if int(self.lv[a.row]) != ev.lv or a.state not in ("moving", "queued", "helping"):
+                continue
+            crossed = self._route_near(a, center, radius) or any(self._route_crosses_door(a, door) for door in doors)
+            if closed and a.target_exit == closed:
+                crossed = True
+            if not crossed:
+                continue
+            if closed and closed in a.known_exits:
+                a.known_exits.remove(closed)
+                self.believe(a, f"exit_open:{closed}", False, 1.0, {"kind": "observation", "ref": closed})
+            keep = a.target_exit if a.target_exit and a.target_exit in self.world.exits \
+                and not self.world.exits[a.target_exit].blocked else None
+            alt = keep or self._open_exit(a)
+            if alt:
+                self.go(a, alt)
+            else:
+                a.state, a.waypoints, a.target_exit, a.target_stair = "waiting", [], None, None
+
+    def _route_near(self, a: Agent, point: np.ndarray, radius: float) -> bool:
+        lv = int(self.lv[a.row])
+        pts = [self.pos[a.row]]
+        pts += [np.asarray(w.pt, dtype=float) for w in a.waypoints if w.link is None and w.lv == lv]
+        return any(float(np.linalg.norm(p - point)) <= radius for p in pts)
+
+    def _route_crosses_door(self, a: Agent, door) -> bool:
+        if int(self.lv[a.row]) != door.lv:
+            return False
+        pts = [self.pos[a.row]]
+        for w in a.waypoints:
+            if w.link is not None or w.lv != door.lv:
+                break
+            pts.append(np.asarray(w.pt, dtype=float))
+        for p0, p1 in zip(pts, pts[1:]):
+            if bool(crosses(p0[None], p1[None], door)[0]):
+                return True
+        return False
+
+    def _open_exit(self, a: Agent) -> str | None:
+        """Nearest exit this person can still reach that has not been blocked."""
+        tri, ok = self.tri_of(a), a.traits["uses_stairs"] or a.carrying
+        known = [e for e in a.known_exits if e in self.world.exits and not self.world.exits[e].blocked
+                 and math.isfinite(self.world.route_m(e, tri, ok))]
+        if known:
+            return min(known, key=lambda e: self.world.route_m(e, tri, ok))
+        found = self.learn_nearest_exit(a)
+        if found and not self.world.exits[found].blocked:
+            return found
+        return None
+
+    def _divert_from_block(self, exit_id: str | None = None, door_id: str | None = None,
+                           stair_id: str | None = None) -> None:
+        """The block is in place now. Anyone whose current route uses it turns toward another exit."""
+        door = next((d for d in self.world.doors if d.id == door_id), None) if door_id else None
+        for a in self.active():
+            if exit_id:
+                self.believe(a, f"exit_open:{exit_id}", False, 1.0, {"kind": "observation", "ref": exit_id})
+            on_stair = stair_id and any(getattr(w.link, "id", None) == stair_id for w in a.waypoints)
+            affected = (
+                (exit_id is not None and a.target_exit == exit_id)
+                or (stair_id is not None and (a.target_stair == stair_id or on_stair))
+                or (door is not None and self._route_crosses_door(a, door))
+            )
+            if not affected:
+                continue
+            if exit_id and exit_id in a.known_exits:
+                a.known_exits.remove(exit_id)
+            same_exit = a.target_exit and a.target_exit != exit_id and a.target_exit in self.world.exits \
+                and not self.world.exits[a.target_exit].blocked
+            alt = a.target_exit if same_exit else self._open_exit(a)
+            if alt:
+                self.go(a, alt)
+            else:
+                a.state, a.waypoints, a.target_exit, a.target_stair = "waiting", [], None, None
+                self.trigger(a, "path_blocked", exit_id or door_id or stair_id)
 
     def _rumor(self, ev: Event) -> None:
         text = ev.params.get("text", "I heard an exit is blocked.")
@@ -384,6 +488,8 @@ class Sim:
         ids = {o["id"] for o in view["options"]}
         if not isinstance(res, dict) or res.get("choice") not in ids:
             return _fallback(view, [f"invalid choice: {res.get('choice') if isinstance(res, dict) else res!r}"])
+        if _saw_hazard(view) and not _is_leaving(view, res):
+            return _fallback(view, ["saw the fire and did not leave"])
         return res
 
     def _record(self, a: Agent, view: dict, res: dict, apply_tick: int | None = None,
@@ -453,7 +559,8 @@ class Sim:
         """Looking around or asking: the agent learns the closest reachable exit it did not know."""
         tri, ok = self.tri_of(a), a.traits["uses_stairs"]
         unknown = [e for e in self.world.exits
-                   if e not in a.known_exits and math.isfinite(self.world.route_m(e, tri, ok))]
+                   if e not in a.known_exits and not self.world.exits[e].blocked
+                   and math.isfinite(self.world.route_m(e, tri, ok))]
         if not unknown:
             return None
         best = min(unknown, key=lambda e: self.world.route_m(e, tri, ok))
@@ -680,6 +787,18 @@ def _label(opt: dict) -> str:
     if opt.get("exit"):
         return f"{opt['action']} {opt['exit']}" + (f" (following {opt['target']})" if opt.get("target") else "")
     return opt["action"]
+
+
+_LEAVING = {"EVACUATE", "TAKE_STAIRS", "FOLLOW", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "USE_ELEVATOR"}
+
+
+def _saw_hazard(view: dict) -> bool:
+    return any(p.get("kind") in ("fire", "smoke") for p in view.get("percepts") or [])
+
+
+def _is_leaving(view: dict, res: dict) -> bool:
+    opt = next((o for o in view.get("options") or [] if o.get("id") == res.get("choice")), None)
+    return bool(opt and opt.get("action") in _LEAVING)
 
 
 def _fallback(view: dict, errors: list[str]) -> dict:

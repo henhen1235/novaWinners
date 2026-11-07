@@ -55,29 +55,6 @@
       <input id="scrub" type="range" min="0" max="0" step="0.5" value="0" aria-label="Replay time" />
       <output id="clock">0.0 s</output>
     </div>
-    <section id="interview" class="interview" aria-labelledby="iv-title" hidden>
-      <div class="iv-head">
-        <div>
-          <h2 id="iv-title">Occupant</h2>
-          <p id="iv-who"></p>
-        </div>
-        <button id="iv-close" type="button" aria-label="Close interview">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
-        </button>
-      </div>
-      <dl class="iv-now">
-        <dt>State at <span id="iv-time">0.0 s</span></dt><dd id="iv-state"></dd>
-      </dl>
-      <div id="iv-emotion" class="iv-emotion"></div>
-      <h3>Timeline</h3>
-      <ol id="iv-timeline" class="iv-timeline"></ol>
-      <form id="iv-form" class="iv-form">
-        <label for="iv-question">Ask this occupant</label>
-        <textarea id="iv-question" rows="2" placeholder="Why didn't you take the other exit?"></textarea>
-        <button type="submit">Ask</button>
-      </form>
-      <div id="iv-answer" class="iv-answer" aria-live="polite"></div>
-    </section>
   </div>
   <aside>
     <section id="live" class="live" hidden>
@@ -88,6 +65,33 @@
         <button id="live-end" type="button" disabled>End and save replay</button>
       </div>
       <p id="live-result" class="live-result"></p>
+    </section>
+    <section id="interview" class="interview" aria-labelledby="iv-title">
+      <div class="iv-head">
+        <div>
+          <h2 id="iv-title">This person</h2>
+          <p id="iv-who">Click a person to read why they are moving.</p>
+        </div>
+        <button id="iv-close" type="button" aria-label="Close interview" hidden>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9" /></svg>
+        </button>
+      </div>
+      <div id="iv-body" hidden>
+        <dl class="iv-now">
+          <dt>State at <span id="iv-time">0.0 s</span></dt><dd id="iv-state"></dd>
+        </dl>
+        <div id="iv-emotion" class="iv-emotion"></div>
+        <h3>Thinking</h3>
+        <div id="iv-thought" class="iv-thought"></div>
+        <h3>What they decided</h3>
+        <ol id="iv-timeline" class="iv-timeline"></ol>
+        <form id="iv-form" class="iv-form">
+          <label for="iv-question">Ask this occupant</label>
+          <textarea id="iv-question" rows="2" placeholder="Why didn't you take the other exit?"></textarea>
+          <button type="submit">Ask</button>
+        </form>
+        <div id="iv-answer" class="iv-answer" aria-live="polite"></div>
+      </div>
     </section>
     <section id="run" class="run" hidden>
       <h2>Result</h2>

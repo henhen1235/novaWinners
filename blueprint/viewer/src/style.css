@@ -170,11 +170,10 @@ p.layer .swatch { margin-left: 24px; }
 .split-captions span + span { padding-left: var(--space-5); }
 #stage.split::before { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; z-index: 1; border-left: 1px solid var(--color-line-strong); pointer-events: none; }
 
-/* ---- Interview ---- */
+/* ---- Interview: lives in the side panel, one selected person at a time ---- */
 .interview {
-  position: absolute; top: var(--space-5); left: var(--space-5); bottom: 88px; width: 340px; z-index: 4; box-sizing: border-box;
-  display: flex; flex-direction: column; overflow: auto; padding: var(--space-4);
-  background: var(--color-surface); border: 1px solid var(--color-line-strong); box-shadow: var(--shadow-panel);
+  display: flex; flex-direction: column; gap: 0;
+  padding-bottom: var(--space-4); border-bottom: 1px solid var(--color-line);
 }
 .interview > * { flex: none; }
 .iv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
@@ -193,7 +192,12 @@ p.layer .swatch { margin-left: 24px; }
 .bar .track i { display: block; height: 100%; background: var(--color-drafting); }
 .bar output { font-family: var(--font-mono); text-align: right; color: var(--color-text); }
 .interview h3 { margin: var(--space-4) 0 var(--space-2); font: 600 var(--size-sm) var(--font-sans); color: var(--color-text-muted); }
-.iv-timeline { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow: auto; flex: none; }
+.iv-thought { display: grid; gap: var(--space-2); font-size: var(--size-sm); text-wrap: pretty; }
+.iv-thought p { margin: 0; }
+.iv-source { font: 500 var(--size-xs)/1.4 var(--font-mono); color: var(--color-text-muted); }
+.iv-source.model { color: var(--color-route); }
+.iv-say { padding: 6px 8px; background: var(--color-raised); border-radius: var(--radius-sm); }
+.iv-timeline { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; flex: none; }
 .iv-timeline li.future { opacity: 0.45; }
 .iv-timeline li.active button { background: var(--color-raised); }
 .iv-why { margin: 2px 0 var(--space-2) 62px; font-size: var(--size-xs); color: var(--color-text-muted); text-wrap: pretty; }

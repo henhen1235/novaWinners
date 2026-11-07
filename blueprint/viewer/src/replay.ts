@@ -289,9 +289,10 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   const isSaid = (event: ReplayEvent) => event.kind === "said" && event.agent && event.text;
   const said = new Map(runs.map((run) => [run, run.doc.events.map((event, n) => ({ event, n })).filter(({ event }) => isSaid(event))]));
   const bubbles = new Map(runs.map((run) => [run, new Map<number, CSS2DObject>()]));
-  function drawBubbles(run: Run, t: number) {
+  function drawBubbles(run: Run, _t: number) {
+    // What people say stays in the event list. A label on the figure hides the person.
     const shown = bubbles.get(run)!;
-    const active = run.people.lod === "far" ? [] : said.get(run)!.filter(({ event }) => event.t <= t && t - event.t < BUBBLE_S).slice(-MAX_BUBBLES);
+    const active: { event: ReplayEvent; n: number }[] = [];
     const keep = new Set<number>();
     for (const { event, n } of active) {
       const k = run.doc.agents.findIndex((agent) => agent.id === event.agent);

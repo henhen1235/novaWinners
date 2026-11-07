@@ -71,6 +71,9 @@ def _public_logs(records: list[dict]) -> list[dict]:
             "t_s": rec.get("t_s"),
             "model": rec.get("model"),
             "persona": rec.get("persona"),
+            "say": rec.get("say"),
+            "source": "model" if rec.get("raw_output") else "rule",
+            "action": chosen.get("action") or "",
             "decision": {"padm": {"why": why}, "reasons": dec.get("reasons") or []},
         }
         if isinstance(rec.get("emotion"), dict):

@@ -92,6 +92,10 @@ def resolve_moves(world: World, pos: np.ndarray, lv: np.ndarray, step: np.ndarra
         rows = rows[crosses(pos[rows], new[rows], door)]
         if len(rows) == 0:
             continue
+        if door.blocked:
+            new[rows] = pos[rows]
+            denied[rows] = True
+            continue
         mid = (door.a + door.b) / 2
         for r in rows[np.argsort(np.linalg.norm(pos[rows] - mid, axis=1), kind="stable")]:
             if door.bucket.take():

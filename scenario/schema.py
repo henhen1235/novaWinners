@@ -176,7 +176,7 @@ def _check_event(i: int, ev: Event, sc: Scenario, scene: dict, ids: dict, rooms:
         errs.append(f"{w}.t_start_s: {ev.t_start_s} is after duration_s {sc.duration_s}")
     stairwell = ev.at.room in rooms and rooms[ev.at.room]["type"] == "stairwell"
     if ev.type == "blocked_exit" and ev.at.exit is None and ev.at.stair is None and ev.at.door is None \
-            and not stairwell:
+            and ev.at.point is None and not stairwell:
         errs.append(f"{w}.at: blocked_exit needs an exit, door or stair id, or a stairwell room; "
                     f"exits: {_known(ids['exit'])}")
     if ev.type == "open_exit" and ev.at.exit is None:
