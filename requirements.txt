@@ -21,3 +21,4 @@ shapely==2.2.0
 trimesh==5.2.0
 usd-core==26.11
 uvicorn==0.35.0
+websockets==13.1
