@@ -8,6 +8,7 @@ import { People, type AgentSample } from "./people";
 import { parseFrames, type ParsedFrames } from "./frames";
 import { startSuggestions, type Suggestions } from "./recommendations";
 import { agentNames, clockText, personaName, scenarioName } from "./names";
+import { CrowdMarks, type CrowdPerson } from "./crowd";
 
 export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: string; text?: string };
 export type ReplayDoc = {
@@ -228,9 +229,12 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     for (const run of runs) run.people.setOnTop(true);
   };
   onTop(context.view());
+  const crowds = new CrowdMarks(context);
+  const crowd: CrowdPerson[] = [];
   let started = false; // the split below re-lays out the stage before the clock exists
   context.onLayout((view) => {
     onTop(view);
+    crowds.poke();
     if (started) refresh(true);
   });
   if (runs[1]) {
@@ -325,14 +329,20 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
     const focus = context.level();
     const now = performance.now();
     run.people.begin(context.pxPerMeter());
-    if (run === runs[0]) for (const id of levelIds) perFloor.set(id, 0);
+    if (run === runs[0]) {
+      crowd.length = 0;
+      for (const id of levelIds) perFloor.set(id, 0);
+    }
     run.doc.agents.forEach((agent, k) => {
       const x0 = run.xs[i][k] ?? NaN; // live agents spawned after this frame have no slot yet
       const z0 = run.zs[i][k] ?? NaN;
       const state = run.states[i][k];
       const level0 = levelIds[run.levels[i][k]];
       const level1 = levelIds[run.levels[j][k]];
-      if (!Number.isNaN(x0) && state !== "exited" && run === runs[0]) perFloor.set(level0, (perFloor.get(level0) ?? 0) + 1);
+      if (!Number.isNaN(x0) && state !== "exited" && run === runs[0]) {
+        perFloor.set(level0, (perFloor.get(level0) ?? 0) + 1);
+        crowd.push({ level: level0, x: x0, z: z0 });
+      }
       if (Number.isNaN(x0) || (view === "single" && level0 !== focus)) {
         run.people.hide(k);
         return;
@@ -371,6 +381,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       }
     });
     run.people.end(now);
+    if (run === runs[0]) crowds.update(crowd, now);
     drawBubbles(run, t);
     for (const [exitId, element] of run.exitCounts) {
       const value = String(run.exitOf.filter((id, k) => id === exitId && run.exitTime[k] <= t).length);
