@@ -81,6 +81,7 @@ class Sim:
         self.done = False
         self.replay: dict[tuple[int, str], dict] = {}  # (tick, agent id) -> recorded decision
         self.replay_until = 0  # ticks below this take decisions from `replay`, not the decider
+        self.replay_divergence = 0  # replayed decisions that no longer matched the options offered
         self.async_dec = None  # sim.live.AsyncDecisions when decisions must not block the clock
         self.n_ticks = int(round(self.duration / DT))
 
@@ -338,11 +339,17 @@ class Sim:
     def _replayed(self, a: Agent, view: dict) -> dict:
         """The recorded decision for this agent and tick (branch re-runs make no decider calls)."""
         rec = self.replay.get((self.tick, a.id))
-        if rec is None:
-            log.warning("branch replay: no recorded decision for %s at tick %d; default policy", a.id, self.tick)
-            return _fallback(view, ["replay_missing"])
-        return self._checked(view, {"choice": rec["choice"], "say": rec.get("say"), "record": rec,
-                                    "apply_tick": rec.get("apply_tick")})
+        mine = next((o for o in view["options"] if rec and o["id"] == rec.get("choice")), None)
+        theirs = next((o for o in (rec or {}).get("options", []) if o["id"] == rec.get("choice")), None)
+        same = mine is not None and theirs is not None and all(
+            mine.get(k) == theirs.get(k) for k in ("action", "exit", "stair", "target"))
+        if not same:  # log from another scene/scenario version: the run diverges here
+            if self.replay_divergence == 0:
+                log.warning("branch replay diverges at tick %d (%s); rule policy from here on", self.tick, a.id)
+            self.replay_divergence += 1
+            return _fallback(view, ["replay_divergence"])
+        keep = {k: v for k, v in rec.items() if k not in _VIEW_KEYS}
+        return {"choice": rec["choice"], "say": rec.get("say"), "record": keep, "apply_tick": rec.get("apply_tick")}
 
     def finish_async(self, a: Agent, view: dict, res: dict, req_tick: int, status: str | None = None) -> None:
         """An async decision (or its deadline fallback) applies at the current tick."""
@@ -645,6 +652,10 @@ class Sim:
             state = "waiting" if a.group_waiting and state != "exited" else state
             rows.append([a.id, round(float(x), 2), round(float(z), 2), state, self.world.nav.level_ids[self.lv[a.row]]])
         self.frames.append({"t": self.t, "a": rows})
+
+
+_VIEW_KEYS = ("record_id", "run_id", "tick", "t_s", "agent_id", "trigger", "percepts", "beliefs_before", "options",
+              "choice", "say", "apply_tick")
 
 
 def _ids(x: object) -> list[str]:
