@@ -163,3 +163,12 @@ demo runs (blueprint/viewer/public/replays/loop_hall_*, loop_tepper_*, tepper_fi
 tepper_fire_plan) and use the best charts in the deck (A2). Tests on a tiny fixture run.
 Elevators: in fires they are recalled and not used; occupants may walk to an elevator
 lobby and turn back. Mention this honestly in the deck as a modelling choice.
+
+## 6. Note for the README and deck (added 14:50)
+
+Product feature to document: the floor-plan converter (`python -m ingest_plans <floor
+PDFs or folder> -o out/<name>`, being generalized from tools/tepper_to_scene.py right now;
+see ingest_plans/README.md once pushed). It turns a building's CAD-exported floor-plan
+PDFs into a validated multi-floor model in seconds (Tepper: 5 floors, 576 rooms; Mudge
+dorm next). Source plans are never committed (CMU-internal); only our code and the
+generated models are in the repo. Demo buildings: Tepper (main) and Mudge (dorm).
