@@ -60,3 +60,14 @@ def test_door_arcs_on_two_separate_buildings():
     doors = doors_from_arcs(faces, [((4.0, 1.0), (3.6, 1.6), 0.9), ((24.0, 1.0), (23.5, 1.6), 0.9)])
     assert len(doors) == 2
     assert [door.is_exit for door in doors] == [False, True]
+
+
+def test_open_to_below_faces_are_not_floor():
+    from ingest_blueprint.pipeline import _drop_voids
+    from ingest_blueprint.types import PlanPage, ScaleEstimate, TextSpan
+    import numpy as np
+
+    page = PlanPage("x", 0, 10, 10, np.zeros((1, 1, 3), np.uint8), [], [TextSpan("OTB3-4", (150, 150, 250, 250), 2.0)])
+    notes: dict = {}
+    kept = _drop_voids([box(0, 0, 1, 1), box(1.5, 1.5, 2.5, 2.5)], page, ScaleEstimate(100.0, "manual", 1.0), notes)
+    assert len(kept) == 1 and notes["void_faces_dropped"] == 1

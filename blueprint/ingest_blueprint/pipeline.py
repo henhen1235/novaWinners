@@ -7,6 +7,7 @@ Pixel y increases downward. Meter z uses that axis directly:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import replace
 from pathlib import Path
@@ -95,6 +96,7 @@ def run(
                 walls, thin = [], []
                 if raster_faces:
                     scale, raster_faces, doors, raster_wall_m = _rescale_from_area_labels(page, scale, raster_faces, doors, raster_wall_m, notes)
+                raster_faces = _drop_voids(raster_faces, page, scale, notes)
                 if raster_faces and page.door_arcs:
                     doors = _merge_doors(doors, doors_from_arcs(raster_faces, _arcs_m(page, scale)))
                 if page.door_arcs or needs_inference(doors, raster_faces):
@@ -197,6 +199,19 @@ def run(
     (out / "validator_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     exit_code = 1 if report["errors"] else 0
     return scene, exit_code
+
+
+_VOID = re.compile(r"\bOTB|OPEN TO BELOW|^OPEN$", re.IGNORECASE)
+
+
+def _drop_voids(faces, page: PlanPage, scale: ScaleEstimate, notes: dict):
+    """Remove faces tagged open-to-below ("OTB3-4"): atria and shafts are not floor."""
+
+    tags = [Point(span.center[0] / scale.px_per_m, span.center[1] / scale.px_per_m) for span in page.texts if _VOID.search(span.text.strip())]
+    kept = [face for face in faces if not any(face.contains(tag) for tag in tags)]
+    if len(kept) < len(faces):
+        notes["void_faces_dropped"] = len(faces) - len(kept)
+    return kept
 
 
 def _arcs_m(page: PlanPage, scale: ScaleEstimate):
