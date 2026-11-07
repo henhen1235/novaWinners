@@ -320,9 +320,9 @@ def offered_actions(v):
     return {o["action"] for o in st["offered"]}
 
 
-def test_regular_employee_keeps_working_only_until_second_cue_or_two_minutes():
+def test_regular_employee_keeps_working_until_second_cue_with_no_fixed_clock():
     assert "CONTINUE_TASK" in offered_actions(pacing_view(since=30))
-    assert "CONTINUE_TASK" not in offered_actions(pacing_view(since=130, premove=200))
+    assert "CONTINUE_TASK" in offered_actions(pacing_view(since=400, premove=600))  # long tail kept
     crowd = [{"id": "p9", "kind": "people_moving", "count": 3, "channel": "sight"}]
     assert "CONTINUE_TASK" not in offered_actions(pacing_view(since=30, extra=crowd))
 

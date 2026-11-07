@@ -4,7 +4,8 @@ The LLM chooses HOW to respond; code bounds HOW LONG waiting can last:
 - a per-agent deadline from the persona's lognormal pre-movement delay (sampled by the sim as
   traits.premove_s, else here), stretched by DEADLINE_FACTOR so cues can still make people leave
   earlier and nobody stalls forever;
-- SEEK_INFO at most MAX_SEEK times, CONTINUE_TASK only while the persona's own override rule allows.
+- SEEK_INFO at most MAX_SEEK times, CONTINUE_TASK only while the persona's cue-based override rule allows
+  (second distinct cue, staff or PA instruction; no fixed clock).
 Waiting options that are no longer allowed are not offered (a subset of the sim's options).
 """
 
@@ -22,10 +23,10 @@ WAIT_ACTIONS = {"SEEK_INFO", "CONTINUE_TASK"}
 PREMOVE = {"warden": (20, 0.5), "regular_employee": (60, 0.7), "visitor": (90, 0.8), "committed_task": (120, 0.8),
            "parent_with_child": (90, 0.8), "older_adult": (120, 0.9), "mobility_impaired": (120, 0.9),
            "skeptic": (300, 1.0)}
-# CONTINUE_TASK ends at the first of: this many distinct cue kinds, or this many seconds since the first cue
-TASK_RULE = {"warden": (1, 0), "regular_employee": (2, 120), "visitor": (2, 90), "committed_task": (3, 180),
-             "parent_with_child": (1, 30), "older_adult": (2, 120), "mobility_impaired": (2, 120),
-             "skeptic": (3, 300)}
+# CONTINUE_TASK ends once this many distinct cue kinds have accumulated (cue-based, no clock: the only time
+# bound is the agent's own sampled deadline, so the lognormal tail is kept). 0 = never keeps working.
+TASK_RULE = {"warden": 0, "regular_employee": 2, "visitor": 2, "committed_task": 3, "parent_with_child": 1,
+             "older_adult": 2, "mobility_impaired": 2, "skeptic": 3}
 
 
 def _normal(seed: str) -> float:
@@ -61,12 +62,12 @@ def limits(agent: dict, mind: dict, cues: dict, options: list[dict]) -> dict:
     since = float(traits.get("t_since_cue_s") or cues.get("alarm_s") or 0.0)
     deadline = DEADLINE_FACTOR * premove_s(agent)
     waits = mind.get("waits") or {}
-    n_cues, max_s = TASK_RULE[name]
+    n_cues = TASK_RULE[name]
     allowed = set()
     if since < deadline:
         if waits.get("SEEK_INFO", 0) < MAX_SEEK:
             allowed.add("SEEK_INFO")
-        if cues["distinct"] < n_cues and since < max_s and not (cues["staff_or_pa"] and name != "skeptic"):
+        if cues["distinct"] < n_cues and not (cues["staff_or_pa"] and name != "skeptic"):
             allowed.add("CONTINUE_TASK")
     acting = [o for o in options if o.get("action") not in WAIT_ACTIONS]
     offered = [o for o in options if o.get("action") not in WAIT_ACTIONS or o.get("action") in allowed or not acting]
