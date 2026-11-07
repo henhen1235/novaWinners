@@ -15,6 +15,7 @@ import copy
 import json
 import logging
 import statistics
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Callable
 
@@ -88,12 +89,16 @@ class Loop:
             _dump(Path(scene_file), scene)
         sc = {**sc, "scene": scene_file}
         _dump(d / "scenario.json", sc)
-        sums = []
-        for seed in self.seeds:
-            sums.append(run_one(scene, sc, seed, d / f"s{seed}", self.decide, self.no_llm, self.n0,
-                                scene_file, str(d / "scenario.json")))
-            log.info("%s seed %s: t95 %s, %s/%s out, %s misled, $%.4f", name, seed, sums[-1]["t95_s"],
-                     sums[-1]["evacuated"], sums[-1]["total"], sums[-1]["misled_by_rumor"], sums[-1]["cost_usd"])
+        jobs = [(scene, sc, seed, d / f"s{seed}", self.decide, self.no_llm, self.n0, scene_file, str(d / "scenario.json"))
+                 for seed in self.seeds]
+        if self.decide == "cognition" and len(jobs) > 1:  # LLM-bound: one process per seed (cognition keeps per-process minds)
+            with ProcessPoolExecutor(len(jobs)) as ex:
+                sums = list(ex.map(run_one, *zip(*jobs)))
+        else:
+            sums = [run_one(*j) for j in jobs]
+        for seed, summ in zip(self.seeds, sums):
+            log.info("%s seed %s: t95 %s, %s/%s out, %s misled, $%.4f", name, seed, summ["t95_s"],
+                     summ["evacuated"], summ["total"], summ["misled_by_rumor"], summ["cost_usd"])
         self.stages.append({"stage": name, "label": label, "scene": scene_file, "per_seed": dict(zip(self.seeds, sums)),
                             "median": aggregate(sums)})
         return sums

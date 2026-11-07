@@ -45,7 +45,7 @@ def _pa_hook(scenario: dict):
 
     def hook(sim: Sim) -> None:
         for t, eid, exit_id in pas:
-            if eid in done or sim.t + 1e-9 < t:
+            if eid in done or sim.t <= t + 1e-9:  # one tick after the PA, so it beats a same-tick rumor
                 continue
             done.add(eid)
             for a in sim.active():
