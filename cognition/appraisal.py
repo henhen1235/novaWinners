@@ -18,6 +18,7 @@ COPING_T_S = 90.0  # time scale for "an exit this far away still works"; ours, c
 CONTAGION_WINDOW_S = 2.0  # ponytail: neighbours sampled only at decision time; integrate over 2 s, not the gap
 EVAC_ACTIONS = {"EVACUATE", "FOLLOW", "TURN_BACK"}
 PROTECTIVE = EVAC_ACTIONS | {"HIDE", "SHELTER"}
+OBSERVED = {"sight", "smell", "observation"}  # "observation" is the sim's own-eyes source kind
 
 
 def clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
@@ -36,15 +37,28 @@ def noisy_or(ws: list[float]) -> float:
 _EXIT_RE = re.compile(r"\b(?:e_?0*(\d+)|exit\s*(\d+))\b", re.I)
 
 
-def parse_claims(text: str) -> dict:
-    """Crude claims from free speech, so an agent's `say` can spread a rumor. ponytail: keywords only."""
+def _mentioned_exit(t: str, exits: dict[str, str]) -> str | None:
+    for eid, label in exits.items():
+        if eid.lower() in t or (label and label.lower() in t):
+            return eid
+    m = _EXIT_RE.search(t)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        hit = [e for e in exits if re.search(r"(\d+)$", e) and int(re.search(r"(\d+)$", e).group(1)) == n]
+        return hit[0] if hit else f"e_{n:03d}"
+    return None
+
+
+def parse_claims(text: str, exits: dict[str, str] | None = None) -> dict:
+    """Crude claims from free speech (exit id, label or "exit 2"), so a `say` can spread a rumor.
+    ponytail: keywords only; ask the LLM for structured claims if rumors need nuance."""
     t = (text or "").lower()
     out: dict = {}
     for i, w in enumerate(("one", "two", "three", "four", "five", "six", "seven", "eight", "nine"), 1):
         t = re.sub(rf"\bexit {w}\b", f"exit {i}", t)
-    m = _EXIT_RE.search(t)
-    if m and re.search(r"block|lock|closed|shut|can't get|cannot get|jammed", t):
-        out["exit_blocked"] = f"e_{int(m.group(1) or m.group(2)):03d}"
+    eid = _mentioned_exit(t, exits or {})
+    if eid and re.search(r"block|lock|closed|shut|can't get|cannot get|jammed", t):
+        out["exit_blocked"] = eid
     if re.search(r"\bfire\b|smoke|burning|gun|shoot", t):
         out["hazard"] = "reported"
     if re.search(r"\b(get out|leave|evacuate|go now|move|run|out now|this way|follow me)\b", t):
@@ -55,7 +69,7 @@ def parse_claims(text: str) -> dict:
 def _evidence(p: dict, persona_name: str) -> list[tuple[str, bool, float, dict]]:
     """(belief key, value, weight, source) items a percept supports."""
     kind, ref, ch = p.get("kind"), p.get("ref"), p.get("channel", "sight")
-    direct = {"kind": ch if ch in ("sight", "smell") else "sight", "ref": p["id"]}
+    direct = {"kind": "smell" if ch == "smell" else "sight", "ref": p["id"]}
     if kind in HAZARD_KINDS:
         return [(f"hazard:{p.get('where') or ref or 'here'}", True, 1.0, direct)]
     if kind in ("exit_blocked", "blocked") and ref:
@@ -64,19 +78,20 @@ def _evidence(p: dict, persona_name: str) -> list[tuple[str, bool, float, dict]]
         return [(f"exit_open:{ref}", not p["blocked"], 1.0, direct)]
     if kind == "alarm":
         return [("alarm", True, credibility(persona_name, "alarm"), {"kind": "alarm", "ref": p["id"]})]
-    if kind in ("pa", "utterance", "said", "shout"):
+    if kind in ("pa", "utterance", "said", "shout", "message"):
         sk = "pa" if kind == "pa" else p.get("source_kind", "stranger")
         w = credibility(persona_name, sk)
         src = {"kind": sk, "ref": p["id"], "from": p.get("from")}
         claims = p.get("claim") or parse_claims(p.get("text", ""))
         out = []
-        if claims.get("exit_blocked"):
-            out.append((f"exit_open:{claims['exit_blocked']}", False, w, src))
+        blocked = claims.get("exit_blocked")
+        for eid in [blocked] if isinstance(blocked, str) else (blocked or []):
+            out.append((f"exit_open:{eid}", False, w, src))
         if claims.get("exit_open"):
             out.append((f"exit_open:{claims['exit_open']}", True, w, src))
         if claims.get("hazard"):
             out.append((f"hazard:{claims['hazard']}", True, w, src))
-        if claims.get("told_to_leave") or kind == "pa":
+        if claims.get("told_to_leave") or kind == "pa" or p.get("urgent"):
             out.append(("told_to_leave", True, w, src))
         return out
     return []
@@ -96,12 +111,12 @@ def update_beliefs(before: list[dict], percepts: list[dict], persona_name: str, 
     for p in percepts:
         for key, value, w, src in _evidence(p, persona_name):
             cur = next((b for b in out if b["key"] == key), None)
-            observed = src["kind"] in ("sight", "smell")
+            observed = src["kind"] in OBSERVED
             new = {"key": key, "value": value, "source": src, "tick": tick}
             if cur is None:
                 out.append({"id": _next_id(out), **new, "conf": round(w, 3)})
                 continue
-            cur_observed = cur["source"]["kind"] in ("sight", "smell")
+            cur_observed = cur["source"]["kind"] in OBSERVED
             if observed:
                 cur.update(new, conf=1.0)
             elif cur_observed and cur["value"] != value:
@@ -120,6 +135,10 @@ def update_beliefs(before: list[dict], percepts: list[dict], persona_name: str, 
 # ---------- appraisal ----------
 
 def social_proof(percepts: list[dict]) -> float:
+    """Share of visible people leaving; the sim's aggregate people_moving cue counts 4+ movers as 1."""
+    agg = [p for p in percepts if p.get("kind") == "people_moving"]
+    if agg:
+        return clip(max(float(p.get("count") or 0) for p in agg) / 4)
     people = [p for p in percepts if p.get("kind") == "person"]
     if not people:
         return 0.0
@@ -152,7 +171,7 @@ def appraise(percepts: list[dict], beliefs: list[dict], options: list[dict], per
         if not b["value"]:
             continue
         if b["key"].startswith("hazard:"):
-            cues.append(b["conf"] * (0.95 if b["source"]["kind"] in ("sight", "smell") else CLAIM_WEIGHT["hazard"]))
+            cues.append(b["conf"] * (0.95 if b["source"]["kind"] in OBSERVED else CLAIM_WEIGHT["hazard"]))
         elif b["key"] == "alarm":
             cues.append(ALARM_WEIGHT * b["conf"])
         elif b["key"] == "told_to_leave":

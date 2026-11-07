@@ -16,19 +16,22 @@ from pathlib import Path
 
 from . import llm
 from .appraisal import EVAC_ACTIONS, PROTECTIVE, HAZARD_KINDS, appraise, dominant, emotions, exit_open_prob
-from .appraisal import parse_claims, update_beliefs
+from .appraisal import _next_id, parse_claims, update_beliefs
 from .personas import contagion_traits, persona
 from .prompt import messages, user_message
 from .schemas import Decision, DecisionRecord
 
+_ENV_DONE = [False]
 CONFIG = {"offline": os.environ.get("NOVA_NO_LLM") == "1", "run_id": "run", "model": llm.DEFAULT_MODEL,
           "temperature": 0.7, "include_emotion": True, "workers": 32, "timeout_s": 6.0}
 MINDS: dict[str, dict] = {}
 REPLAY: dict[tuple[int, str], dict] = {}
 ATTN_K, ATTN_THETA = 0.5, 1.0  # COGNITION_SOURCES.md: k ~0.5 (ours); theta so a calm agent sees a static sign 38%
 SALIENCE = {"exit_sign": 0.38, "person": 0.8, "exit": 0.9, "object": 0.5}
-PRIORITY_KINDS = set(HAZARD_KINDS) | {"alarm", "pa", "exit", "exit_sign", "exit_blocked", "blocked", "utterance",
-                                      "said", "shout"}
+SPEECH = {"utterance", "said", "shout", "message"}
+PRIORITY_KINDS = set(HAZARD_KINDS) | SPEECH | {"alarm", "pa", "exit", "exit_sign", "exit_blocked", "blocked",
+                                              "people_moving"}
+NEIGHBOUR_M, NEIGHBOUR_STALE_S = 6.0, 10.0
 FEEL_MAP = {"afraid": "fear", "scared": "fear", "terrified": "fear", "panicked": "fear", "frightened": "fear",
             "anxious": "anxiety", "worried": "anxiety", "nervous": "anxiety", "uneasy": "anxiety", "unsure": "anxiety",
             "confused": "anxiety", "frustrated": "frustration", "annoyed": "frustration", "irritated": "frustration",
@@ -49,12 +52,16 @@ def configure(offline: bool | None = None, replay: str | Path | None = None, run
     if model:
         CONFIG["model"] = model
     CONFIG.update(kw)
-    replay = replay or os.environ.get("NOVA_REPLAY")
+    _ENV_DONE[0] = True
+    env = os.environ.get("NOVA_REPLAY")
+    if env == "1" and os.environ.get("NOVA_RUN_DIR"):
+        env = str(Path(os.environ["NOVA_RUN_DIR"]) / "decisions.jsonl")
+    replay = replay or env
     if replay and Path(replay).exists():
         for line in Path(replay).read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
-                REPLAY[(int(r["tick"]), r["agent_id"])] = r
+                REPLAY[(r["run_id"], int(r["tick"]), r["agent_id"])] = r
 
 
 def stats() -> dict:
@@ -86,6 +93,8 @@ def perceive(percepts: list[dict], arousal: float, threatened: bool, seed: str) 
 def _source_kind(p: dict, agent: dict) -> str:
     if p.get("source_kind"):
         return p["source_kind"]
+    if p.get("kind") == "pa":
+        return "pa"
     who = p.get("from")
     known = set((agent.get("traits") or {}).get("known", [])) | set((agent.get("traits") or {}).get("companions", []))
     other = MINDS.get(who, {}).get("persona") or p.get("speaker_persona")
@@ -102,26 +111,48 @@ def build_inputs(view: dict) -> dict:
     aid, tick = agent["id"], int(view["tick"])
     run_id = view.get("run_id") or CONFIG["run_id"]
     mind = MINDS.get(aid, {})
+    exits = {o["exit"]: o.get("label") or "" for o in view.get("options") or [] if o.get("exit")}
+    exits.update({e: exits.get(e, "") for e in agent.get("known_exits") or []})
     raw = []
     for i, p in enumerate(view.get("percepts") or []):
         p = {"id": p.get("id") or f"p{i + 1}", "channel": p.get("channel", "sight"), **p}
-        if p["kind"] in ("utterance", "said", "shout"):
+        if p["kind"] in SPEECH:
             p["source_kind"] = _source_kind(p, agent)
+            p.setdefault("claim", parse_claims(p.get("text", ""), exits))
         raw.append(p)
     threatened = mind.get("certainty", 0.0) > 0.2 or any(p["kind"] in HAZARD_KINDS for p in raw)
     percepts, dropped = perceive(raw, (mind.get("emotion") or {}).get("arousal", 0.0), threatened,
                                  f"{run_id}|{aid}|{tick}")
     neighbours = []
+
+    def add_nb(who: str, pid: str, dist: float, channel: str) -> None:
+        m = MINDS.get(who)
+        if m and m.get("emotion") and who != aid and all(n["agent"] != who for n in neighbours):
+            neighbours.append({"agent": who, "pid": pid, "dist_m": round(dist, 2), "channel": channel,
+                               "fear": m["emotion"]["fear"], "anxiety": m["emotion"]["anxiety"],
+                               "eps": contagion_traits(m["persona"])["eps"]})
     for p in percepts:
-        who = p.get("ref") if p["kind"] == "person" else p.get("from")
-        m = MINDS.get(who) if who else None
-        if m and m.get("emotion"):
-            neighbours.append({"agent": who, "pid": p["id"], "dist_m": p.get("dist_m") or 0.0,
-                               "channel": p.get("channel"), "fear": m["emotion"]["fear"],
-                               "anxiety": m["emotion"]["anxiety"], "eps": contagion_traits(m["persona"])["eps"]})
-    prior = {b["key"]: b for b in mind.get("beliefs", [])}
-    for b in view.get("beliefs") or []:  # sim-held beliefs fill gaps, ours win
-        prior.setdefault(b["key"], b)
+        if p["kind"] == "person" and p.get("ref"):
+            add_nb(p["ref"], p["id"], float(p.get("dist_m") or 0.0), "sight")
+        elif p["kind"] in SPEECH and p.get("from"):
+            add_nb(p["from"], p["id"], float(p.get("dist_m") or 2.0), "hearing")
+    crowd = next((p for p in percepts if p["kind"] == "people_moving"), None)
+    if crowd and agent.get("pos"):
+        # ponytail: the sim reports movers as one aggregate, so sight contagion uses each neighbour's
+        # position at its last decision (<= 10 s old, no line-of-sight check); per-person percepts fix this
+        for who, m in sorted(MINDS.items()):
+            if m.get("pos") and float(view["t_s"]) - m["t_s"] <= NEIGHBOUR_STALE_S:
+                d = ((m["pos"][0] - agent["pos"][0]) ** 2 + (m["pos"][1] - agent["pos"][1]) ** 2) ** 0.5
+                if d <= NEIGHBOUR_M:
+                    add_nb(who, crowd["id"], d, "sight")
+    prior = {b["key"]: dict(b) for b in mind.get("beliefs", [])}
+    for b in view.get("beliefs") or []:  # sim-held beliefs fill gaps under fresh ids; ours win
+        if b["key"] not in prior:
+            nb = {**b, "id": _next_id(list(prior.values()))}
+            nb.setdefault("conf", 0.5)
+            nb.setdefault("tick", tick)
+            nb.setdefault("source", {"kind": "prior"})
+            prior[b["key"]] = nb
     return {"run_id": run_id, "tick": tick, "t_s": float(view["t_s"]), "agent": agent,
             "trigger": view.get("trigger") or {"kind": "periodic"}, "percepts": percepts, "dropped": dropped,
             "beliefs_before": list(prior.values()), "options": list(view.get("options") or []),
@@ -144,7 +175,8 @@ def compute_state(inp: dict, remove: frozenset = frozenset(), keep_only: set | N
     after = [b for b in after if keep(b["id"]) or b["source"].get("ref") in {p["id"] for p in percepts}]
     pids = {p["id"] for p in percepts}
     neighbours = [n for n in inp["neighbours"] if n["pid"] in pids]
-    a = appraise(percepts, after, inp["options"], name, inp["trigger"], agent.get("traits"))
+    traits = {**(agent.get("traits") or {}), "target_exit": agent.get("target_exit")}
+    a = appraise(percepts, after, inp["options"], name, inp["trigger"], traits)
     emo, src = emotions(a, inp["mind_before"], inp["t_s"], name, neighbours)
     ids = pids | {b["id"] for b in after} | {o["id"] for o in inp["options"]}
     return {"percepts": percepts, "beliefs_after": after, "appraisal": a, "emotion": emo, "emotion_sources": src,
@@ -203,7 +235,7 @@ def validate(raw: str, ids: set, options: list[dict]) -> tuple[dict | None, list
 # ---------- fallback ----------
 
 def _evac_cost(o: dict, beliefs: list[dict], traits: dict) -> float:
-    familiar = o.get("exit") in (traits.get("entry_exit"), traits.get("familiar_exit"))
+    familiar = o.get("exit") in {traits.get("entry_exit"), traits.get("familiar_exit")} - {None}
     return (float(o.get("route_m") or 20) / 1.3 + float(o.get("queue_s") or 0) - (30 if familiar else 0)
             + 300 * (1 - exit_open_prob(beliefs, o.get("exit"))))
 
@@ -211,14 +243,17 @@ def _evac_cost(o: dict, beliefs: list[dict], traits: dict) -> float:
 def fallback(inp: dict, st: dict) -> dict:
     """Deterministic persona policy. Same state in, same decision out."""
     name, p = persona(inp["agent"].get("persona", ""))
-    traits = inp["agent"].get("traits") or {}
+    traits = {"entry_exit": inp["agent"].get("entry_exit"), **(inp["agent"].get("traits") or {})}
     a, opts, beliefs = st["appraisal"], inp["options"], st["beliefs_after"]
     by = lambda act: [o for o in opts if o.get("action") == act]  # noqa: E731
     cues = [b["id"] for b in beliefs if b["value"] and not b["key"].startswith("exit_open")]
     seen = [x["id"] for x in st["percepts"] if x["kind"] in HAZARD_KINDS]
     speakers = {x.get("from") for x in st["percepts"]
-                if (x.get("claim") or parse_claims(x.get("text", ""))).get("told_to_leave")}
-    act = a["certainty"] >= p["act_at"] or (name == "skeptic" and (seen or len(speakers) >= 2))
+                if x["kind"] in SPEECH and (x.get("urgent") or (x.get("claim") or {}).get("told_to_leave"))}
+    waited = (inp["trigger"].get("kind") == "premove_done" or
+              float(traits.get("t_since_cue_s") or 0) >= float(traits.get("premove_s") or 1e9))
+    act = (a["certainty"] >= p["act_at"] or (name == "skeptic" and (seen or len(speakers) >= 2))
+           or (waited and name != "skeptic") or (waited and a["certainty"] >= 0.5))
     if not act:
         pick = (by("CONTINUE_TASK") or by("SEEK_INFO") or opts)[0]
         need, when = ("later" if a["certainty"] > 0.1 else "no"), "after_info"
@@ -309,6 +344,7 @@ def inputs_from_record(rec: dict) -> dict:
 
 def _remember(rec: dict) -> None:
     MINDS[rec["agent_id"]] = {"persona": rec["persona"], "emotion": rec["emotion"], "t_s": rec["t_s"],
+                              "pos": (rec.get("inputs") or {}).get("agent", {}).get("pos"),
                               "harm": rec["appraisal"]["harm"], "certainty": rec["appraisal"]["certainty"],
                               "beliefs": rec["beliefs_after"]}
 
@@ -320,10 +356,12 @@ def _result(rec: dict) -> dict:
 def decide_batch(views: list[dict]) -> list[dict]:
     """Decide for many agents in one tick: state in order, LLM calls in parallel, minds updated after.
     Every agent in the batch sees its neighbours' emotions from before this batch (order-independent)."""
+    if not _ENV_DONE[0]:
+        configure(reset=False)
     out: list[dict | None] = [None] * len(views)
     jobs = []
     for i, v in enumerate(views):
-        hit = REPLAY.get((int(v["tick"]), v["agent"]["id"]))
+        hit = REPLAY.get((v.get("run_id") or CONFIG["run_id"], int(v["tick"]), v["agent"]["id"]))
         if hit:
             out[i] = _result(hit)
             continue

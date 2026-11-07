@@ -86,6 +86,14 @@ def render_belief(b: dict) -> str:
             f"from {s['kind']} {s.get('ref') or ''}{by}, tick {b['tick']})")
 
 
+def _timing(traits: dict) -> list[str]:
+    """Sampled pre-movement delay (Lovreglio et al. 2019) is a floor the sim already applied."""
+    if traits.get("t_since_cue_s") is None or traits.get("premove_s") is None:
+        return []
+    return [f"TIMING: you noticed the first cue {traits['t_since_cue_s']} s ago; a person like you usually starts "
+            f"moving after about {round(float(traits['premove_s']))} s."]
+
+
 def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], beliefs: list[dict],
                  options: list[dict], appraisal: dict, emotion: dict | None) -> str:
     name, p = persona(agent.get("persona", ""))
@@ -93,6 +101,7 @@ def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], b
              f"YOU: {agent['id']} in {agent.get('room')} at t={t_s:.1f} s. Known exits: "
              f"{', '.join(agent.get('known_exits') or []) or 'only the way you came in'}.",
              f"TRAITS: {_fields(agent.get('traits') or {}) or 'none'}",
+             *_timing(agent.get("traits") or {}),
              f"DECISION POINT: {trigger.get('kind')} {trigger.get('ref') or ''}".rstrip(),
              "CUES (what you perceive now):"]
     lines += [render_percept(x) for x in percepts] or ["- nothing unusual"]
