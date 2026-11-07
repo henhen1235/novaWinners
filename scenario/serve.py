@@ -5,6 +5,8 @@ POST /parse {scene_path, text, at?: {point: [x, z], level}, t_s?, history?}
 POST /chat  {scene_path, messages: [{role: user|assistant, content}]}
   -> {scenario?, events, occupants, assumptions, questions, messages, cost_usd}
      A question ends the turn: the client appends the user's answer to messages and posts again.
+POST /populate {scene_path, total, mode?, preset?, personas?, levels?, seed?} -> {occupants, notes}
+  (scenario/populate.py; mode llm uses the seeding LLM)
 GET /health. CORS for localhost only. scene_path must be a .json file inside the repo.
 """
 
@@ -20,6 +22,7 @@ from pathlib import Path
 
 from .chat import NeedUser, raise_need_user, run
 from .parse import parse_event
+from .populate import populate
 
 REPO = Path(__file__).resolve().parents[1]
 MAX_BODY = 200_000
@@ -86,7 +89,20 @@ def handle_chat(req: dict) -> dict:
             "messages": history + [{"role": "assistant", "content": summary}]}
 
 
-ROUTES = {"/parse": handle_parse, "/chat": handle_chat}
+def handle_populate(req: dict) -> dict:
+    scene, _ = load_scene(str(req.get("scene_path", "")))
+    total, levels = req.get("total"), req.get("levels")
+    if levels is not None and not (isinstance(levels, list) and all(isinstance(x, str) for x in levels)):
+        raise ValueError("levels must be a list of level ids")
+    personas = req.get("personas")
+    if personas is not None and not isinstance(personas, dict):
+        raise ValueError("personas must be an object of weights")
+    occupants, notes = populate(scene, total, str(req.get("mode", "load")), str(req.get("preset", "office_day")),
+                                personas, levels or None, int(req.get("seed", 42)))
+    return {"occupants": occupants, "notes": notes}
+
+
+ROUTES = {"/parse": handle_parse, "/chat": handle_chat, "/populate": handle_populate}
 
 
 class Handler(BaseHTTPRequestHandler):
