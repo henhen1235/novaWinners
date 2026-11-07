@@ -93,7 +93,13 @@ elements; treat missing level as the scene's first level).
    `samples/cmu/tepper/` appears (pull), load it.
 6. Commit as `feat(viewer): ...`.
 
-## T2. One-command demo setup (you own `scripts/demo/`, `docs/DEMO.md`)
+## Reassignment (14:15)
+
+T2 (demo setup) and T4 (README, deck, writeup) are now Andrew's agent's tasks
+(see ANDREW_AGENT.md). Henry's agent: finish your Tepper work, then do T3 (validation)
+only. Do not edit `scripts/demo/`, `docs/DEMO.md`, `docs/pitch/` or `README.md`.
+
+## T2. One-command demo setup  [TAKEN by Andrew's agent]
 
 The demo assets currently exist only on one laptop. Make it reproducible:
 
@@ -143,7 +149,7 @@ validate. Output `validation/report.md` + an SVG chart per test + one summary ta
 unverified as such. `python -m validation run -o out/validation`. Tests check the
 harness runs on a tiny case (< 20 s). Commit as `feat(validation): ...`.
 
-## T4. Pitch deck, README, submission writeup (you own `docs/pitch/`, `README.md`)
+## T4. Pitch deck, README, submission writeup  [TAKEN by Andrew's agent]
 
 1. Rewrite the top-level `README.md` for the whole project (currently WS-B only): one
    sentence of what it is; architecture (capture: iPhone RoomPlan/Mesh app + blueprint
