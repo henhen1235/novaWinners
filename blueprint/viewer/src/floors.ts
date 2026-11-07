@@ -501,7 +501,7 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
   }
 
   function declutter(pxPerMeter: number) {
-    document.body.classList.toggle("zoomed-out", pxPerMeter < 9);
+    document.body.classList.toggle("zoomed-out", pxPerMeter < 24); // exit names only when there is room
     for (const level of levels) {
       const allowed = layerOn.rooms && level.root.visible && !level.ghost;
       for (const label of level.roomLabels) {

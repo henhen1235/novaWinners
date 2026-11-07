@@ -55,6 +55,7 @@ let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspective;
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(4, 0, 4);
 controls.enableDamping = true;
+controls.zoomToCursor = true; // scroll into the spot under the pointer, as in a map
 controls.update();
 
 scene.add(new THREE.HemisphereLight(token("text"), token("ground"), 2.2));
