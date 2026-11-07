@@ -117,7 +117,7 @@ The demo assets currently exist only on one laptop. Make it reproducible:
      decisions for free; see cognition docs).
    Check `python -m sim --help` and `python -m analysis --help` for exact flags; do not
    edit sim/ or analysis/.
-2. `scripts/demo/start.sh`: start `python -m cognition.serve --runs blueprint/viewer/public/replays --port 8770`
+2. `scripts/demo/start.sh`: start `python -m cognition.serve --runs blueprint/viewer/public/replays --port 8771`
    and `npx vite` in `blueprint/viewer` (port 5173), wait until both answer, then print
    and open the three demo URLs (scan to route, classic vs LLM side by side, interview).
    `scripts/demo/stop.sh` stops both.

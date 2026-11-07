@@ -1,6 +1,6 @@
 // Interview panel: who the clicked occupant is, what it decided and felt (decisions.jsonl,
 // docs/AGENT_COGNITION.md), and a question box for the grounded interview server
-// (POST /interview {run, agent_id, question}, proxied by vite.config.ts to 127.0.0.1:8770).
+// (POST /interview {run, agent_id, question}, proxied by vite.config.ts to 127.0.0.1:8771).
 import type { Player, Run } from "./replay";
 
 export type Reason = { text?: string; reason?: string; label?: string; status?: string; verified?: boolean; cites?: string[] };
@@ -137,7 +137,7 @@ async function ask(question: string) {
     }
     renderAnswer(player, run, data);
   } catch {
-    box.replaceChildren(el("p", "iv-status error", "Interview server offline. Start it with python -m cognition.serve (port 8770), then ask again."));
+    box.replaceChildren(el("p", "iv-status error", "Interview server offline. Start it with python -m cognition.serve (--port 8771), then ask again."));
   } finally {
     submit.disabled = false;
   }

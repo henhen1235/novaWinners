@@ -102,7 +102,7 @@ The demo assets exist only on Karthik's laptop. Make them reproducible from a cl
      `public/replays/loop_<hall|tepper>_<stage>`. Re-running loop with the same command
      replays recorded decisions for free; do not trigger new LLM spend.
    Check every CLI's `--help` first; do not edit their code.
-2. `scripts/demo/start.sh`: start `python -m cognition.serve --runs blueprint/viewer/public/replays --port 8770` and `npx vite --port 5173` in `blueprint/viewer`; wait until both answer; print and open the demo URLs. `stop.sh` stops both.
+2. `scripts/demo/start.sh`: start `python -m cognition.serve --runs blueprint/viewer/public/replays --port 8771` and `npx vite --port 5173` in `blueprint/viewer`; wait until both answer; print and open the demo URLs. `stop.sh` stops both.
 3. `docs/DEMO.md`: a 3-minute demo script with exact URLs and clicks, using these moments:
    (1) scan in, validated 3D out (hall, click a room for the route);
    (2) Tepper side-by-side floors replay (`?view=side`), then no-plan vs assisted-plan compare (`&compare=`);
