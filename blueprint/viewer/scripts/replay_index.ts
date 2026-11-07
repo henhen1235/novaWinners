@@ -6,7 +6,8 @@ import { scenarioName } from "../src/names.ts";
 
 const root = "public/replays";
 const runs = readdirSync(root, { withFileTypes: true })
-  .filter((entry) => entry.isDirectory() && existsSync(join(root, entry.name, "replay.json")))
+  // Folders starting with "_" are scratch copies for testing, not runs to offer.
+  .filter((entry) => entry.isDirectory() && !entry.name.startsWith("_") && existsSync(join(root, entry.name, "replay.json")))
   .map((entry) => {
     // Only the head of the file is needed for meta.scene; replays can be tens of MB.
     const head = readFileSync(join(root, entry.name, "replay.json"), "utf8").slice(0, 4000);
