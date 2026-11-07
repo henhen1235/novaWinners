@@ -16,6 +16,20 @@ Sources: research/PITCH_IDEAS.md, research/EVAC_PSYCHOLOGY.md, research/LLM_LATE
 - Exit sign reading from photos listed in scan_notes.json (vision LLM).
 - Live scan of the judging room the morning of the demo (keep a recorded fallback).
 
+## Scenarios and model casting (user idea, 2026-11-07; research: research/SCENARIOS_AND_MODELS.md)
+- Pinpoint an emergency at a location (room id/name or a clicked point), with a
+  type: fire, smoke only, active intruder, earthquake, gas leak, flood, bomb
+  threat. Each type triggers different research-backed behavior (e.g. fire:
+  evacuate away from smoke; active intruder: run/hide/fight, avoid the threat,
+  lock down; earthquake: drop/cover/hold, evacuate after shaking).
+- Scenario chatbot: knows every labeled space in scene.json (room names come from
+  our LLM labeling) and turns "fire in the kitchen, intruder at the east
+  entrance, then deploy 20 people on floor 2" into a structured scenario.json
+  (events + occupant placements) that the sim validates and runs.
+- Model casting: give different occupants different LLMs, using documented
+  model tendencies (risk-taking, compliance, cooperation) as a source of
+  behavioral diversity, alongside explicit persona prompts.
+
 ## From IBS27/rumi (HackMIT 2026; NO LICENSE: ideas only, do not copy code)
 - Phone-to-browser pairing: RoomScanner uploads the scan straight to the web
   app (QR code / short code), no AirDrop. Makes a live judging-room scan smooth.
