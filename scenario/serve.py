@@ -5,8 +5,8 @@ POST /parse {scene_path, text, at?: {point: [x, z], level}, t_s?, history?}
 POST /chat  {scene_path, messages: [{role: user|assistant, content}]}
   -> {scenario?, events, occupants, assumptions, questions, messages, cost_usd}
      A question ends the turn: the client appends the user's answer to messages and posts again.
-POST /populate {scene_path, total, mode?, preset?, personas?, levels?, seed?} -> {occupants, notes}
-  (scenario/populate.py; mode llm uses the seeding LLM)
+POST /populate {scene_path, total, mode?, preset?, personas?, levels?, seed?, traits?} -> {occupants, notes}
+  (scenario/populate.py; mode llm, alias ai, uses the seeding LLM)
 GET /health. CORS for localhost only. scene_path must be a .json file inside the repo.
 """
 
@@ -97,8 +97,11 @@ def handle_populate(req: dict) -> dict:
     personas = req.get("personas")
     if personas is not None and not isinstance(personas, dict):
         raise ValueError("personas must be an object of weights")
+    traits = req.get("traits")
+    if traits is not None and not isinstance(traits, dict):
+        raise ValueError("traits must be an object")
     occupants, notes = populate(scene, total, str(req.get("mode", "load")), str(req.get("preset", "office_day")),
-                                personas, levels or None, int(req.get("seed", 42)))
+                                personas, levels or None, int(req.get("seed", 42)), traits=traits)
     return {"occupants": occupants, "notes": notes}
 
 

@@ -102,3 +102,13 @@ def test_http_populate():
         assert e.value.code == 400
     finally:
         srv.shutdown()
+
+
+def test_viewer_request_shape_ai_mode_and_traits(monkeypatch):
+    """What blueprint/viewer/src/edit.ts posts: mode "ai", preset custom with personas and slider traits."""
+    monkeypatch.setattr(seed_mod, "complete", lambda prompt, **kw: json.dumps({"rooms": []}))
+    traits = {"speed_mps": 1.1, "risk_tolerance": 0.2, "ocean": {"O": 0.0, "C": 0.5, "E": 0.0, "A": 0.0, "N": -0.5}}
+    groups, _ = populate(OFFICE, 9, mode="ai", preset="custom", personas={"skeptic": 1.0}, traits=traits)
+    assert _total(groups) == 9 and all(g["traits"] == traits for g in groups)
+    with pytest.raises(ValueError, match="speed_mps"):  # bad sliders are caught by the final schema check
+        populate(OFFICE, 9, preset="custom", personas={"skeptic": 1.0}, traits={"speed_mps": 9.0})

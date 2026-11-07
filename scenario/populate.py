@@ -24,6 +24,7 @@ from analysis.occupancy import analyze as occupancy
 from .schema import DEFAULT_MODEL, MAX_PER_M2, PERSONAS, validate
 
 MODES = ("load", "random", "llm")
+MODE_ALIASES = {"ai": "llm"}  # the viewer's people palette says "ai"
 # Mixes are our assumptions [H] for demo scenarios, not survey data.
 PRESETS: dict[str, dict[str, float]] = {
     "office_day": {"regular_employee": 0.72, "first_time_visitor": 0.12, "warden": 0.06, "older_adult": 0.06,
@@ -97,8 +98,12 @@ def _staff_groups(counts: dict[str, int], rooms: dict[str, dict], per_floor: int
 
 def populate(scene: dict, total: int, mode: str = "load", preset: str = "office_day",
              personas: dict[str, float] | None = None, levels: list[str] | None = None, seed: int = 42,
-             use_llm: bool = True) -> tuple[list[dict], list[str]]:
-    """Occupant groups placing exactly `total` people, plus notes (assumptions) to show the user."""
+             use_llm: bool = True, traits: dict | None = None) -> tuple[list[dict], list[str]]:
+    """Occupant groups placing exactly `total` people, plus notes (assumptions) to show the user.
+
+    traits (the viewer's sliders) is copied onto every group when given.
+    """
+    mode = MODE_ALIASES.get(mode, mode)
     if mode not in MODES:
         raise ValueError(f"mode must be one of {MODES}")
     if preset != "custom" and preset not in PRESETS:
@@ -142,6 +147,8 @@ def populate(scene: dict, total: int, mode: str = "load", preset: str = "office_
         notes.append(f"{len(staff)} resident-assistant staff ({STAFF_PER_FLOOR[preset]} per floor) inside the total")
     groups = [{"where": {"room": k}, "count": n, "personas": llm_mix.get(k, mix), "models": {DEFAULT_MODEL: 1.0}}
               for k, n in sorted(counts.items()) if n > 0] + staff
+    if traits:
+        groups = [{**g, "traits": dict(traits)} for g in groups]
     errors = validate({"scene": "", "occupants": groups}, scene)
     if errors:  # should not happen: caps are respected above
         raise ValueError("; ".join(errors[:3]))
