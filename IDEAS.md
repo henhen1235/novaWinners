@@ -16,6 +16,24 @@ Sources: research/PITCH_IDEAS.md, research/EVAC_PSYCHOLOGY.md, research/LLM_LATE
 - Exit sign reading from photos listed in scan_notes.json (vision LLM).
 - Live scan of the judging room the morning of the demo (keep a recorded fallback).
 
+## Mapping-side quick wins (research/MAPPING_IDEAS.md, ranked by value/effort)
+Recommended combo "your building's weak spots, before anyone runs a drill" (~4.5 h):
+- Lose-one-exit / single points of failure (1 h): networkx MultiGraph on rooms
+  and doors, articulation points and per-exit loss of exit width. Doubles as
+  the WS-C adversary's target list.
+- As-is pinch-point map (1.5 h): narrowest clear width along each route to an
+  exit from the scan (distance transform + skeleton), converted to persons/min.
+  Only the scan sees furniture in corridors.
+- Smoke clock per room (2 h): Tanaka-Yamana smoke-filling time from scanned
+  ceiling height and area (prototype: 20 m^2 room, 2.4 m ceiling -> 38 s,
+  4 m -> 64 s to 1.8 m).
+Then: visibility map (2 h; exits seen from where, decision points; becomes the
+agents' perception), AR dollhouse via animated USDZ (2 h static, usd-core
+prototype validated), occupant load per room (0.75 h), QR phone-to-browser
+pairing, tap-to-tag safety equipment in the app (scans have no POIs today),
+printable evacuation poster. Code values partly unverified: read adopted code
+text before any slide.
+
 ## Scenarios and model casting (user idea, 2026-11-07; research: research/SCENARIOS_AND_MODELS.md)
 - Pinpoint an emergency at a location (room id/name or a clicked point), with a
   type: fire, smoke only, active intruder, earthquake, gas leak, flood, bomb
