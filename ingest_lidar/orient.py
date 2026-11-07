@@ -135,6 +135,28 @@ def _refine_up_by_floor(up: np.ndarray, centers: np.ndarray, normals: np.ndarray
     return up
 
 
+def _snap_yaw(rot: np.ndarray, normals: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Rotate about Y so wall normals line up with X/Z.
+
+    Uses the area-weighted circular mean of 4*theta over near-vertical faces:
+    symmetric normal noise averages out and the 90-degree ambiguity vanishes.
+    """
+    n = normals @ rot.T
+    vert = np.abs(n[:, 1]) < 0.3
+    if vert.sum() < 100:
+        return rot
+    theta = np.arctan2(n[vert, 2], n[vert, 0])
+    z = (w[vert] * np.exp(4j * theta)).sum()
+    phi = np.angle(z) / 4  # current wall angle offset from the axes
+    c, s = np.cos(phi), np.sin(phi)
+    yaw = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])  # rotation about +Y by -phi in XZ
+    out = yaw @ rot
+    t = np.arctan2((normals[vert] @ out.T)[:, 2], (normals[vert] @ out.T)[:, 0])
+    if abs(np.angle((w[vert] * np.exp(4j * t)).sum())) > abs(np.angle(z)):  # wrong sense: flip
+        out = yaw.T @ rot
+    return out
+
+
 def _peak(h: np.ndarray, w: np.ndarray) -> float:
     """Offset of the heaviest 5 cm bin (smoothed over 3 bins)."""
     edges = np.arange(h.min(), h.max() + 2 * BIN, BIN)
@@ -191,6 +213,7 @@ def orient(scan: Scan, up_override: str | None = None, seed: int = 0) -> Orienta
     ex = ex - (ex @ up) * up
     ex /= np.linalg.norm(ex)
     rot = np.stack([ex, up, np.cross(ex, up)])
+    rot = _snap_yaw(rot, normals, w)
     p = centers @ rot.T
     m = np.eye(4)
     m[:3, :3] = rot
