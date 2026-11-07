@@ -1,7 +1,18 @@
 html, body { margin: 0; height: 100%; background: #121212; color: #f4f4f4; font: 13px/1.4 system-ui, sans-serif; }
+body { display: flex; flex-direction: column; }
 header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: #1c1c1c; flex-wrap: wrap; }
-button, select { font: inherit; background: #2a2a2a; color: inherit; border: 1px solid #444; padding: 4px 8px; }
-#stage { position: absolute; inset: 42px 220px 0 0; }
-aside { position: absolute; top: 42px; right: 0; bottom: 0; width: 220px; overflow: auto; padding: 8px; background: #181818; }
-aside button { display: block; width: 100%; text-align: left; margin: 0 0 6px; }
+button, select, input { font: inherit; background: #2a2a2a; color: inherit; border: 1px solid #444; padding: 4px 8px; }
+#buildings { flex: 1 0 100%; display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; }
+#buildings:empty { display: none; }
+#buildings button { flex: 0 0 auto; border-radius: 999px; white-space: nowrap; }
+#buildings button.unread { color: #c8c8c8; }
+#buildings button[aria-selected="true"] { background: #f4f4f4; color: #161616; border-color: #f4f4f4; }
+.upload { display: flex; gap: 8px; align-items: center; }
+#workspace { flex: 1; display: flex; min-height: 0; }
+#stage { flex: 1; position: relative; min-width: 0; }
+aside { width: 340px; overflow: auto; padding: 10px; background: #181818; }
+aside p { margin: 0 0 10px; color: #c8c8c8; }
+aside button { display: block; width: 100%; text-align: left; margin: 0 0 6px; white-space: normal; line-height: 1.35; }
+aside button.error { border-color: #a66; }
+aside button.warn { border-color: #876; }
 #readout { margin-left: auto; }

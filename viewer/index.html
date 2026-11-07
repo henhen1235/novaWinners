@@ -7,6 +7,7 @@
 </head>
 <body>
   <header>
+    <label class="upload">Blueprint <input id="blueprint" type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.dxf,application/pdf" /></label>
     <button id="orbit" type="button">Orbit</button>
     <button id="top" type="button">Top</button>
     <label>Level <select id="level"></select></label>
@@ -16,9 +17,12 @@
     <label><input id="show-exits" type="checkbox" checked /> Exits</label>
     <label><input id="show-warnings" type="checkbox" /> Warnings</label>
     <span id="readout">Load display.glb and scene.json</span>
+    <nav id="buildings" aria-label="Buildings" role="tablist"></nav>
   </header>
-  <div id="stage"></div>
-  <aside id="warnings"></aside>
+  <div id="workspace">
+    <div id="stage"></div>
+    <aside id="warnings"></aside>
+  </div>
   <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

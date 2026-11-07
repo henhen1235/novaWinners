@@ -174,7 +174,9 @@ def split_gaps(segments: list[Segment], close_gap_m: float = CLOSE_GAP_M) -> tup
             a = project(segment.p1)
             b = project(segment.p2)
             intervals.append((min(a, b), max(a, b), segment.thickness_m, segment))
-        intervals.sort()
+        # Identical overlapping strokes are common in CAD exports. Sorting the
+        # segment object itself raises TypeError, so only the numbers decide order.
+        intervals.sort(key=lambda item: (item[0], item[1], item[2]))
         merged = [intervals[0]]
         for start, end, thickness, segment in intervals[1:]:
             prev_start, prev_end, prev_thickness, prev_segment = merged[-1]

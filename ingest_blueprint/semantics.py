@@ -32,7 +32,7 @@ def load_env() -> None:
 
 
 def model_name() -> str:
-    return os.environ.get("OPENROUTER_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "anthropic/claude-sonnet-4.5"
+    return os.environ.get("OPENROUTER_MODEL") or os.environ.get("ANTHROPIC_MODEL") or "anthropic/claude-opus-5.5"
 
 
 def api_key() -> str | None:

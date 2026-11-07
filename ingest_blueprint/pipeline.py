@@ -155,14 +155,21 @@ def run(
         generated_by=generated_by(),
         source="blueprint",
     )
+    return publish_scene(scene, out)
+
+
+def publish_scene(scene: dict, out_dir: str | Path) -> tuple[dict, int]:
+    """Validate, write scene.json / display.glb, and return the validator exit code."""
+
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
     issues = validate_data(scene)
     scene["warnings"] = [
         {"code": issue["code"], "message": issue["message"], "ref": issue.get("ref"), "severity": issue["severity"]}
         for issue in issues
         if issue["code"] != "SCHEMA"
     ]
-    scene_path = out / "scene.json"
-    scene_path.write_text(json.dumps(scene, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    (out / "scene.json").write_text(json.dumps(scene, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     display = build_display(scene)
     display.export(out / "display.glb")
     debug_mesh = build_navmesh_debug(scene["navmesh"])
