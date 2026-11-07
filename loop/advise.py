@@ -263,8 +263,9 @@ def call_llm(messages: list[dict], tools: list[dict], model: str) -> tuple[dict,
             "reasoning": {"effort": "low"}, "usage": {"include": True}}
     raw = json.dumps(body, sort_keys=True).encode()
     hit = CACHE / f"advise_{hashlib.sha256(raw).hexdigest()}.json"
-    if hit.exists():
-        return json.loads(hit.read_text())["message"], 0.0
+    if hit.exists():  # replay: report the cost recorded on the first, real call
+        c = json.loads(hit.read_text())
+        return c["message"], float(c.get("cost_usd", 0.0))
     key = _key()
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY not set (env or repo .env)")
@@ -283,8 +284,9 @@ def call_llm(messages: list[dict], tools: list[dict], model: str) -> tuple[dict,
         raise RuntimeError(f"OpenRouter error: {str(resp.get('error', resp))[:300]}")
     msg = {k: v for k, v in resp["choices"][0]["message"].items() if k in ("role", "content", "tool_calls") and v is not None}
     CACHE.mkdir(parents=True, exist_ok=True)
-    hit.write_text(json.dumps({"model": model, "message": msg}))
-    return msg, float(resp.get("usage", {}).get("cost") or 0.0)
+    cost = float(resp.get("usage", {}).get("cost") or 0.0)
+    hit.write_text(json.dumps({"model": model, "message": msg, "cost_usd": cost}))
+    return msg, cost
 
 
 _STR, _IDS = {"type": "string"}, {"type": "array", "items": {"type": "string"}}
@@ -448,7 +450,7 @@ def to_patch(rec: dict, scene: dict, scenario: dict, cands: list[dict]) -> tuple
 
 def _runs(scene: dict, sc: dict, seeds: list[int], d: Path, n0: int) -> list[dict]:
     jobs = [(scene, {**sc, "seed": s}, s, d / f"s{s}", "policy", True, n0) for s in seeds]
-    with ProcessPoolExecutor(min(len(jobs), 8)) as ex:
+    with ProcessPoolExecutor(min(len(jobs), 4)) as ex:
         return list(ex.map(run_one, *zip(*jobs)))
 
 
