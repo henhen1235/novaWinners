@@ -33,28 +33,11 @@ def _decider(mode: str, run_dir: Path, run_id: str, no_llm: bool):
     return cog.decide, cog.decide_batch
 
 
-def _pa_hook(scenario: dict):
-    """Tick hook: a PA claiming exit X is open sets that belief (conf 0.9) for everyone still inside.
-
-    ponytail: the sim's hear() only parses exit_blocked claims; drop this once it parses exit_open too.
-    """
-    pas = [(float(e["t_start_s"]), e["id"], (e.get("params") or {}).get("claim", {}).get("exit_open"))
-           for e in scenario.get("events", []) if e["type"] == "pa_announcement"]
-    pas = [p for p in pas if p[2]]
-    done: set[str] = set()
-
-    def hook(sim: Sim) -> None:
-        for t, eid, exit_id in pas:
-            if eid in done or sim.t <= t + 1e-9:  # one tick after the PA, so it beats a same-tick rumor
-                continue
-            done.add(eid)
-            for a in sim.active():
-                sim.believe(a, f"exit_open:{exit_id}", True, 0.9, {"kind": "pa", "ref": eid})
-    return hook
-
-
 def _pa_percepts(scenario: dict, decide, batch):
-    """Wrap the decider so official PA messages reach cognition as kind 'pa' with their claim."""
+    """Wrap the decider so official PA messages reach cognition as kind 'pa' with their claim.
+
+    ponytail: the sim sets the exit_open belief itself; cognition reads percept kind/claim only,
+    so drop this once sim percepts carry kind 'pa' and the claim."""
     by_text = {(e.get("params") or {}).get("text"): (e.get("params") or {}).get("claim") or {}
                for e in scenario.get("events", []) if e["type"] == "pa_announcement"}
     if not by_text:
@@ -80,7 +63,7 @@ def run_one(scene: dict, scenario: dict, seed: int, run_dir: Path, decide_mode: 
     decide, batch = _decider(decide_mode, run_dir, run_id, no_llm)
     decide, batch = _pa_percepts(scenario, decide, batch)
     t0 = time.perf_counter()
-    sim = Sim(scene, scenario, seed, decide, batch, run_id=run_id, hooks=[_pa_hook(scenario)])
+    sim = Sim(scene, scenario, seed, decide, batch, run_id=run_id)
     sim.run()
     wall = time.perf_counter() - t0
     body = write_run(sim, run_dir, scene_path, scenario_path)

@@ -65,6 +65,7 @@ def test_adversary_heuristic_cites_numbers():
     {"kind": "unlock_exit", "args": {"exit": "exit_01"}},
     {"kind": "assign_familiar_exit", "args": {"room": "L1_office_s2", "exit": "exit_02"}},
     {"kind": "widen_door", "args": {"door": "door_05", "width_m": 1.2}},
+    {"kind": "assisted_evacuation_plan", "args": {}},
 ])
 def test_interventions_apply_and_validate(iv):
     sc = {**BASE, "events": BASE["events"] + [{"id": "b", "type": "blocked_exit", "t_start_s": 0,

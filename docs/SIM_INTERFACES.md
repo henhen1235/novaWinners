@@ -150,7 +150,7 @@ to the model for repair. Each round writes `out/loop/<name>/rN/interventions.jso
 | kind | args | patch | limits |
 |---|---|---|---|
 | add_warden | room, count | occupants += {where: {room}, count, personas: {staff: 1.0}} | count 1..2 |
-| add_signage | room, exit | interventions += {type: signage, exit, p: 0.8} | sim applies it building-wide |
+| add_signage | room, exit | interventions += {type: signage, exit, p: 0.8, room} | occupants of the room and passers-by |
 | pa_announcement | t_s, text, exit_open? | events += pa_announcement at t_s, params.claim {exit_open} | t_s within the run |
 | unlock_exit | exit | events += open_exit at (blocked_exit t_start_s + 30 s) | exit must have a blocked_exit with cause locked, chained or obstructed |
 | assign_familiar_exit | room, exit | occupants in room get familiar_exit = exit | |
@@ -162,9 +162,9 @@ Adversary injections are plain scenario events with ids `advN_k`: blocked_exit
 (params.text, params.claim.exit_blocked). At least one exit must stay open, each `why` must cite
 a number, at most 3 per round.
 
-Loop runs the sim in-process with one tick hook: a pa_announcement claiming exit_open sets
-`exit_open:<exit>` true (conf 0.9, source pa) for everyone inside, and cognition sees that
-message as percept kind "pa" with the claim. Scoreboard metrics count only the original
+Loop runs the sim in-process; the sim itself sets `exit_open:<exit>` from an official
+pa_announcement claim, and loop rewrites that message for cognition as percept kind "pa" with
+the claim. Scoreboard metrics count only the original
 occupants (wardens are excluded): t95_s (time from alarm to 95% out; the run duration when never
 reached), evacuated, stragglers, misled_by_rumor, max_queue (most agents queued in one frame),
 llm_calls, cost_usd, and per-tick LLM latency (slowest call of each tick's batch).

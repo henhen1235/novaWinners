@@ -37,6 +37,9 @@ TOOLS = [
          {"room": _S, "exit": _S, **_WHY}, ["room", "exit", "why"]),
     tool("widen_door", "Widen a door (at most 1.5x and 2.4 m); raises its flow.",
          {"door": _S, "width_m": {"type": "number"}, **_WHY}, ["door", "width_m", "why"]),
+    tool("assisted_evacuation_plan", "Adopt an assisted evacuation plan: trained staff go to people who cannot use "
+         "stairs (waiting at refuges) and carry them down. Only matters with mobility-impaired people above ground level.",
+         {**_WHY}, ["why"]),
     tool("submit", "Finish this round's fixes.", {"summary": _S}, ["summary"]),
 ]
 
@@ -114,6 +117,10 @@ def heuristic_calls(scene: dict, scenario: dict, dig: dict, metrics: dict) -> li
             out.append(("pa_announcement", {"t_s": e["t_start_s"] + PA_AFTER_RUMOR_S, "exit_open": claim,
                                             "text": f"Building announcement: {labels[claim]} is open. Leave now by the nearest exit.",
                                             "why": f"{misled} occupants over {dig['seeds']} seeds believed the rumor that {claim} is blocked."}))
+    stuck = (dig.get("stragglers_by_persona") or {}).get("mobility_impaired", 0)
+    if stuck and {"type": "assisted_evacuation_plan"} not in scenario.get("interventions", []):
+        out.insert(0, ("assisted_evacuation_plan", {"why": f"{stuck} mobility-impaired occupants over {dig['seeds']} "
+                                                           "seeds never got out."}))
     strag = dig.get("stragglers_by_room") or {}
     room = next((r for r in strag if r), None)
     if room is None:
