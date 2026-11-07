@@ -48,3 +48,11 @@
 /* Drag box for spreading people, and a crosshair while a tool is armed. */
 .edit-box { position: absolute; z-index: 2; pointer-events: none; border: 1px dashed var(--color-drafting); background: rgba(141, 180, 220, 0.12); border-radius: var(--radius-sm); }
 canvas.edit-armed { cursor: crosshair; }
+
+.edit-populate { margin: var(--space-3) 0 0; padding: var(--space-2) var(--space-3) var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-sm); }
+.edit-populate legend { padding: 0 var(--space-1); font-weight: 600; color: var(--color-text); font-size: var(--size-xs); }
+.edit-populate-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.edit-populate-actions button {
+  padding: 5px 12px; border-radius: var(--radius-sm); cursor: pointer; background: var(--color-raised); border: 1px solid var(--color-line-strong);
+}
+#pop-run { background: var(--color-text); color: var(--color-ground); border-color: var(--color-text); font-weight: 600; }

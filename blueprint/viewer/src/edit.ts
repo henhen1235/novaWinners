@@ -15,7 +15,7 @@ export type Occupant = {
 };
 type Hit = { level: string; x: number; z: number };
 type Person = Hit & { persona: string };
-type Item = { label: string; sent: boolean; event?: ScenarioEvent; occupants?: Occupant[]; people: Person[]; marker?: THREE.Object3D };
+type Item = { label: string; sent: boolean; event?: ScenarioEvent; occupants?: Occupant[]; people: Person[]; marker?: THREE.Object3D; populate?: boolean };
 type Tool = "fire" | "smoke" | "block" | "rumor" | "pa" | "open" | "type" | "people";
 
 const TOOLS: [Tool, string, string][] = [
@@ -69,6 +69,20 @@ const TRAITS: [string, string, number, number, number, number][] = [
   ["sign_follow_p", "Sign following", 0, 1, 0.05, 0.6],
   ["risk_tolerance", "Risk tolerance", 0, 1, 0.05, 0.5],
 ];
+// ---- populate ----
+type PopulateMode = "load" | "random" | "ai";
+// Persona mixes per preset; "custom" uses the persona and traits picked above.
+const PRESETS: Record<string, [string, Record<string, number>]> = {
+  office_day: ["Office day", { regular: 0.6, staff: 0.1, visitor: 0.2, older_adult: 0.05, mobility_impaired: 0.05 }],
+  dorm_night: ["Dorm night", { regular: 0.85, staff: 0.03, skeptic: 0.07, mobility_impaired: 0.05 }],
+  event: ["Event", { visitor: 0.6, regular: 0.2, staff: 0.05, parent_with_child: 0.07, older_adult: 0.05, mobility_impaired: 0.03 }],
+  custom: ["Custom (persona and traits above)", {}],
+};
+// Floor area per occupant by room use, m2 (IBC table 1004.5 style); 0 means nobody is placed there.
+const LOAD_M2: Record<string, number> = {
+  office: 9.3, classroom: 1.9, lobby: 4.6, storage: 28, corridor: 30, unknown: 9.3, restroom: 0, stairwell: 0, mechanical: 0, outside: 0,
+};
+
 const OCEAN = [["O", "Openness"], ["C", "Conscientiousness"], ["E", "Extraversion"], ["A", "Agreeableness"], ["N", "Neuroticism"]];
 const MARKER_PX = 9;
 const DOT_PX = 8;
@@ -183,6 +197,24 @@ export function startEdit(context: ViewerContext) {
         ${PERSONAS.map(([id, name]) => `<option value="${id}">${name}</option>`).join("")}
       </select></label>
       <label class="edit-field edit-count"><span>People per box</span><input id="edit-count" type="number" min="1" max="200" value="10" /></label>
+      <fieldset class="edit-populate">
+        <legend>Populate the building</legend>
+        <label class="edit-field edit-count"><span>People in total</span><input id="pop-total" type="number" min="1" max="5000" value="200" /></label>
+        <label class="edit-field"><span>Spread</span><select id="pop-mode">
+          <option value="load">By occupant load</option><option value="random">Random</option><option value="ai">AI-proposed</option>
+        </select></label>
+        <label class="edit-field"><span>Preset</span><select id="pop-preset">
+          ${Object.entries(PRESETS).map(([id, [name]]) => `<option value="${id}">${name}</option>`).join("")}
+        </select></label>
+        <label class="edit-field"><span>Where</span><select id="pop-scope">
+          <option value="building">Whole building</option><option value="floor">Current floor</option>
+        </select></label>
+        <div class="edit-populate-actions">
+          <button id="pop-run" type="button">Populate</button>
+          <button id="pop-clear" type="button">Clear</button>
+        </div>
+        <p id="pop-floors" class="edit-hint" aria-live="polite"></p>
+      </fieldset>
       <details open><summary>Traits</summary>
         ${TRAITS.map(([key, name, min, max, step, value]) => slider(key, name, min, max, step, value)).join("")}
         ${OCEAN.map(([key, name]) => slider(`ocean-${key}`, `${name} (${key})`, 0, 1, 0.05, 0.5)).join("")}
@@ -436,7 +468,7 @@ export function startEdit(context: ViewerContext) {
   }
 
   // ---- draft vs live ----
-  function commit(change: { label: string; event?: ScenarioEvent; occupants?: Occupant[]; people?: Person[]; hit?: Hit }) {
+  function commit(change: { label: string; event?: ScenarioEvent; occupants?: Occupant[]; people?: Person[]; hit?: Hit; populate?: boolean }) {
     const payload = { type: "edit", t_s: null, ...(change.event && { event: change.event }), ...(change.occupants && { occupants: change.occupants }) };
     const sent = !window.dispatchEvent(new CustomEvent("nova:edit", { detail: payload, cancelable: true }));
     if (!sent) {
@@ -446,9 +478,10 @@ export function startEdit(context: ViewerContext) {
       };
     }
     const people = change.people ?? (change.occupants ?? []).flatMap(peopleFor);
-    items.push({ label: change.label, sent, event: change.event, occupants: change.occupants, people, marker: change.event && eventMarker(change.event, change.hit) });
+    items.push({ label: change.label, sent, event: change.event, occupants: change.occupants, people, marker: change.event && eventMarker(change.event, change.hit), populate: change.populate });
     if (people.length) drawPeople();
     renderList();
+    showFloorCounts();
     return sent;
   }
   function remove(item: Item) {
@@ -460,7 +493,85 @@ export function startEdit(context: ViewerContext) {
     if (item.marker) { item.marker.removeFromParent(); markers.delete(item.marker); }
     if (item.people.length) drawPeople();
     renderList();
+    showFloorCounts();
   }
+
+  // ---- populate: N people over the building or one floor ----
+  const roomLevel = new Map(doc.rooms.map((room) => [room.id, room.level]));
+  function showFloorCounts() {
+    const perFloor = new Map<string, number>();
+    for (const occupant of draft.occupants) {
+      const level = "room" in occupant.where ? roomLevel.get(occupant.where.room) : occupant.where.level;
+      if (level) perFloor.set(level, (perFloor.get(level) ?? 0) + occupant.count);
+    }
+    const parts = doc.levels.filter((level) => perFloor.has(level.id)).map((level) => `${level.name ?? level.id}: ${perFloor.get(level.id)}`);
+    $<HTMLElement>("#pop-floors").textContent = parts.length ? `In the scenario: ${parts.join(", ")}` : "";
+  }
+
+  // Seeded so the same request gives the same spread (mulberry32).
+  function rng(seed: number) {
+    return () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /** Offline stand-in for POST /scenario/populate: rooms weighted by area (or occupant load), largest remainder. */
+  function localPopulate(total: number, mode: PopulateMode, mix: Record<string, number>, levels: string[], seed: number): Occupant[] {
+    const random = rng(seed);
+    const rooms = doc.rooms.filter((room) => levels.includes(room.level) && (room.area_m2 ?? 0) > 1);
+    const weights = rooms.map((room) => {
+      const per = LOAD_M2[room.type ?? "unknown"] ?? 9.3;
+      if (!per) return 0;
+      const area = room.area_m2 ?? 0;
+      return mode === "random" ? area * (0.5 + random()) : area / per;
+    });
+    const sum = weights.reduce((a, b) => a + b, 0);
+    if (!sum) return [];
+    const exact = weights.map((w) => (total * w) / sum);
+    const counts = exact.map(Math.floor);
+    let left = total - counts.reduce((a, b) => a + b, 0);
+    for (const i of exact.map((e, i) => [e - Math.floor(e), i]).sort((a, b) => b[0] - a[0]).map(([, i]) => i)) {
+      if (left-- <= 0) break;
+      counts[i] += 1;
+    }
+    return rooms.flatMap((room, i) => (counts[i] ? [{ where: { room: room.id }, count: counts[i], personas: mix }] : []));
+  }
+
+  async function populate() {
+    const total = Math.max(1, Math.min(5000, Math.round(Number($<HTMLInputElement>("#pop-total").value) || 0)));
+    const mode = $<HTMLSelectElement>("#pop-mode").value as PopulateMode;
+    const preset = $<HTMLSelectElement>("#pop-preset").value;
+    const levels = $<HTMLSelectElement>("#pop-scope").value === "floor" ? [context.level()] : doc.levels.map((level) => level.id);
+    const custom = preset === "custom";
+    const mix = custom ? { [persona.value]: 1 } : PRESETS[preset][1];
+    const seed = 42 + items.filter((item) => item.populate).length;
+    const where = levels.length === 1 ? levelName(levels[0]) : "the building";
+    const status = $<HTMLElement>("#pop-floors");
+    status.textContent = "Placing people...";
+    let occupants: Occupant[];
+    let source = "";
+    try {
+      const data = await post("populate", { scene_path: SCENE_PATH, total, mode, preset, levels, seed, ...(custom && { personas: mix, traits: traits() }) });
+      occupants = data.occupants ?? [];
+    } catch {
+      // ponytail: no AI offline; "AI-proposed" falls back to occupant load until scenario.serve has /populate.
+      occupants = localPopulate(total, mode === "ai" ? "load" : mode, mix, levels, seed);
+      source = " (offline spread)";
+    }
+    if (custom) occupants = occupants.map((occupant) => ({ ...occupant, traits: occupant.traits ?? traits() }));
+    const placed = occupants.reduce((n, occupant) => n + occupant.count, 0);
+    if (!placed) { status.textContent = "No rooms to place people in on that floor."; return; }
+    const modeName = { load: "by occupant load", random: "at random", ai: "AI-proposed" }[mode];
+    commit({ label: `${placed} people in ${where}, ${PRESETS[preset][0].toLowerCase()}, ${modeName}${source}`, occupants, populate: true });
+  }
+  $<HTMLButtonElement>("#pop-run").addEventListener("click", () => void populate());
+  $<HTMLButtonElement>("#pop-clear").addEventListener("click", () => {
+    // Only draft groups can be taken back; people already sent to a live run stay in it.
+    for (const item of items.filter((entry) => entry.populate && !entry.sent)) remove(item);
+  });
   function renderList() {
     $<HTMLElement>("#edit-empty").hidden = items.length > 0;
     list.replaceChildren(...items.map((item) => {
