@@ -79,8 +79,11 @@ def check(iv: dict, scene: dict, sc: dict) -> list[str]:
         errs.append("args.exit: required")
     if kind == "unlock_exit" and a.get("exit") in ids["exit"]:
         ev = _blocked_exits(sc).get(a["exit"])
+        opened = any(e["type"] == "open_exit" and e["at"].get("exit") == a["exit"] for e in sc.get("events", []))
         if ev is None:
             errs.append(f"args.exit: {a['exit']} is not blocked")
+        elif opened:
+            errs.append(f"args.exit: {a['exit']} already has a key holder assigned (open_exit event)")
         elif (ev.get("params") or {}).get("cause", "locked") not in ("locked", "chained", "obstructed"):
             errs.append(f"args.exit: {a['exit']} is blocked by {ev['params'].get('cause')}, staff cannot clear it")
     if kind == "pa_announcement":
