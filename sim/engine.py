@@ -147,11 +147,12 @@ class Sim:
         t0 = round(self.tick * DT, 3)
         for a in new:
             a.spawn_t = t0
-        groups.form(self, new)
-        elevators.assign(self, new)
+        # Positions and levels first: everything below looks the new agents up by row.
         self.agents += new
         self.pos = np.vstack([self.pos, pos]) if len(pos) else self.pos
         self.lv = np.concatenate([self.lv, lv]) if len(lv) else self.lv
+        groups.form(self, new)
+        elevators.assign(self, new)
         for a in new:
             self.event("spawned", agent=a.id, ref=a.persona, text=f"{a.persona} added")
         return new

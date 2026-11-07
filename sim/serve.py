@@ -246,6 +246,18 @@ async def run_session(sess: Session) -> None:
             last_status, status_sim_t, ticks, t_rate = now, sess.sim.t, 0, now
 
 
+async def _guarded(sess: Session) -> None:
+    """Run the session loop; any crash is logged and reported to the client instead of dying silently."""
+    try:
+        await run_session(sess)
+    except Exception as exc:
+        log.exception("live session %s crashed", sess.id)
+        try:
+            await sess.ws.send_json({"type": "error", "for": "session", "errors": [f"{type(exc).__name__}: {exc}"]})
+        except Exception:  # the socket may be gone too
+            pass
+
+
 @app.get("/health")
 def health() -> dict:
     return {"ok": True}
@@ -265,7 +277,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 except Exception as exc:  # bad paths or scenario: report, keep the socket
                     await ws.send_json({"type": "error", "for": "start", "errors": [str(exc)]})
                     continue
-                loop_task = asyncio.create_task(run_session(sess))
+                loop_task = asyncio.create_task(_guarded(sess))
             elif sess is not None:
                 sess.queue.append(msg)
                 if msg.get("type") == "end":

@@ -380,3 +380,30 @@ def test_box_spawn_fly_personas_and_slider_traits() -> None:
         assert sorted(a.known_exits) == ["exit_01", "exit_02"]
     view = __import__("sim.perception", fromlist=["build_view"]).build_view(sim, sim.agents[0])
     assert view["agent"]["traits"]["risk_tolerance"] == 0.7 and view["agent"]["traits"]["ocean"]["N"] == -0.3
+
+
+def test_live_spawn_in_a_building_with_elevators() -> None:
+    sim = Sim(SCHOOL, _school_scen([{"where": {"room": "L2_class_n1"}, "count": 3, "personas": {"regular": 1.0}}]), 1)
+    assert sim.elevators  # the school has an elevator, so spawning runs the elevator-attempt draw
+    for _ in range(20):
+        sim.advance()
+    new = sim.add_occupants([{"where": {"room": "L2_class_s2"}, "count": 4, "personas": {"older_adult": 1.0}}])
+    assert len(new) == 4 and len(sim.pos) == len(sim.agents) == len(sim.lv)
+    assert all("tries_elevator" in a.traits for a in new)
+    sim.run()
+
+
+def test_live_session_crash_is_reported_not_silent(tmp_path, monkeypatch) -> None:
+    from starlette.testclient import TestClient
+    import sim.serve as serve
+    monkeypatch.setattr(serve, "RUNS_DIR", tmp_path)
+
+    async def boom(sess: object) -> None:
+        raise RuntimeError("tick failed")
+
+    monkeypatch.setattr(serve, "run_session", boom)
+    with TestClient(serve.app).websocket_connect("/ws") as ws:
+        ws.send_json({"type": "start", "scene": "fixtures/tiny_office.scene.json",
+                      "scenario": "sim/examples/tiny_office_fire.json", "seed": 1})
+        msg = ws.receive_json()
+        assert msg["type"] == "error" and "tick failed" in msg["errors"][0]
