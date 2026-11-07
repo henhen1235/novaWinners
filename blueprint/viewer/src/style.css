@@ -318,3 +318,13 @@ body.zoomed-out .exit-label .exit-text { display: none; }
   background: var(--color-ground); border: 1px solid var(--color-line-strong); border-radius: var(--radius-sm);
 }
 body.zoomed-out .elevator-tag { display: none; }
+
+/* People key: shapes that mean the same thing at every zoom and in every view. */
+.legend-cue { order: 1; }
+.legend { display: flex; flex-wrap: wrap; }
+.legend li { width: calc(50% - var(--space-3)); }
+.cue { width: 12px; height: 12px; flex: none; border-radius: 50%; box-sizing: border-box; }
+.cue-vest { border-radius: 2px; background: #FF5FD2; }
+.cue-fear { border: 2.5px solid var(--color-hazard-bright); }
+.cue-refuge { border: 2.5px dashed var(--color-warn); }
+.cue-heat { background: radial-gradient(circle, var(--color-warn) 0, color-mix(in srgb, var(--color-warn) 0%, transparent) 70%); }

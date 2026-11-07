@@ -430,6 +430,21 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       const seen = live ? new Set(Object.keys(STATE_LABEL)) : new Set(runs.flatMap((run) => run.states.flat()).filter(Boolean));
       for (const state of Object.keys(STATE_LABEL)) if (seen.has(state)) entries.push([STATE_LABEL[state], state === "exited" ? context.token("exit-bright") : stateColor(state)]);
     }
+    // Shape cues are the same in plans and 3D, so they get one fixed key under the colors.
+    const cues: [string, string][] = [
+      ["cue-vest", "Staff vest"],
+      ["cue-fear", "Fear ring"],
+      ["cue-refuge", "Dashed: at a refuge"],
+      ["cue-heat", "Crowding (zoomed out)"],
+    ];
+    for (const [className, label] of cues) {
+      const item = document.createElement("li");
+      const swatch = document.createElement("i");
+      swatch.className = `cue ${className}`;
+      item.className = "legend-cue";
+      item.append(swatch, label);
+      legend.append(item);
+    }
     for (const [name, value] of entries) {
       const item = document.createElement("li");
       const swatch = document.createElement("i");
