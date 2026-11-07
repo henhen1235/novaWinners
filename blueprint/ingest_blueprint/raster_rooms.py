@@ -308,6 +308,7 @@ def _seam_doors(labels: np.ndarray, thick: np.ndarray, max_px: float):
     clearance = cv2.distanceTransform((thick == 0).astype(np.uint8), cv2.DIST_L2, 5)
     high, low = _neighbour_labels(labels)
     seam = (labels == -1) & (thick == 0) & (high > 0) & (low < 1e7) & (high != low)
+    near_ink = cv2.dilate(thick, np.ones((5, 5), np.uint8)) > 0
     count, parts, stats, _ = cv2.connectedComponentsWithStats(seam.astype(np.uint8), connectivity=8)
     doors = []
     for index in range(1, count):
@@ -324,9 +325,31 @@ def _seam_doors(labels: np.ndarray, thick: np.ndarray, max_px: float):
         pair_high = high[ys + top, xs + left].astype(np.int64)
         keys, counts = np.unique(pair_low * 1_000_000 + pair_high, return_counts=True)
         key = int(keys[np.argmax(counts)])
-        p1, p2 = _extent(pts)
+        p1, p2 = _jambs(pts, near_ink[ys + top, xs + left])
         doors.append((float(np.hypot(p2[0] - p1[0], p2[1] - p1[1])), p1, p2, (key // 1_000_000, key % 1_000_000)))
     return doors
+
+
+def _jambs(points: np.ndarray, touches_ink: np.ndarray) -> tuple[tuple[float, float], tuple[float, float]]:
+    """Door endpoints: the centre of each jamb's contact with the seam.
+
+    The seam bends where the two floods meet, so its principal axis tilts, and
+    it touches each jamb across the whole wall thickness. Splitting the contact
+    pixels into the two ends and taking each end's centroid gives a line along
+    the wall. Falls back to the principal axis.
+    """
+
+    ends = points[touches_ink]
+    if len(ends) < 2:
+        return _extent(points)
+    center = points.mean(axis=0)
+    _u, _s, vt = np.linalg.svd(points - center, full_matrices=False)
+    along = (ends - center) @ vt[0]
+    first, second = ends[along < 0], ends[along >= 0]
+    if not len(first) or not len(second):
+        return _extent(points)
+    a, b = first.mean(axis=0), second.mean(axis=0)
+    return (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
 
 
 def _extent(points: np.ndarray) -> tuple[tuple[float, float], tuple[float, float]]:
