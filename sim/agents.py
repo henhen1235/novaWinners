@@ -44,6 +44,12 @@ class Agent:
     stair_asked: list = field(default_factory=list)  # (stair id, level) already asked about
     last_speech_trigger_t: float = -1e9
     spawn_t: float = 0.0
+    group: str | None = None
+    group_wait_s: float = 0.0
+    group_waiting: bool = False
+    going_to: str | None = None  # GO_TO_PERSON / SWEEP target id
+    warden: bool = False
+    swept: bool = False
     cue_t: float | None = None
     first_move_t: float | None = None
     exit_t: float | None = None
@@ -94,6 +100,7 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
     width = width or max(2, len(str(total)))
     agent_seqs = root.spawn(total + 1)[1:]
     agents: list[Agent] = []
+    declared = 0  # index into agent_seqs (children get their own seeds)
     pos: list[np.ndarray] = []
     lvs: list[int] = []
     entry_w = _entry_weights(world)
@@ -103,9 +110,11 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
         if room is not None and room not in world.room_polys:
             log.warning("occupants: unknown room %s, spawning anywhere walkable", room)
             room = None
+        first = len(agents)
         for _ in range(int(g.get("count", 0))):
             row = start_row + len(agents)
-            rng = np.random.default_rng(agent_seqs[row - start_row])
+            rng = np.random.default_rng(agent_seqs[declared])
+            declared += 1
             persona = resolve(_choice(rng, g.get("personas") or {"regular": 1.0}))
             model = _choice(rng, g.get("models") or {"rule-based": 1.0})
             lv = world.room_lv[room] if room else world.lv_index.get(where.get("level"), _exit_level(world))
@@ -124,10 +133,53 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
             traits.update({k: v for k, v in (g.get("traits") or {}).items() if k in traits})  # viewer sliders
             if omniscient:
                 traits.update(premove_s=0.0, notice_s=0.0)
-            agents.append(Agent(f"a_{row + 1:0{width}d}", row, persona.name, model, traits, rng, r, entry, known))
+            a = Agent(f"a_{row + 1:0{width}d}", row, persona.name, model, traits, rng, r, entry, known)
+            a.warden = bool(g.get("warden"))
+            agents.append(a)
             pos.append(p)
             lvs.append(lv)
+            if persona.name == "parent" and g.get("children", True) is not False:
+                _add_child(world, g, a, p, lv, agents, pos, lvs, seed, start_row, width, omniscient, place_rng)
+        _declared_groups(g, agents[first:])
     return agents, np.asarray(pos, dtype=float).reshape(-1, 2), np.asarray(lvs, dtype=int)
+
+
+GROUP_SIZE = {"family": 3, "coworkers": 4}
+
+
+def _declared_groups(g: dict, made: list[Agent]) -> None:
+    """occupants[].group: consecutive agents of this occupant group form groups of group_size."""
+    kind = g.get("group")
+    if kind not in GROUP_SIZE:
+        return
+    size = max(2, int(g.get("group_size", GROUP_SIZE[kind])))
+    adults = [a for a in made if a.group is None]
+    for i, a in enumerate(adults):
+        a.group = f"{kind}_{adults[i - i % size].id}"
+
+
+def _add_child(world: World, g: dict, parent: Agent, p: np.ndarray, lv: int, agents: list[Agent], pos: list,
+               lvs: list, seed: int, start_row: int, width: int, omniscient: bool, rng: np.random.Generator) -> None:
+    """Spawn the parent's child: next to the parent, or in occupants[].children.room (to be fetched)."""
+    row = start_row + len(agents)
+    crng = np.random.default_rng(np.random.SeedSequence([seed, 7919, row]))
+    room = (g.get("children") or {}).get("room") if isinstance(g.get("children"), dict) else None
+    if room in world.room_polys:
+        lv_c = world.room_lv[room]
+        q = world.room_point(room, rng)
+    else:
+        lv_c, room = lv, parent.spawn_room
+        q = world.nav.snap(p + rng.normal(0, 0.4, 2), lv)
+    child = resolve("child")
+    traits = sample_traits(child, crng)
+    if omniscient:
+        traits.update(premove_s=0.0, notice_s=0.0)
+    kid = Agent(f"a_{row + 1:0{width}d}", row, "child", parent.model, traits, crng, room, parent.entry_exit,
+                list(parent.known_exits))
+    parent.group = kid.group = parent.group or f"family_{parent.id}"
+    agents.append(kid)
+    pos.append(q)
+    lvs.append(lv_c)
 
 
 def _spawn_point(world: World, room: str | None, lv: int, where: dict, rng: np.random.Generator,

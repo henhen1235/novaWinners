@@ -39,6 +39,8 @@ PERSONAS: dict[str, Persona] = {p.name: p for p in [
     Persona("older_adult", 0.80, 0.15, 120, 0.9, 10, False, 0.5, 0.3, 4, "#8d6e63", 0.3, 0.25),
     Persona("mobility_impaired", 0.60, 0.1, 120, 0.9, 10, False, 0.5, 0.3, 4, "#c62828", 0.3, 0.2, False),
     Persona("skeptic", 1.34, 0.26, 300, 1.0, 10, False, 1.0, 0.2, 99, "#455a64"),
+    # A child stays with its parent; its own pre-movement only matters if it is alone.
+    Persona("child", 1.0, 0.15, 90, 0.8, 8, False, 0.0, 0.0, 99, "#ec407a", 0.4, 0.3),
 ]}
 
 ALIASES = {

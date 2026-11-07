@@ -13,7 +13,7 @@ from typing import Callable
 
 import numpy as np
 
-from sim import perception, stairs
+from sim import groups, perception, stairs
 from sim.agents import Agent, spawn
 from sim.movement import resolve_moves
 from sim.navmesh import INF, Waypoint
@@ -34,8 +34,9 @@ STUCK_TICKS = 6
 STAIR_ENTRY_M = 0.6
 PRIORITY = {"hazard_seen": 5, "path_blocked": 5, "rumor_heard": 4, "heard": 4, "cue_noticed": 3,
             "premove_done": 3, "level_reached": 4, "picked_up": 5, "stair_smoke": 5, "stair_crowded": 4,
-            "route_changed": 4, "help_request": 4, "door_reached": 2, "periodic": 1}
-MOVING_ACTIONS = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP")
+            "route_changed": 4, "help_request": 4, "group_moving": 4, "reached_person": 5,
+            "sweep_next": 4, "door_reached": 2, "periodic": 1}
+MOVING_ACTIONS = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP")
 
 Decider = Callable[[dict], dict]
 
@@ -56,6 +57,8 @@ class Sim:
         self.run_id = run_id
         self.duration = float(scenario.get("duration_s", 300))
         self.agents, self.pos, self.lv = spawn(self.world, scenario.get("occupants", []), seed, omniscient)
+        self.groups: dict[str, list[Agent]] = {}
+        groups.form(self, self.agents)
         self.events = sorted((self.world.resolve_event(e) for e in scenario.get("events", [])),
                              key=lambda e: (e.t_start, e.id))
         self.alarm_t = self._alarm_time()
@@ -141,6 +144,7 @@ class Sim:
         t0 = round(self.tick * DT, 3)
         for a in new:
             a.spawn_t = t0
+        groups.form(self, new)
         self.agents += new
         self.pos = np.vstack([self.pos, pos]) if len(pos) else self.pos
         self.lv = np.concatenate([self.lv, lv]) if len(lv) else self.lv
@@ -411,6 +415,9 @@ class Sim:
         elif act == "HELP" and opt.get("target"):
             a.action = act
             self._go_help(a, opt["target"])
+        elif act in ("GO_TO_PERSON", "SWEEP") and opt.get("target"):
+            a.action = act
+            self._go_person(a, opt["target"])
         else:
             a.action = act if act in PERIODIC_S else "CONTINUE_TASK"
             if act == "SEEK_INFO" and a.rng.random() < 0.5:
@@ -448,6 +455,7 @@ class Sim:
         a.state, a.waypoints = "moving", path
         if a.first_move_t is None:
             a.first_move_t = self.t
+            groups.on_departure(self, a)
         return True
 
     def go(self, a: Agent, exit_id: str) -> None:
@@ -487,8 +495,21 @@ class Sim:
         if not self._start(a, path, target_id):
             p.helper, a.helping = None, None
 
+    def _go_person(self, a: Agent, target_id: str) -> None:
+        """Walk to another person (stairs allowed); arrival is handled in groups.update."""
+        p = next((b for b in self.agents if b.id == target_id), None)
+        if p is None or p.state == "exited":
+            self._start(a, None, target_id)
+            return
+        corr = self.world.nav.astar(self.tri_of(a), self.tri_of(p))
+        path = None if corr is None else self.world.nav.waypoints(self.pos[a.row].copy(), self.pos[p.row].copy(), corr)
+        a.target_exit = a.target_stair = None
+        a.going_to = p.id if self._start(a, path, target_id) else None
+
     def replan(self, a: Agent) -> None:
-        if a.target_exit:
+        if a.going_to:
+            self._go_person(a, a.going_to)
+        elif a.target_exit:
             self.go(a, a.target_exit)
         elif a.target_stair and a.action in ("TAKE_STAIRS", "GO_TO_REFUGE"):
             self._go_stair(a, a.target_stair, a.action == "GO_TO_REFUGE")
@@ -513,6 +534,7 @@ class Sim:
         if act:
             self._walk(act)
         stairs.update_helpers(self)
+        groups.update(self)
         self._exits([a for a in self.active() if a.state != "carried"])
 
     def _walk(self, act: list[Agent]) -> None:
@@ -522,7 +544,10 @@ class Sim:
         step = np.zeros_like(pos)
         walking = [a.state in ("moving", "queued", "helping") for a in act]
         for i, a in enumerate(act):
-            if walking[i]:
+            a.group_waiting = walking[i] and groups.waits_for_group(self, a)
+            if a.group_waiting:
+                a.group_wait_s += DT
+            elif walking[i]:
                 step[i] = self._seek(a, pos[i])
         hurry = np.array([a.pace == "hurry" for a in act])
         new, denied, passed = resolve_moves(self.world, pos, lv, step, np.ones(len(act)), hurry)
@@ -533,7 +558,7 @@ class Sim:
         moved = np.linalg.norm(new - pos, axis=1)
         self.pos[rows] = new
         for i, a in enumerate(act):
-            if walking[i] and a.stair is None:
+            if walking[i] and a.stair is None and not a.group_waiting:
                 self._after_step(a, moved[i], float(np.linalg.norm(step[i])), bool(denied[i]))
 
     def _skip_visible_waypoints(self, act: list[Agent], pos: np.ndarray, lv: np.ndarray) -> None:
@@ -617,6 +642,7 @@ class Sim:
         for a in self.agents:
             x, z = self.pos[a.row]
             state = "deciding" if a.in_flight and a.state == "waiting" else a.state
+            state = "waiting" if a.group_waiting and state != "exited" else state
             rows.append([a.id, round(float(x), 2), round(float(z), 2), state, self.world.nav.level_ids[self.lv[a.row]]])
         self.frames.append({"t": self.t, "a": rows})
 

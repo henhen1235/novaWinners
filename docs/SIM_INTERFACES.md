@@ -127,6 +127,17 @@ alarm_only, fire, smoke or pa_announcement event, the alarm cue starts at t = 0.
 Event kinds added by the sim: alarm, opened, waiting_at_refuge, help_assigned, helping,
 help_released. metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
 
+Groups (sim/groups.py): `occupants[].group: "family" | "coworkers"` (optional `group_size`, default
+3 / 4) groups consecutive occupants; every `parent` gets a `child` (persona child) next to them, or
+in `occupants[].children: {"room": id}` so the parent fetches it first (`children: false` opts out).
+Members keep track of each other (percept group_member: ref, persona, doing, state, toward, level,
+dist_m, coming_for_me); when one leaves the others get a `group_moving` decision point; a mover
+waits while a member is more than 4 m behind (up to 30 s per person, frame state waiting). Options
+GO_TO_PERSON {target, persona, level, route_m} (parent away from its child) and SWEEP {target, ...}
+(staff with `occupants[].warden: true` or under an assisted-evacuation plan, while people on their
+floor have not started to leave; on arrival the warden gives an official urgent instruction).
+Triggers reached_person, group_moving, sweep_next; events reached_person, said (sweep).
+
 ## Live mode (sim/live.py, sim/serve.py; design in docs/LIVE_MODE.md)
 
 Branch: `sim.live.branch(scene, scenario, seed, records, t, events, occupants, decider, history=...)`

@@ -16,7 +16,7 @@ import hashlib
 
 FAMILIAR_BONUS_S = 15.0
 SKEPTIC_PEOPLE_LEAVING = 2
-MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP")  # how much longer a route to the entry exit may be and still win
+MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP")  # how much longer a route to the entry exit may be and still win
 
 
 def _blocked_beliefs(view: dict) -> set[str]:
@@ -57,6 +57,14 @@ def _go_reason(view: dict) -> tuple[str | None, list[str]]:
         return "hazard", hazard
     if a.get("carrying") or tr.get("activity") in MOVING:
         return "already_leaving", alarm
+    coming = [p["id"] for p in per if p["kind"] == "group_member" and p.get("coming_for_me")]
+    if coming:
+        return None, coming  # stay put: someone from my group is on the way to get me
+    group_leaving = [p["id"] for p in per if p["kind"] == "group_member" and p.get("doing") in MOVING]
+    if group_leaving:
+        return "group", group_leaving  # affiliation: people leave with the people they came with
+    if a["persona"] == "child":
+        return None, alarm  # a child waits for its parent (fire or smoke seen still sends it)
     if official:
         return "official", official
     needs = [p["id"] for p in per if p["kind"] == "needs_help"]
@@ -157,13 +165,20 @@ def decide(view: dict) -> dict:
         choice = opts.get(act) or view["options"][0]
         return _result(view, choice, "Not sure it is real yet; waiting for more cues.", evidence, False, None, "calm")
     pace = _pace(view, reason)
+    fetch = opts.get("GO_TO_PERSON")
+    if fetch:
+        return _result(view, fetch, f"I will not leave without {fetch['target']}.", evidence, True, None, pace)
     help_opt = min(_help_choices(view), key=lambda o: o.get("route_m", 0), default=None)
+    if help_opt is None and opts.get("SWEEP") and reason != "hazard":
+        sweep = opts["SWEEP"]
+        return _result(view, sweep, f"Clearing my floor: {sweep['target']} has not moved yet.", evidence, True,
+                       None, "brisk")
     if help_opt:
         return _result(view, help_opt, f"{help_opt['target']} cannot use the stairs; I go and help.", evidence, True,
                        "I'm coming to help you.", pace)
     blocked = _blocked_beliefs(view)
     follow = opts.get("FOLLOW")
-    if reason == "social" and follow and follow.get("exit") not in blocked:
+    if reason in ("social", "group") and follow and follow.get("exit") not in blocked:
         return _result(view, follow, "Others around me are leaving, so I follow them.", evidence, True, None, pace)
     if follow and follow.get("exit") in blocked:
         follow = None

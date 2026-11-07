@@ -288,11 +288,12 @@ def test_live_server_streams_edits_and_writes_the_branch(tmp_path, monkeypatch) 
         ws.send_json({"type": "start", "scene": "fixtures/tiny_office.scene.json",
                       "scenario": "sim/examples/tiny_office_fire.json", "seed": 1, "speed": 200})
         meta = ws.receive_json()
-        assert meta["type"] == "meta" and len(meta["agents"]) == 30
+        n0 = len(meta["agents"])
+        assert meta["type"] == "meta" and n0 >= 30
         ws.send_json({"type": "edit", "occupants": [{"where": {"room": "L1_office_s2"}, "count": 2,
                                                        "personas": {"staff": 1.0}}]})
         n, got_ok = 0, False
-        while n <= 30 or not got_ok:
+        while n < n0 + 2 or not got_ok:
             m = ws.receive()
             if m.get("bytes"):
                 t, n = struct.unpack("<fI", m["bytes"][:8])
@@ -305,4 +306,34 @@ def test_live_server_streams_edits_and_writes_the_branch(tmp_path, monkeypatch) 
             if m.get("text") and json.loads(m["text"])["type"] == "ended":
                 break
     out = next(tmp_path.glob("*/branch_0"))
-    assert (out / "replay.json").exists() and len(json.loads((out / "replay.json").read_text())["agents"]) == 32
+    assert (out / "replay.json").exists() and len(json.loads((out / "replay.json").read_text())["agents"]) == n0 + 2
+
+
+def test_family_moves_together_and_parent_fetches_child() -> None:
+    occ = [{"where": {"room": "L1_office_n1"}, "count": 3, "personas": {"regular": 1.0}, "group": "family"},
+           {"where": {"room": "L1_office_n3"}, "count": 1, "personas": {"parent": 1.0},
+            "children": {"room": "L1_office_s1"}}]
+    scen = _scenario([{"id": "a", "type": "alarm_only", "t_start_s": 0, "at": {"room": "L1_corridor"}}], occ, 600)
+    sim = Sim(SCENE, scen, 3)
+    fam = [a for a in sim.agents if a.group and a.group.startswith("family_") and a.persona == "regular"]
+    parent = next(a for a in sim.agents if a.persona == "parent")
+    child = next(a for a in sim.agents if a.persona == "child")
+    assert len(fam) == 3 and parent.group == child.group
+    sim.run()
+    t_fam = [a.exit_t for a in fam]
+    assert None not in t_fam and max(t_fam) - min(t_fam) <= 15.0  # they leave together
+    assert any(e["kind"] == "reached_person" and e["agent"] == parent.id for e in sim.replay_events)
+    assert parent.exit_t is not None and child.exit_t is not None and abs(parent.exit_t - child.exit_t) <= 10.0
+
+
+def test_warden_sweep_gets_sitters_moving() -> None:
+    occ = [{"where": {"room": "L1_office_s1"}, "count": 4, "personas": {"skeptic": 1.0}},
+           {"where": {"room": "L1_office_n1"}, "count": 1, "personas": {"staff": 1.0}, "warden": True}]
+    ev = [{"id": "a", "type": "alarm_only", "t_start_s": 0, "at": {"room": "L1_corridor"}}]
+    sim = Sim(SCENE, _scenario(ev, occ, 240), 5)
+    for a in sim.agents:
+        if a.persona == "skeptic":
+            a.traits["premove_s"] = 1e4  # they would sit through the whole run on the alarm alone
+    sim.run()
+    swept = [a for a in sim.agents if a.persona == "skeptic" and a.swept]
+    assert swept and all(a.exit_t is not None for a in swept)

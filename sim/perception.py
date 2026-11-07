@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from sim import groups
 from sim.pace import PACES, pace_speed
 
 if TYPE_CHECKING:
@@ -143,7 +144,7 @@ def _percepts(sim: "Sim", a: "Agent", seen: list["Agent"]) -> list[dict]:
         if sim.t - m["t"] <= MESSAGE_MEMORY_S:
             out.append({"kind": "message", "from": m["from"], "text": m["text"], "urgent": m["urgent"],
                         "official": m.get("official", False), "channel": "hearing", "ref": m["id"]})
-    out += _exit_signs(sim, a) + _stair_percepts(sim, a)
+    out += _exit_signs(sim, a) + _stair_percepts(sim, a) + groups.percepts(sim, a)
     if a.persona == "staff":
         out += [{"kind": "needs_help", "ref": b.id, "level": sim.world.nav.level_ids[sim.lv[b.row]],
                  "state": b.state, "channel": "radio" if sim.assisted else "sight"} for b in help_targets(sim, a)]
@@ -304,8 +305,9 @@ def _help_options(sim: "Sim", a: "Agent", tri: int) -> list[dict]:
 def _options(sim: "Sim", a: "Agent", tri: int, seen: list["Agent"]) -> list[dict]:
     out = _exit_options(sim, a, tri)
     if not sim.omniscient:
-        out += _stair_options(sim, a) + _help_options(sim, a, tri)
-        movers = [b for b in seen if b.state in ("moving", "queued") and b.target_exit]
+        out += _stair_options(sim, a) + _help_options(sim, a, tri) + groups.options(sim, a)
+        mates = [b for b in groups.members(sim, a) if b.state in ("moving", "queued", "helping") and b.target_exit]
+        movers = mates or [b for b in seen if b.state in ("moving", "queued") and b.target_exit]
         lead = min(movers, default=None, key=lambda b: float(np.linalg.norm(sim.pos[b.row] - sim.pos[a.row])))
         ok = a.traits["uses_stairs"]
         if lead is not None and np.isfinite(sim.world.route_m(lead.target_exit, tri, ok)):
