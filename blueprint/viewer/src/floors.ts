@@ -427,13 +427,14 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
       const transparent = ghost || solidOpacity < 1;
       if (material.transparent !== transparent) material.needsUpdate = true;
       material.transparent = transparent;
-      material.opacity = ghost ? (above ? 0.06 : 0.14) : solidOpacity;
+      material.opacity = ghost ? (above ? 0.03 : 0.14) : solidOpacity;
       material.depthWrite = !ghost;
     }
-    edge.opacity = ghost ? (above ? 0.25 : 0.45) : 1;
+    // Floors above the focus are a faint silhouette so they never veil the floor being read.
+    edge.opacity = ghost ? (above ? 0.1 : 0.4) : 1;
     for (const material of model.filter((m) => m instanceof THREE.LineBasicMaterial)) material.opacity = edge.opacity;
-    tint.opacity = ghost ? 0.04 : 0.16;
-    outline.opacity = ghost ? 0.22 : 0.8;
+    tint.opacity = ghost ? (above ? 0.015 : 0.04) : 0.16;
+    outline.opacity = ghost ? (above ? 0.08 : 0.22) : 0.8;
     level.layers.navmesh.visible = layerOn.navmesh && !ghost;
     level.layers.exitTags.visible = !ghost;
     level.layers.badges.visible = viewMode === "side" || viewMode === "single" || !ghost;
@@ -468,7 +469,7 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
         const row = Math.floor(i / best.cols);
         level.root.position.set(col * (width + gap), -level.elevation, row * (depth + gap));
         level.root.visible = true;
-        level.caption.position.set(footprint.min.x, level.elevation + 0.1, footprint.max.z + gap * 0.18);
+        level.caption.position.set(footprint.min.x, level.elevation + 0.1, footprint.max.z + gap * 0.3);
         level.caption.visible = true;
       });
       const rows = Math.ceil(levels.length / best.cols);
@@ -478,7 +479,9 @@ export function buildFloors(doc: SceneDoc, scene: THREE.Scene): Floors {
       );
     } else {
       for (const level of levels) {
-        const lift = mode === "exploded" ? level.elevation * (spacing - 1) : 0;
+        // On a 150 m footprint a 4 m storey gap is invisible, so the pull-apart grows with the footprint.
+        const storey = Math.max(level.elevation / Math.max(level.index, 1), 0.08 * Math.max(width, depth));
+        const lift = mode === "exploded" ? level.index * storey * (spacing - 1) : 0;
         level.root.position.set(0, lift, 0);
         level.root.visible = mode !== "single" || level === focusLevel;
         level.caption.visible = false;

@@ -121,8 +121,10 @@ function setOrbit() {
   camera.up.set(0, 1, 0);
   const target = bounds.getCenter(new THREE.Vector3());
   controls.target.copy(target);
-  // Three-quarter view from the south-west, about 50 degrees above the floor so rooms stay visible.
-  const offset = new THREE.Vector3(-0.45, 0.95, 0.75).normalize().multiplyScalar(fitDistance());
+  // Three-quarter view from the south-west: about 50 degrees above one floor so rooms stay visible,
+  // lower for a stack of floors so the storeys read as layers.
+  const stack = view === "stacked" || view === "exploded";
+  const offset = new THREE.Vector3(-0.45, stack ? 0.6 : 0.95, 0.75).normalize().multiplyScalar(fitDistance() * (stack ? 0.8 : 1));
   camera.position.copy(target).add(offset);
   controls.update();
   markView("orbit");
@@ -281,12 +283,13 @@ function rebuildGrid() {
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
   const span = Math.ceil(Math.max(size.x, size.z) / 5) * 5 + 10;
-  const minor = new THREE.GridHelper(span, span, token("line"), token("line"));
   const major = new THREE.GridHelper(span, span / 5, token("line-strong"), token("line-strong"));
-  for (const helper of [minor, major]) {
+  // A 1 m grid under a 150 m building is noise; large sites keep only the 5 m grid.
+  const helpers = span > 80 ? [major] : [new THREE.GridHelper(span, span, token("line"), token("line")), major];
+  for (const helper of helpers) {
     helper.position.set(Math.round(center.x), bounds.min.y - 0.12, Math.round(center.z));
     (helper.material as THREE.Material).transparent = true;
-    (helper.material as THREE.Material).opacity = helper === major ? 0.35 : 0.5;
+    (helper.material as THREE.Material).opacity = helper === major ? (span > 80 ? 0.22 : 0.35) : 0.5;
     helper.raycast = () => {};
     grid.add(helper);
   }

@@ -211,9 +211,10 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
     }
   };
   onTop(context.view());
+  let started = false; // the split below re-lays out the stage before the clock exists
   context.onLayout((view) => {
     onTop(view);
-    refresh(true);
+    if (started) refresh(true);
   });
   if (runs[1]) {
     context.split(runs[0].root, runs[1].root, runs[1].labels);
@@ -255,8 +256,8 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
     const { i, j, frac } = frameIndex(run, t);
     const view = context.view();
     const focus = context.level();
-    // Zoomed out over a 150 m building a 0.4 m person is under a pixel; keep each one at least ~7 px wide.
-    scale.setScalar(Math.min(10, Math.max(1, 7 / (0.4 * context.pxPerMeter()))));
+    // Zoomed out over a 150 m building a 0.4 m person is under a pixel; keep each one at least ~9 px wide.
+    scale.setScalar(Math.min(10, Math.max(1, 9 / (0.4 * context.pxPerMeter()))));
     if (run === runs[0]) for (const id of levelIds) perFloor.set(id, 0);
     run.doc.agents.forEach((agent, k) => {
       const x0 = run.xs[i][k];
@@ -264,6 +265,7 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
       const state = run.states[i][k];
       const level0 = levelIds[run.levels[i][k]];
       const level1 = levelIds[run.levels[j][k]];
+      if (!Number.isNaN(x0) && state !== "exited" && run === runs[0]) perFloor.set(level0, (perFloor.get(level0) ?? 0) + 1);
       if (Number.isNaN(x0) || (view === "single" && level0 !== focus)) {
         run.live.setMatrixAt(k, hidden);
         run.ghosts.setMatrixAt(k, hidden);
@@ -278,7 +280,6 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
       p0.lerp(p1, frac);
       matrix.compose(p0, noTurn, scale);
       const exited = state === "exited";
-      if (!exited && run === runs[0]) perFloor.set(level0, (perFloor.get(level0) ?? 0) + 1);
       run.live.setMatrixAt(k, exited ? hidden : matrix);
       run.ghosts.setMatrixAt(k, exited ? matrix : hidden);
       color.copy(clock.colorBy === "state" ? stateColor(state) : personaColors.get(agent.persona) ?? stateColor(""));
@@ -489,6 +490,7 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
   });
 
   drawLegend();
+  started = true;
   refresh(true);
   if (new URLSearchParams(location.search).has("autoplay")) setPlaying(true);
 }
