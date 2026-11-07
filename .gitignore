@@ -9,3 +9,4 @@ out/
 ios/**/xcuserdata/
 ios/**/DerivedData/
 .tycho/
+.playwright-mcp/

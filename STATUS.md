@@ -26,12 +26,19 @@ Updated: 2026-11-07 ~12:30
 | obstacle recall (> 0.5 m) | 0.997 | >= 0.80 |
 | runtime | <= 2.3 s (55k-150k tris) | <= 90 s at 500k |
 
+## Verified end to end
+- WS-A viewer (`blueprint/viewer`) opens our LiDAR output unchanged: copy
+  `out/<run>/display.glb` and `scene.json` to `blueprint/viewer/public/lidar/`,
+  `npx vite`, open `/?glb=/lidar/display.glb&scene=/lidar/scene.json`; clicking a
+  room draws the path to an exit (26.3 m, 20.3 s on tiny_office).
+- Runtime: 1.67M-triangle mesh in 4.8 s, 1.5 GB peak memory (target <= 90 s at 500k).
+
 ## Not done / known issues
 - No real Path B scan yet (needs a human with an iPhone; see SCAN_GUIDE.md, ios/README.md).
 - RoomPlan samples from homes produce many "exits" where doors lead to unscanned
   rooms; use exit_tags.json.
 - Multi-level scans and Path B stairs: not implemented (stretch).
-- 500k-triangle runtime not measured yet.
+
 - Synthetic scans are Manhattan; diagonal walls are not emitted as clean walls.
 
 ## How to run
