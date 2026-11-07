@@ -3,7 +3,7 @@
 "You can't drill a 3 a.m. fire. You can rehearse one."
 
 One slide-sized chunk per topic. Every citation below is copied from the repo's notes
-(research/, docs/, DECISIONS.md, IDEAS.md, code docstrings). Numbers marked "single run"
+(research/, docs/, code docstrings). Numbers marked "single run"
 are one seed; do not present them as averages. Where a value is ours and not from a
 source, it says "(our assumption)".
 

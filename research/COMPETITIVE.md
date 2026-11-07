@@ -74,7 +74,7 @@ Each holds only if it is on screen at demo time. Order is strength of evidence.
 
 1. Scan or blueprint to a validated, sim-ready scene in seconds, no CAD step.
    Evidence: our benchmark on 30 synthetic scans (door recall 0.979, precision
-   0.961, walkable IoU 0.956, wall error 12 mm median, <= 2.3 s; STATUS.md);
+   0.961, walkable IoU 0.956, wall error 12 mm median, <= 2.3 s);
    1.67M-triangle mesh in 4.8 s. Pathfinder's non-IFC path needs manual
    door/floor typing and missing exits added by hand [V]. scan2net stops at a
    route network with user-linked exits [V]; Evacuation Plan App and Polycam

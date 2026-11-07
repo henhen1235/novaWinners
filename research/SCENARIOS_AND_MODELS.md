@@ -48,7 +48,7 @@ Events stack: "earthquake then gas leak" or "fire alarm pulled during an
 intruder event" are common real combinations [U for frequency], so the
 scenario file is a list of timed events, not one type.
 
-Contract gaps found (for a future docs/team/CONTRACT_CHANGE_REQUEST.md, not urgent):
+Contract gaps found (for a future contract change, not urgent):
 Door has no `lockable` flag (needed for HIDE), Room.type has no kitchen,
 meeting, or retail values (fine, the chatbot matches `name`), and Meta has no
 compass bearing, so "east exit" needs a convention (Section 2.3).

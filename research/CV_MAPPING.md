@@ -207,8 +207,7 @@ Steps 1 and 2 run in parallel (iOS and Python owners). Each is <= 45 min.
    needs `vertexColors: true` for the `scan` node and a small marker per `points_of_interest`
    entry. Tell the WS-A owner; it is their file.
 5. Both, 30 min: run the real hall end to end, compare with the RoomPlan failure (walls, rooms,
-   doors, POIs found vs what is in the hall), fix the worst issue, tag exits, write the numbers into
-   STATUS.md.
+   doors, POIs found vs what is in the hall), fix the worst issue, tag exits, record the numbers.
 
 ## 5. What not to attempt today
 

@@ -83,12 +83,12 @@ The yaw column is the scene's yaw relative to the truth (any multiple of 90 deg 
 scorer undoes it). centimeters_scaled IoU 0.000 before was half a pipeline bug (D22: the
 recorded input_to_scene left out --scale) and half a wrong score; the scene itself was usable.
 
-30-scan benchmark after the fixes (all targets pass; before in parentheses, from STATUS.md):
+30-scan benchmark after the fixes (all targets pass; before in parentheses):
 IoU 0.958 (0.956) and 0.914 (0.914), door recall/precision 0.996/0.982 (0.979/0.961), rooms
 within +-1 100% (96.7%), wall error 0.006 m, obstacle recall 0.997, validator-clean 100%,
 max runtime 3.9 s. `pytest -q tests`: 75 passed.
 
-## Root causes and fixes (DECISIONS.md D20-D24)
+## Root causes and fixes
 
 1. Fixed height bands (D20). The wall test needs points in the 2.0-2.4 m band and a max
    height above 2.15 m. Under a 2.3 m ceiling the ceiling slab itself satisfies both in every
@@ -121,7 +121,7 @@ found, including doors on the 45 deg walls (via the exit-opening detector and th
 split). I did not check which door was missed. Obstacles at scan edges were not
 seen to fail. Closets of 1.5 m, 1.8 m double doors and a 2.4 m corridor all score perfectly.
 
-## IFC plans: root causes and fixes (DECISIONS.md D25-D28)
+## IFC plans: root causes and fixes
 
 The truth was checked first: every truth door has no wall across it and floor under it, and
 both truth scenes pass the validator, so the failures were in ingest_lidar.

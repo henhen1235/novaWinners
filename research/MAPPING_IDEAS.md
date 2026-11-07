@@ -35,13 +35,13 @@ exam-prep site, state adoption), read the adopted code text before a slide;
 | # | Idea | Demo | User | Effort h | Score | Uniq | Risk | Feeds sim? |
 |---|------|------|------|----------|-------|------|------|------------|
 | 1 | Lose-one-exit / single-point-of-failure doors and rooms | 4 | 4.5 | 1 | 4.3 | 4 | low | yes: adversary target list |
-| 2 | Occupant load per room (IBC Table 1004.5 factors) | 2 | 4 | 0.75 | 4.0 | 1 | low | yes: agent counts (already in IDEAS.md) |
+| 2 | Occupant load per room (IBC Table 1004.5 factors) | 2 | 4 | 0.75 | 4.0 | 1 | low | yes: agent counts |
 | 3 | As-is pinch-point map (clear width, flow capacity per route) | 4 | 5 | 1.5 | 3.0 | 4 | low | yes: door/corridor flow limits |
 | 4 | Smoke clock per room (Tanaka-Yamana, ceiling height from scan) | 4 | 4 | 2 | 2.0 | 4 | medium | yes: time-varying hazard, tenability |
 | 5 | Visibility: "can you see an exit / sign from here" map + decision points | 4 | 4 | 2 | 2.0 | 3 | low | yes: agent perception |
 | 6 | AR dollhouse on the judges' table (USDZ, AR Quick Look) | 5 | 3 | 2 | 2.0 | 2 | medium | consumes sim output later |
 | 7 | Advisory code red-pen (travel distance, separation, capacity, dead ends, door width/swing) | 4 | 5 | 2.5 | 1.8 | 3 | medium | yes: capacity, loads |
-| 8 | Phone-to-browser pairing by QR (from IDEAS.md) | 3 | 2 | 1.5 | 1.7 | 1 | low | no |
+| 8 | Phone-to-browser pairing by QR | 3 | 2 | 1.5 | 1.7 | 1 | low | no |
 | 9 | Tap-to-tag safety equipment in the app (raycast -> POI) | 3 | 4 | 2 | 1.8 | 2 | medium | yes: signs and equipment in perception |
 | 10 | Printable evacuation plan poster (ISO 23601 style) from the scan | 4 | 4 | 2.5 | 1.6 | 3 | low | no |
 | 11 | Accessible-route audit (ADA widths, turning space, steps) | 3 | 4 | 2.5 | 1.4 | 3 | medium | yes: wheelchair persona routing |

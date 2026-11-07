@@ -110,7 +110,7 @@ Observations that change the design:
 6. Deduplicate within a tick. Impact: proportional to duplicate rate. Hash
    (model, messages, params); identical requests in the same tick share one
    call. Bucket the observation (room id, smoke yes/no, crowd density bin) so
-   duplicates are more likely. The PLAN.md disk cache by SHA-256 already
+   duplicates are more likely. The disk cache by SHA-256 already
    covers repeats across runs.
 7. Use cheap per-agent calls for routine decisions, a stronger model for rare
    ones. Impact: quality where it is visible, small cost. Routine (alarm,

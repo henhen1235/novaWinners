@@ -137,4 +137,5 @@ output coordinates.
 - [docs/LIVE_MODE.md](docs/LIVE_MODE.md): interactive what-if design
 - [docs/pitch/](docs/pitch/): pitch deck and submission writeup
 - [research/](research/): evacuation psychology, scenarios and models, competitive analysis, LLM latency
-- `PLAN.md`, `DECISIONS.md`, `STATUS.md`, `DATA.md`, `SCAN_GUIDE.md`, `blueprint/AUDIT.md`
+- [docs/SCAN_GUIDE.md](docs/SCAN_GUIDE.md): scanning a room with the iPhone app
+- [docs/DATA.md](docs/DATA.md): data sources, licenses and provenance

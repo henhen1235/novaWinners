@@ -122,4 +122,4 @@ hesitate, who gets left behind, and which fix helps, in minutes."
 With the servers up, each URL above should load with no console errors. On
 the Windows test laptop (Python 3.14, no 3.11) `pip install -r requirements.txt`
 fails on the pinned `certifi==2026.10.5` and on `scikit-image==0.25.2` (no
-wheel), so only the scene-only views were checked there; see `STATUS.md`.
+wheel), so only the scene-only views were checked there.
