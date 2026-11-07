@@ -233,8 +233,23 @@ export function startEdit(context: ViewerContext) {
     <ol id="edit-list" class="edit-list"></ol>
     <button id="edit-download" type="button" class="edit-download">Download scenario.json</button>
     </details>`;
-  // Findings come first; changing the scenario is the last thing in the rail and starts folded.
+  // Findings come first; changing the scenario is the last thing in the rail. It starts open when there
+  // is nothing to watch (no replay) or in a live run, and the header's "Add an event" opens it from anywhere.
   document.querySelector("aside")?.append(section);
+  const fold = section.querySelector<HTMLDetailsElement>(".edit-collapse")!;
+  const query = new URLSearchParams(location.search);
+  fold.open = !query.get("replay") || query.has("live");
+  const opener = document.createElement("button");
+  opener.id = "add-event";
+  opener.type = "button";
+  opener.className = "add-event";
+  opener.textContent = "Add an event";
+  opener.addEventListener("click", () => {
+    fold.open = true;
+    section.scrollIntoView({ block: "start", behavior: "smooth" });
+    section.querySelector<HTMLButtonElement>("[data-tool]")?.focus();
+  });
+  document.querySelector("header .floor-views, header .camera-views")?.before(opener);
 
   const $ = <T extends Element>(selector: string) => section.querySelector<T>(selector)!;
   const hint = $<HTMLParagraphElement>("#edit-hint");

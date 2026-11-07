@@ -12,7 +12,7 @@ import { startReplay } from "./replay";
 import { startAnalysis } from "./analysis";
 import { startEdit } from "./edit";
 import { startLive } from "./live";
-import { buildingName, scenarioName, setResidential } from "./names";
+import { buildingName, scenarioName } from "./names";
 
 const params = new URLSearchParams(location.search);
 // An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
@@ -186,12 +186,9 @@ function text(tag: string, content: string) {
 // Title block, as on a drawing sheet, in the words of the person who owns the building's plan.
 // Click the name to fold it so it never covers a floor.
 function drawTitleBlock(data: SceneDoc) {
-  setResidential(/house|dorm|residence|hall_res/i.test(data.meta?.name ?? ""));
   const errors = data.warnings.filter((warning) => warning.severity === "error").length;
   const source = data.meta?.source ?? "";
-  const origin = /CMU/.test((data.meta as { source_file?: string } | undefined)?.source_file ?? "")
-    ? "Built from CMU floor plans"
-    : source === "lidar" ? "Built from a LiDAR scan" : source === "blueprint" ? "Built from floor plans" : "Test building";
+  const origin = { blueprint: "Built from floor plans", lidar: "Built from a LiDAR scan", roomplan: "Built from a RoomPlan scan" }[source] ?? (source ? `Built from ${source.replace(/_/g, " ")}` : "Source not recorded");
   const floorsText = data.levels.length > 1 ? `${data.levels.length} floors, ` : "";
   const rows: [string, string?][] = [
     [origin],

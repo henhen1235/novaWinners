@@ -10,8 +10,16 @@ const runs = readdirSync(root, { withFileTypes: true })
   .map((entry) => {
     // Only the head of the file is needed for meta.scene; replays can be tens of MB.
     const head = readFileSync(join(root, entry.name, "replay.json"), "utf8").slice(0, 4000);
-    const scene = head.match(/"scene"\s*:\s*"([^"]*)"/)?.[1] ?? "";
-    return { dir: entry.name, title: scenarioName(entry.name), scene, url: `/replays/${entry.name}/replay.json` };
+    const field = (name: string, text: string) => text.match(new RegExp(`"${name}"\\s*:\\s*"([^"]*)"`))?.[1];
+    const scene = field("scene", head) ?? "";
+    // Title from the run's own words: replay meta label/name/description, then the scenario file's, else the folder.
+    let title = field("label", head) ?? field("name", head) ?? field("description", head);
+    const scenarioPath = field("scenario", head);
+    if (!title && scenarioPath && existsSync(join("../..", scenarioPath))) {
+      const scenario = JSON.parse(readFileSync(join("../..", scenarioPath), "utf8"));
+      title = scenario.name ?? scenario.title ?? scenario.description;
+    }
+    return { dir: entry.name, title: scenarioName(entry.name, title), scene, url: `/replays/${entry.name}/replay.json` };
   });
 writeFileSync(join(root, "index.json"), JSON.stringify({ runs }, null, 1));
 console.log(`${runs.length} replays -> ${join(root, "index.json")}`);

@@ -58,3 +58,10 @@ canvas.edit-armed { cursor: crosshair; }
 #pop-run { background: var(--color-text); color: var(--color-ground); border-color: var(--color-text); font-weight: 600; }
 .edit-note { display: block; color: var(--color-text-muted); }
 .edit-note.warn { color: var(--color-warn); }
+.add-event {
+  margin-left: auto; padding: 6px 14px; cursor: pointer; font-weight: 600;
+  background: var(--color-raised); border: 1px solid var(--color-text-muted); border-radius: var(--radius-sm);
+}
+.add-event:hover { background: var(--color-line); }
+.add-event + .views { margin-left: 0; }
+body.one-level .add-event ~ .camera-views { margin-left: 0; }
