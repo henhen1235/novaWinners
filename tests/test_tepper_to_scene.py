@@ -56,3 +56,21 @@ def test_every_tepper_room_reaches_an_exit_going_down():
     can_leave = set().union(*(nx.ancestors(g, r) | {r} for r in out if r in g))
     stuck = [r["id"] for r in scene["rooms"] if r["id"] not in can_leave]
     assert not stuck, stuck
+
+
+def test_tepper_exits_are_at_grade_on_the_outline():
+    """No exit inside a stair core (x901-x903) or off the building outline; nothing below L1 or above L5."""
+    import json
+    from pathlib import Path
+
+    scene = json.loads((Path(__file__).resolve().parents[1] / "samples/cmu/tepper/scene.json").read_text())
+    levels = {lv["id"] for lv in scene["levels"]}
+    assert levels == {"L1", "L2", "L3", "L4", "L5"}
+    assert all(lk["from"]["level"] in levels and lk["to"]["level"] in levels for lk in scene["links"])
+    outline = {lv: Polygon(r) for lv, r in scene["extensions"]["tepper"]["outline"].items()}
+    cores = [Polygon(r["polygon"]) for r in scene["rooms"] if r["name"][1:4] in ("901", "902", "903")]
+    for e in scene["exits"]:
+        pt = Point(e["position"])
+        assert e["level"] in ("L1", "L2"), e
+        assert outline[e["level"]].exterior.distance(pt) < 1.0, e
+        assert not any(c.buffer(-0.3).contains(pt) for c in cores), e

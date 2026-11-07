@@ -317,6 +317,15 @@ def open_connections(spaces: dict[str, Polygon], doors: list[dict]) -> list[dict
     return out
 
 
+def _outside_probe(door: dict, shell: Polygon, dist: float = 1.5) -> Point:
+    """Point `dist` m out from an exterior door's midpoint, on the side away from the building."""
+    p0, p1 = np.asarray(door["segment"], float)
+    u = (p1 - p0) / np.linalg.norm(p1 - p0)
+    n, mid = np.array([-u[1], u[0]]), (p0 + p1) / 2
+    a, b = Point(mid + n * dist), Point(mid - n * dist)
+    return a if shell.distance(a) > shell.distance(b) or not shell.contains(a) and shell.contains(b) else b
+
+
 def _reach(per: dict, stairs: list) -> set:
     """(floor, space) nodes with a path to outside through doors (either way) and stairs taken
     downward only: evacuees do not climb to get out."""
@@ -497,6 +506,10 @@ def build(raw: Path) -> tuple[dict, dict]:
         doors = place_doors([_tf(g, t) for g in fd["doors"]], spaces, outside)
         if f not in EXIT_FLOORS:
             doors = [d for d in doors if "outside" not in d["connects"]]
+        # An exterior door whose outside lies over a lower floor opens onto a roof or terrace,
+        # not grade: it is not an exit and the terrace is not on the map, so drop it.
+        below = unary_union([per[b]["shell"] for b in FLOORS[:FLOORS.index(f)]])
+        doors = [d for d in doors if "outside" not in d["connects"] or not below.contains(_outside_probe(d, shell))]
         doors += open_connections(spaces, doors)
         spaces, info, doors = merge_open_circulation(spaces, info, doors)
         per[f] = {"spaces": spaces, "info": info, "doors": doors, "shell": shell,
@@ -621,7 +634,8 @@ def build(raw: Path) -> tuple[dict, dict]:
             "scale_method": "room_area_labels", "unreachable": unreachable,
             "inferred_stair_cores": [inf["number"] for f in FLOORS for inf in per[f]["info"].values() if inf.get("inferred")], "inferred_doors": inferred, "floor_to_floor_m": FLOOR_TO_FLOOR_M,
             "scale": {f: stats["floors"][f]["m_per_pt"] for f in FLOORS},
-            "alignment_shift_m": {f: stats["floors"][f]["shift_m"] for f in FLOORS}}},
+            "alignment_shift_m": {f: stats["floors"][f]["shift_m"] for f in FLOORS},
+            "outline": {lid[f]: ring(per[f]["shell"].simplify(0.05)) for f in FLOORS}}},
     }
     stats["unreachable"] = len(unreachable)
     kinds = collections.Counter("inferred" if d["id"] in {i["door"] for i in inferred} else d["kind"] for d in scene_doors)
