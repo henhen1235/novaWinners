@@ -148,7 +148,7 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
 
 
 GROUP_SIZE = {"family": 3, "coworkers": 4}
-PASS_THROUGH = ("risk_tolerance", "ocean")  # not used by the sim; cognition reads them from view traits
+PASS_THROUGH = ("risk_tolerance", "ocean", "playbook")  # not used by the sim; cognition reads them from view traits
 
 
 def _apply_slider_traits(traits: dict, sliders: dict, known: list[str], entry: str, world: World,

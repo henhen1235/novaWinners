@@ -100,6 +100,18 @@ def render_belief(b: dict) -> str:
             f"from {s['kind']} {s.get('ref') or ''}{by}, tick {b['tick']})")
 
 
+def _plan(traits: dict) -> list[str]:
+    """The playbook this person wrote before the run (hybrid occupants)."""
+    pb = traits.get("playbook")
+    if not pb:
+        return []
+    return [f"YOUR PLAN (from before the alarm): first {pb['first_action'].replace('_', ' ')}; what convinces you: "
+            f"{pb['convinced_by']} (or {pb['crowd_n']} people leaving); you prefer the {pb['exit_preference']} exit; "
+            f"trust in staff and announcements {pb['official_trust']:.1f}, in rumors {pb['rumor_trust']:.1f}"
+            f"{'; you help and warn others' if pb.get('helps_others') else ''}. Things you might say: "
+            + " / ".join(f'"{x}"' for x in pb.get("lines") or []) + ". Something has just changed; decide again."]
+
+
 def _level(agent: dict) -> str:
     return f" on floor {agent['level']}" if agent.get("level") else ""
 
@@ -118,7 +130,8 @@ def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], b
     lines = [f"PERSONA: {name}. {p['text']} {trait_text(name, agent.get('traits'))}",
              f"YOU: {agent['id']} in {agent.get('room')}{_level(agent)} at t={t_s:.1f} s. Known exits: "
              f"{', '.join(agent.get('known_exits') or []) or 'only the way you came in'}.",
-             f"TRAITS: {_fields(agent.get('traits') or {}) or 'none'}",
+             f"TRAITS: {_fields({k: v for k, v in (agent.get('traits') or {}).items() if k != 'playbook'}) or 'none'}",
+             *_plan(agent.get("traits") or {}),
              *_timing(agent.get("traits") or {}),
              f"DECISION POINT: {trigger.get('kind')} {trigger.get('ref') or ''}".rstrip(),
              "CUES (what you perceive now):"]

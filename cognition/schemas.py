@@ -148,7 +148,7 @@ class DecisionRecord(_Open):
     raw_output: str
     decision: Decision
     validation: Validation
-    source: Literal["llm", "fallback", "replay"]
+    source: Literal["llm", "fallback", "replay", "playbook"]
     feel_agrees: bool | None = None
     latency_ms: int
     cost_usd: float
