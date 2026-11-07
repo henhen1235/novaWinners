@@ -18,6 +18,7 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import nearest_points, unary_union
 
 INF = math.inf
+MAX_EDGE_M = 2.0  # refine coarse meshes so door and room hazards stay local
 
 
 class NavMesh:
@@ -35,6 +36,7 @@ class NavMesh:
         self.verts = uniq
         self.tris = np.asarray(nav["triangles"], dtype=int)[keep]
         self.tris = inverse.ravel()[self.tris]
+        self.verts, self.tris = refine(self.verts, self.tris, MAX_EDGE_M)
         self.centroids = self.verts[self.tris].mean(axis=1)
         self.polys = [Polygon(self.verts[t]) for t in self.tris]
         self.tree = shapely.STRtree(self.polys)
@@ -107,6 +109,15 @@ class NavMesh:
         coords[same, 1] += 1e-4
         return shapely.covers(self.walk_los, shapely.linestrings(coords))
 
+    def clear_segments(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        """Bool per row: straight move a[i] -> b[i] stays walkable (same 2 cm tolerance as moves)."""
+        if len(a) == 0:
+            return np.zeros(0, dtype=bool)
+        coords = np.stack([a, b], axis=1).copy()
+        same = np.all(np.abs(coords[:, 0] - coords[:, 1]) < 1e-6, axis=1)
+        coords[same, 1] += 1e-4
+        return shapely.covers(self.walk_move, shapely.linestrings(coords))
+
     # ---- search --------------------------------------------------------
     def step_cost(self, i: int, j: int) -> float:
         """Cost of moving from triangle i into neighbour j (meters times j's multiplier)."""
@@ -175,6 +186,45 @@ class NavMesh:
     def tris_with_centroid_in(self, poly: Polygon) -> np.ndarray:
         """Triangles whose centroid lies inside `poly`."""
         return np.flatnonzero(shapely.contains_xy(poly, self.centroids[:, 0], self.centroids[:, 1]))
+
+
+def refine(verts: np.ndarray, tris: np.ndarray, max_edge: float) -> tuple[np.ndarray, np.ndarray]:
+    """Split every edge longer than max_edge (m) at its midpoint until none remain.
+
+    Splits are decided per edge, so both triangles sharing an edge agree and the
+    mesh stays conforming (no T-junctions).
+    """
+    vs = [tuple(v) for v in verts]
+    ts = [tuple(int(i) for i in t) for t in tris]
+    for _ in range(12):
+        mid: dict[tuple[int, int], int] = {}
+        for t in ts:
+            for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
+                k = (min(a, b), max(a, b))
+                if k not in mid and math.dist(vs[a], vs[b]) > max_edge:
+                    mid[k] = len(vs)
+                    vs.append(((vs[a][0] + vs[b][0]) / 2, (vs[a][1] + vs[b][1]) / 2))
+        if not mid:
+            break
+        ts = [nt for t in ts for nt in _split(t, mid)]
+    return np.asarray(vs, dtype=float), np.asarray(ts, dtype=int)
+
+
+def _split(t: tuple[int, int, int], mid: dict[tuple[int, int], int]) -> list[tuple[int, int, int]]:
+    """Children of triangle t given the midpoints of its split edges (orientation kept)."""
+    def m(a: int, b: int) -> int | None:
+        return mid.get((min(a, b), max(a, b)))
+
+    for r in range(3):  # rotate so the split pattern is canonical
+        a, b, c = t[r], t[(r + 1) % 3], t[(r + 2) % 3]
+        ab, bc, ca = m(a, b), m(b, c), m(c, a)
+        if ab is not None and bc is not None and ca is not None:
+            return [(a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)]
+        if ab is not None and bc is not None and ca is None:
+            return [(ab, b, bc), (a, ab, bc), (a, bc, c)]
+        if ab is not None and bc is None and ca is None:
+            return [(a, ab, c), (ab, b, c)]
+    return [t]
 
 
 def _cross(u: np.ndarray, v: np.ndarray) -> float:

@@ -101,6 +101,8 @@ def decide(view: dict) -> dict:
     if reason == "social" and follow and follow.get("exit") not in blocked:
         return {"choice": follow["id"], "say": None,
                 "record": _record(view, follow["id"], "Others around me are leaving, so I follow them.", evidence, True)}
+    if follow and follow.get("exit") in blocked:
+        follow = None
     opt = _pick_exit(view, blocked) or follow or opts.get("SEEK_INFO") or view["options"][0]
     why = f"Leaving by {opt.get('exit', 'whatever way I can')} ({reason})."
     return {"choice": opt["id"], "say": _say(view, opt, reason, blocked) if opt.get("exit") else None,

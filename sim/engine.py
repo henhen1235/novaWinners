@@ -323,6 +323,7 @@ class Sim:
             return
         rows = np.array([a.row for a in act])
         pos = self.pos[rows]
+        self._skip_visible_waypoints(act, pos)
         step = np.zeros_like(pos)
         for i, a in enumerate(act):
             if a.state in ("moving", "queued"):
@@ -339,6 +340,19 @@ class Sim:
             if a.state in ("moving", "queued"):
                 self._after_step(a, moved[i], float(np.linalg.norm(step[i])), bool(denied[i]))
         self._exits(act)
+
+    def _skip_visible_waypoints(self, act: list[Agent], pos: np.ndarray) -> None:
+        """Drop the current waypoint when the one after it is in clear sight.
+
+        Keeps agents that were pushed past a corner from walking back to it.
+        """
+        idx = [i for i, a in enumerate(act) if a.state in ("moving", "queued") and len(a.waypoints) >= 2]
+        if not idx:
+            return
+        ok = self.world.nav.clear_segments(pos[idx], np.array([act[i].waypoints[1] for i in idx]))
+        for i, clear in zip(idx, ok):
+            if clear:
+                act[i].waypoints.pop(0)
 
     def _seek(self, a: Agent, p: np.ndarray) -> np.ndarray:
         """Step (m) toward the current waypoint, dropping waypoints already reached."""
