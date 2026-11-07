@@ -13,10 +13,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 from shapely.geometry import Point, Polygon
 
 EVENT_TYPES = ("fire", "smoke", "alarm_only", "active_intruder", "blocked_exit", "rumor")
-# Archetypes from research/EVAC_PSYCHOLOGY.md; regular/visitor/staff are the
-# SIM_INTERFACES.md example names, kept as aliases so that example validates.
+# Archetypes from research/EVAC_PSYCHOLOGY.md, then the sim's short names
+# (sim/personas.py: staff, regular, visitor, committed, parent); sim and cognition alias both.
 PERSONAS = ("warden", "regular_employee", "first_time_visitor", "committed_task", "parent_with_child",
-            "older_adult", "mobility_impaired", "skeptic", "regular", "visitor", "staff")
+            "older_adult", "mobility_impaired", "skeptic", "regular", "visitor", "staff", "committed", "parent")
 DEFAULT_PERSONAS = {"regular_employee": 0.6, "first_time_visitor": 0.25, "warden": 0.1, "mobility_impaired": 0.05}
 DEFAULT_MODEL = "google/gemini-2.5-flash-lite"
 MAX_PER_M2 = 2.0  # hard cap per room [H], research/SCENARIOS_AND_MODELS.md 2.2
