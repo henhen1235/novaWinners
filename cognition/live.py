@@ -103,8 +103,12 @@ def _fallback_res(inp: dict, st: dict, status: str, errors: list[str]) -> dict:
 
 
 class Live:
-    def __init__(self, batching: bool = True, max_in_flight: int = MAX_IN_FLIGHT) -> None:
+    def __init__(self, batching: bool = False, max_in_flight: int = MAX_IN_FLIGHT, tag: str = "") -> None:
+        # batching is off by default: measured on tiny_office bursts of 24 and 12 (flash-lite, 2026-11-07),
+        # batches of 8-10 gave p50 3.1 s vs 1.3 s for parallel single calls, 17% of entries needed a repair,
+        # and cost only 1.3x less, so a batch misses the 2 s live deadline. Turn on when cost binds.
         self.batching = batching
+        self.tag = tag  # cache namespace: a benchmark can force fresh calls for prompts seen before
         self.max_in_flight = max_in_flight
         self._ids = itertools.count(1)
         self._done: queue.Queue = queue.Queue()
@@ -250,7 +254,7 @@ class Live:
             try:
                 async with self.limiter:
                     out = await llm.achat(self.client, msgs, model=model, temperature=CONFIG["temperature"],
-                                          max_tokens=max_tokens, tag=tag, timeout=CONFIG["timeout_s"])
+                                          max_tokens=max_tokens, tag=tag or self.tag, timeout=CONFIG["timeout_s"])
                 self.limiter.ok()
                 if not out[1]["cached"]:
                     self.calls += 1
@@ -311,23 +315,20 @@ class Live:
         except Exception as e:  # whole batch failed: each agent gets its own single call
             entries, meta, raw = [], {"latency_ms": 0, "cost_usd": 0.0}, f"batch failed: {type(e).__name__}"
         by_id = {str(x.get("agent_id")): x for x in entries if isinstance(x, dict)}
-        out = []
-        for i, (_, inp, st, _p) in enumerate(leaders):
+        async def one(i: int, inp: dict, st: dict) -> dict:
             entry = by_id.get(inp["agent"]["id"]) or (entries[i] if i < len(entries) and not by_id else None)
             info = {"batch": {"id": batch_id, "size": len(leaders), "index": i}}
+            errs = [f"no entry for {inp['agent']['id']} in batch answer"]
             if entry is not None:
-                one = json.dumps({k: v for k, v in entry.items() if k != "agent_id"})
-                dec, errs = validate(one, st["ids"], st["offered"], *validate_ctx(inp, st))
+                text = json.dumps({k: v for k, v in entry.items() if k != "agent_id"})
+                dec, errs = validate(text, st["ids"], st["offered"], *validate_ctx(inp, st))
                 if dec:
-                    out.append({"prompt_sha256": sha, "raw_output": one, "decision": dec, "source": "llm",
-                                "validation": {"status": "ok", "errors": []}, "latency_ms": meta["latency_ms"],
-                                "cost_usd": meta["cost_usd"] / len(leaders), **info})
-                    continue
-            else:
-                errs = [f"no entry for {inp['agent']['id']} in batch answer"]
+                    return {"prompt_sha256": sha, "raw_output": text, "decision": dec, "source": "llm",
+                            "validation": {"status": "ok", "errors": []}, "latency_ms": meta["latency_ms"],
+                            "cost_usd": meta["cost_usd"] / len(leaders), **info}
             res = await self._single(inp, st)  # per-agent repair path for the bad entry
             if res["validation"]["status"] == "ok":
                 res["validation"]["status"] = "repaired"
             res["validation"]["errors"] = errs + res["validation"]["errors"]
-            out.append({**res, **info})
-        return out
+            return {**res, **info}
+        return list(await asyncio.gather(*(one(i, m[1], m[2]) for i, m in enumerate(leaders))))

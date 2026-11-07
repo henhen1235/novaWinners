@@ -53,7 +53,7 @@ def test_batch_sizes():
 
 
 def test_burst_is_batched_and_split_back_per_agent():
-    live = Live()
+    live = Live(batching=True)
     vs = distinct_views(20)
     hs = live.submit(vs)
     got = {r["handle"]: r for r in live.wait(20)}
@@ -69,7 +69,7 @@ def test_burst_is_batched_and_split_back_per_agent():
 
 
 def test_bad_entry_in_batch_is_repaired_alone():
-    live = Live()
+    live = Live(batching=True)
     got = live.wait(len(live.submit(distinct_views(12, bad="a_bad"))))
     live.close()
     bad = next(r for r in got if r["agent_id"] == "a_bad")["record"]
