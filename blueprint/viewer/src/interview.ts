@@ -11,9 +11,10 @@ export type DecisionRecord = {
   tick?: number;
   model?: string;
   emotion?: Record<string, number>;
-  decision?: { action?: string; exit?: string; reasons?: Reason[] };
+  decision?: { action?: string; exit?: string; reasons?: Reason[]; padm?: { why?: string } };
 };
-type Citation = string | { tick?: number; t_s?: number; t?: number; ref?: string; id?: string; record_id?: string; label?: string; text?: string; verified?: boolean };
+// cognition.serve citations: {tag: "[t=148, d_000124:p1]", tick: 148, t_s: 74, record_id, item}; t= is a tick.
+type Citation = string | { tag?: string; tick?: number; t_s?: number; t?: number | string; ref?: string; id?: string; record_id?: string; item?: string; label?: string };
 type Answer = { answer?: string; citations?: Citation[]; verified?: boolean | Reason[]; reasons?: Reason[] };
 
 const INTERVIEW_URL = new URLSearchParams(location.search).get("interview") ?? "/interview";
@@ -30,15 +31,20 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", conte
   return element;
 }
 
-const isVerified = (reason: Reason) =>
-  reason.verified === true || VERIFIED_LABELS.has((reason.label ?? reason.status ?? "").toLowerCase());
+// Reason labels come from the interview's ablation re-runs (docs/AGENT_COGNITION.md).
+function badge(reason: Reason): [string, string] {
+  const label = (reason.label ?? reason.status ?? "").toLowerCase();
+  if (reason.verified === true || VERIFIED_LABELS.has(label)) return ["badge verified", "Verified"];
+  if (label === "untested") return ["badge stated", "Not tested"];
+  return ["badge stated", "Stated, not decisive"];
+}
 
 function reasonList(reasons: Reason[]) {
   const list = el("ul", "iv-reasons");
   for (const reason of reasons) {
     const item = el("li");
-    const verified = isVerified(reason);
-    item.append(el("span", verified ? "badge verified" : "badge stated", verified ? "Verified" : "Stated, not decisive"), reason.text ?? reason.reason ?? "");
+    const [className, text] = badge(reason);
+    item.append(el("span", className, text), reason.text ?? reason.reason ?? "");
     list.append(item);
   }
   return list;
@@ -53,15 +59,20 @@ function timeOf(run: Run, citation: Citation): { t: number; label: string } | nu
     return event ? event.t : null;
   };
   if (typeof citation === "string") {
+    // "[t=148, d_000124:p1]": tick, record, evidence item. The record's own time wins over the tick.
     const tick = /t\s*=\s*(\d+(?:\.\d+)?)/.exec(citation);
-    const ref = /\b([dm]_\d+)\b/.exec(citation);
-    const t = tick ? Number(tick[1]) * dt : ref ? byRef(ref[1]) : null;
-    return t === null ? null : { t, label: citation.replace(/^\[|\]$/g, "") };
+    const ref = /\b([dm]_[A-Za-z0-9_]+)/.exec(citation);
+    const item = /:(\w+)\]?$/.exec(citation);
+    const t = (ref ? byRef(ref[1]) : null) ?? (tick ? Number(tick[1]) * dt : null);
+    if (t === null || !Number.isFinite(t)) return null;
+    return { t, label: [`${t.toFixed(1)} s`, item?.[1] ?? (tick ? null : ref?.[1])].filter(Boolean).join(", ") };
   }
   const ref = citation.ref ?? citation.record_id ?? citation.id;
-  const t = citation.t_s ?? citation.t ?? (citation.tick !== undefined ? citation.tick * dt : ref ? byRef(ref) : null);
-  if (t === null || t === undefined) return null;
-  return { t, label: citation.label ?? [`${t.toFixed(1)} s`, ref].filter(Boolean).join(", ") };
+  const tick = citation.tick ?? (citation.t !== undefined ? Number(citation.t) : undefined);
+  const raw = citation.t_s ?? (ref ? byRef(ref) : null) ?? (tick !== undefined ? tick * dt : null);
+  const t = raw === null || raw === undefined ? NaN : Number(raw);
+  if (!Number.isFinite(t)) return null;
+  return { t, label: citation.label ?? [`${t.toFixed(1)} s`, citation.item ?? ref].filter(Boolean).join(", ") };
 }
 
 function chip(player: Player, run: Run, citation: Citation) {
@@ -75,22 +86,25 @@ function chip(player: Player, run: Run, citation: Citation) {
 }
 
 // Inline citations such as "[t=312, p3]" or "[m_88 from a_09]" become chips in place.
-function answerText(player: Player, run: Run, text: string) {
+function answerText(player: Player, run: Run, text: string): [HTMLParagraphElement, number] {
   const paragraph = el("p", "iv-answer-text");
+  let chips = 0;
   let last = 0;
   for (const match of text.matchAll(/\[([^\]]+)\]/g)) {
     if (!timeOf(run, match[1])) continue;
-    paragraph.append(text.slice(last, match.index), chip(player, run, match[1]));
+    paragraph.append(text.slice(last, match.index), chip(player, run, match[0]));
     last = match.index! + match[0].length;
+    chips += 1;
   }
   paragraph.append(text.slice(last));
-  return paragraph;
+  return [paragraph, chips];
 }
 
 function renderAnswer(player: Player, run: Run, data: Answer) {
   const box = $("#iv-answer");
-  box.replaceChildren(answerText(player, run, data.answer ?? "(no answer text)"));
-  if (data.citations?.length) {
+  const [paragraph, inline] = answerText(player, run, data.answer || "No answer: the server kept no sentence it could verify.");
+  box.replaceChildren(paragraph);
+  if (data.citations?.length && !inline) {
     const chips = el("div", "chips");
     for (const citation of data.citations) chips.append(chip(player, run, citation));
     box.append(chips);
@@ -142,6 +156,7 @@ function drawTimeline(player: Player, run: Run, agentId: string) {
     item.append(button);
     const record = event.kind === "decision" ? run.decisions.find((d) => d.record_id === event.ref) : undefined;
     if (record?.decision?.reasons?.length) item.append(reasonList(record.decision.reasons));
+    else if (record?.decision?.padm?.why) item.append(el("p", "iv-why", `Said at the time: ${record.decision.padm.why}`));
     list.append(item);
     items.push({ t: event.t, element: item });
   }
@@ -188,10 +203,14 @@ export function updateInterview(t: number) {
   let active: HTMLElement | null = null;
   for (const item of items) {
     item.element.classList.toggle("future", item.t > t + 1e-6);
-    item.element.classList.remove("active");
     if (item.t <= t + 1e-6) active = item.element;
   }
-  active?.classList.add("active");
+  for (const item of items) if (item.element !== active) item.element.classList.remove("active");
+  if (active && !active.classList.contains("active")) {
+    active.classList.add("active");
+    const list = active.parentElement!;
+    list.scrollTop = active.offsetTop - list.offsetTop - list.clientHeight / 3;
+  }
 }
 
 $("#iv-close").addEventListener("click", () => {

@@ -74,7 +74,16 @@ async function fetchDecisions(url: string): Promise<DecisionRecord[]> {
   }
 }
 
-function buildRun(context: ViewerContext, url: string, doc: ReplayDoc, decisions: DecisionRecord[]): Run {
+// "EVACUATE exit_02" -> "Evacuate Main Entrance": sim event texts use action codes and exit ids.
+function readable(context: ViewerContext, text: string | undefined) {
+  if (!text) return text;
+  let out = text.replace(/\b[A-Z][A-Z_]{2,}\b/g, (code) => code.charAt(0) + code.slice(1).toLowerCase().replace(/_/g, " "));
+  for (const exit of context.doc.exits) out = out.replace(new RegExp(`\\b${exit.id}\\b`, "g"), exit.label);
+  return out;
+}
+
+function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisions: DecisionRecord[]): Run {
+  const doc = { ...source, events: source.events.map((event) => ({ ...event, text: readable(context, event.text) })) };
   const index = new Map(doc.agents.map((agent, i) => [agent.id, i]));
   const count = doc.agents.length;
   const xs: Float32Array[] = [];
@@ -129,8 +138,9 @@ function buildRun(context: ViewerContext, url: string, doc: ReplayDoc, decisions
   const root = new THREE.Group();
   const labels = new THREE.Group();
   root.add(live, ghosts, ring);
-  const name = doc.meta.label ?? doc.meta.scenario ?? url.split("/").slice(-2).join("/");
-  const runId = doc.meta.run_id ?? url;
+  const name = doc.meta.label ?? url.split("/").slice(-2, -1)[0] ?? url;
+  // cognition.serve names a run by its directory under --runs (out/<run>/replay.json).
+  const runId = url.split("/").slice(-2, -1)[0] || doc.meta.run_id || url;
   return { url, doc, name, runId, xs, zs, states, decisions, live, ghosts, root, labels, exitOf, exitTime, exitCounts: new Map(), ring };
 }
 
@@ -164,6 +174,9 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
     $("#readout").textContent = `Could not load the replay (${error instanceof Error ? error.message : error}). Check the path under public/.`;
     return;
   }
+  // ?names=Classic agents,LLM agents overrides the run captions for the demo.
+  const names = new URLSearchParams(location.search).get("names")?.split(",");
+  runs.forEach((run, i) => (run.name = names?.[i]?.trim() || run.name));
   for (const run of runs) {
     context.scene.add(run.root);
     addExitCounts(context, run);
@@ -339,7 +352,7 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
       kind.textContent = KIND_LABEL[event.kind] ?? event.kind;
       const who = document.createElement("span");
       who.className = "who";
-      who.textContent = [runs.length > 1 ? run.name : "", event.agent ?? ""].filter(Boolean).join(", ");
+      who.textContent = [runs.length > 1 ? (run === runs[0] ? "left" : "right") : "", event.agent ?? ""].filter(Boolean).join(", ");
       const what = document.createElement("span");
       what.className = "what";
       what.textContent = event.text ?? event.ref ?? "";
