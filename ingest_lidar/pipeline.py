@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import shapely
-from shapely.geometry import MultiPolygon, Point, Polygon
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 
 from contract.validate_scene import validate
 
@@ -22,7 +22,7 @@ from . import grid as G
 from .display import write_display, write_navmesh_debug
 from .geometry import exit_reachable_parts, navmesh_from_walkable, ring, walkable_to_contract
 from .load import Scan, load_scan
-from .orient import orient
+from .orient import apply, orient
 
 LEVEL = "L1"
 PLAUSIBLE_CEILING_M = (1.0, 10.0)  # outside this the units are wrong, not the building (D22)
@@ -73,6 +73,45 @@ def _segment(g: G.Grid, m: G.Masks, ceiling: float) -> tuple[list[dict], list[di
     return walls, rooms, doors, detect_obstacles(g, m, walls)
 
 
+def _confirm_exits(scan: Scan, matrix: np.ndarray, g: G.Grid, openings: list[dict], tagged: bool,
+                   min_faces: int = 20) -> tuple[list[dict], list[dict]]:
+    """Split openings into (confirmed, unconfirmed) by ARKit door faces on the opening.
+
+    Door-labeled faces (class 7) at 0.3-2.0 m within 0.3 m of the opening segment confirm it.
+    Without labels, or if nothing is confirmed and no tags exist, all openings stay exits
+    (best effort, the scene must have an exit).
+    """
+    if scan.face_classes is None or not openings:
+        return openings, []
+    sel = scan.face_classes == 7
+    c = apply(matrix, scan.vertices[scan.faces[sel]].mean(1)) if sel.any() else np.zeros((0, 3))
+    c = c[(c[:, 1] > 0.3) & (c[:, 1] < 2.0)]
+    confirmed, unconfirmed = [], []
+    for op in openings:
+        seg = LineString(op["segment"])
+        n = sum(1 for x, z in c[:, [0, 2]] if seg.distance(Point(x, z)) <= 0.3) if len(c) else 0
+        (confirmed if n >= min_faces else unconfirmed).append(op)
+    if not confirmed and not tagged:
+        return openings, []
+    return confirmed, unconfirmed
+
+
+def _drop_unreachable_slivers(rooms: list[dict], doors: list[dict], max_m2: float = 2.0
+                              ) -> tuple[list[dict], list[dict], list[dict]]:
+    """Drop rooms under max_m2 with no door path to an exit (scan pockets, not real rooms)."""
+    import networkx as nx
+
+    gr = nx.Graph()
+    gr.add_nodes_from([r["id"] for r in rooms] + ["outside"])
+    gr.add_edges_from(tuple(d["connects"]) for d in doors)
+    goals = {c for d in doors if d["is_exit"] for c in d["connects"]}
+    ok = set().union(*(nx.node_connected_component(gr, s) for s in goals if s in gr)) if goals else set()
+    drop = [r for r in rooms if r["id"] not in ok and r["area_m2"] < max_m2] if goals else []
+    gone = {r["id"] for r in drop}
+    return ([r for r in rooms if r["id"] not in gone],
+            [d for d in doors if not gone & set(d["connects"])], drop)
+
+
 def _room_at(rooms: list[dict], xz: list[float], tol: float = 0.6) -> str | None:
     best, bd = None, tol
     for r in rooms:
@@ -83,7 +122,20 @@ def _room_at(rooms: list[dict], xz: list[float], tol: float = 0.6) -> str | None
 
 
 def _exits(openings: list[dict], rooms: list[dict], tags: list, start: int) -> tuple[list[dict], list[dict]]:
-    """Exit doors from outside openings; tags [x, z, label] relabel the nearest within 1.5 m."""
+    """Exit doors from outside openings.
+
+    Without tags every opening is an exit. With tags [x, z, label] the tags decide: each tag
+    picks the nearest opening within 2 m (any width), and only tagged openings become exits.
+    """
+    labels: dict[int, str] = {}
+    if tags and openings:
+        for x, z, label in tags:
+            d = [np.hypot(o["center"][0] - x, o["center"][1] - z) for o in openings]
+            if min(d) <= 2.0:
+                labels[int(np.argmin(d))] = str(label)
+        if labels:
+            openings = [openings[i] for i in sorted(labels)]
+            labels = {k: labels[i] for k, i in enumerate(sorted(labels))}
     doors, exits = [], []
     for o in openings:
         rid = _room_at(rooms, o["center"])
@@ -97,11 +149,8 @@ def _exits(openings: list[dict], rooms: list[dict], tags: list, start: int) -> t
         exits.append({"id": f"e_{len(exits) + 1:03d}", "level": LEVEL, "door_id": did, "position": o["center"],
                       "width_m": round(w, 3), "leads_to": "outside", "label": f"Exit {len(exits) + 1}",
                       "assembly_point": None})
-    for x, z, label in tags:
-        if exits:
-            e = min(exits, key=lambda e: np.hypot(e["position"][0] - x, e["position"][1] - z))
-            if np.hypot(e["position"][0] - x, e["position"][1] - z) <= 1.5:
-                e["label"] = str(label)
+    if labels:
+        exits = [{**e, "label": labels.get(i, e["label"])} for i, e in enumerate(exits)]
     return doors, exits
 
 
@@ -205,9 +254,24 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         warnings.append(_warn("SCALE_LOW_CONFIDENCE", f"floor-to-ceiling {o.ceiling_height_m:.2f} m outside "
                               "[2.2, 4.5]; check units or pass --scale"))
     g = G.build_grid(G.sample_points(scan, o.matrix), ceiling_m=o.ceiling_height_m)
-    m = G.build_masks(g)
+    # Interior glass (Mesh mode): LiDAR sees the next room's floor through glass and nothing at
+    # body height, so walkable space would run straight through a glass partition and each pane
+    # between frames would read as a door. ARKit labels those surfaces "window" (6): block them
+    # at body height, except where it also labels a door (7), bridging gaps between frames.
+    glass = G.class_mask(scan, o.matrix, g, (6,), (0.15, 2.0), bridge_m=1.2)
+    glass &= ~(cv2.dilate(G.class_mask(scan, o.matrix, g, (7,), (0.3, 2.0)).astype(np.uint8),
+                          np.ones((7, 7), np.uint8)) > 0)
+    m = G.build_masks(g, barrier=glass if glass.any() else None)
     walls, rooms, doors, obstacles = _segment(g, m, o.ceiling_height_m)
     openings, wide = G.exit_openings(g, m)
+    # Glass walls: LiDAR sees through glass, so a curtain wall split by mullions looks like a row
+    # of door-width openings to unscanned space. With ARKit labels (Mesh mode) an opening is an
+    # exit only if door-labeled faces lie on it; human exit tags always win (see _exits).
+    openings, unconfirmed = _confirm_exits(scan, o.matrix, g, openings, bool(tags))
+    warnings += [_warn("EXIT_UNCONFIRMED", f"{op['width_m']} m opening at {op['center']} has no ARKit door "
+                       "on it (glass or scan edge?); not an exit unless tagged") for op in unconfirmed]
+    if tags:
+        openings = openings + unconfirmed + wide  # tags pick among every opening
     warnings += [_warn("LEAKY_WALL_SUSPECTED", f"{w['width_m']} m opening to unscanned space at {w['center']}")
                  for w in wide]
     exit_doors, exits = _exits(openings, rooms, tags, len(doors) + 1)
@@ -216,6 +280,9 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         from .rooms import connect_unreachable
 
         doors = doors + connect_unreachable(g, m, rooms, doors, len(doors) + 1)
+    rooms, doors, dropped_rooms = _drop_unreachable_slivers(rooms, doors)
+    warnings += [_warn("SMALL_ROOM_ARTIFACT", f"dropped {r['area_m2']} m^2 pocket with no path to an exit",
+                       r["id"]) for r in dropped_rooms]
     walk = G.vectorize(m.walkable, g)
     # vectorize's simplify can pinch a narrow neck to zero width; its collinear triangles are
     # dropped as degenerate and the navmesh splits (NAVMESH_ISLAND). A mitre opening removes

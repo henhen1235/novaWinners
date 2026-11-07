@@ -137,10 +137,42 @@ class Masks:
     walkable: np.ndarray  # cells whose center is > agent radius from any non-free cell
 
 
-def build_masks(g: Grid, radius_m: float = AGENT_RADIUS_M, max_fill_m2: float = 1.0) -> Masks:
-    """Derive masks; see DECISIONS.md D10 for the hole-filling rule."""
+def class_mask(scan: Scan, matrix: np.ndarray, g: Grid, classes: tuple[int, ...], y_range: tuple[float, float],
+               bridge_m: float = 0.0) -> np.ndarray:
+    """Cells holding ARKit-labeled faces of `classes` with centroid height in y_range (scene frame).
+
+    bridge_m closes gaps along the X and Z axes (e.g. glass between window frames:
+    LiDAR does not see glass, only the frames and sills ARKit labels "window").
+    """
+    mask = np.zeros(g.shape, bool)
+    if scan.face_classes is None or scan.faces is None:
+        return mask
+    sel = np.isin(scan.face_classes, classes)
+    if not sel.any():
+        return mask
+    c = apply(matrix, scan.vertices[scan.faces[sel]].mean(1))
+    c = c[(c[:, 1] >= y_range[0]) & (c[:, 1] <= y_range[1])]
+    rc = g.rc(c[:, [0, 2]])
+    ok = (rc[:, 0] >= 0) & (rc[:, 0] < g.shape[0]) & (rc[:, 1] >= 0) & (rc[:, 1] < g.shape[1])
+    mask[rc[ok, 0], rc[ok, 1]] = True
+    if bridge_m > 0:
+        k = max(3, int(round(bridge_m / g.res)) | 1)
+        m8 = mask.astype(np.uint8)
+        mask = (cv2.morphologyEx(m8, cv2.MORPH_CLOSE, np.ones((1, k), np.uint8)) |
+                cv2.morphologyEx(m8, cv2.MORPH_CLOSE, np.ones((k, 1), np.uint8))) > 0
+    return mask
+
+
+def build_masks(g: Grid, radius_m: float = AGENT_RADIUS_M, max_fill_m2: float = 1.0,
+                barrier: np.ndarray | None = None) -> Masks:
+    """Derive masks; see DECISIONS.md D10 for the hole-filling rule.
+
+    barrier: extra cells that block walking even without body-band points (glass).
+    """
     cell = g.res * g.res
     occupied = g.body >= 2
+    if barrier is not None:
+        occupied = occupied | barrier
     floor = cv2.morphologyEx((g.floor >= 1).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8)) > 0
     floor &= ~occupied
     # furniture interiors: small enclosed non-occupied pockets with almost no floor seen
