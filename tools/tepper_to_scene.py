@@ -197,6 +197,7 @@ EXTERIOR_WALL_M = 0.3  # A-SPAC-EXTR is the outer face of the exterior wall
 CORRIDOR_MIN_M = 0.9
 INFERRED_DOOR_M = 0.9
 INFER_REACH_M = 1.2  # inferred doors may cross thicker walls (glazed suite fronts)
+GAP_OVERLAP_M = 0.8  # door boxes extend 0.4 m into each room so off-center symbols still bridge
 OPEN_GAP_M = 0.08  # spaces closer than this have no wall between them
 
 
@@ -522,7 +523,7 @@ def build(raw: Path) -> tuple[dict, dict]:
                                 "connects": d["connects"], "is_exit": is_exit,
                                 "kind": d.get("kind") or ("double" if d["width"] >= 1.5 else "swing"), "fire_rated": None,
                                 "opens_toward": "outside" if is_exit else None})
-            gaps.append(door_gap_box(d["segment"], d["thick"] + 0.1))
+            gaps.append(door_gap_box(d["segment"], d["thick"] + GAP_OVERLAP_M))  # reach well into both rooms
             if d.get("inferred"):
                 inferred.append({"door": did, "reason": d["inferred"]})
             if is_exit:
