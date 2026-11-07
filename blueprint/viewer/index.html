@@ -21,7 +21,13 @@
       <span class="wordmark">Rehearsal</span>
     </div>
     <span id="building" class="building">Loading scene</span>
-    <div class="views" role="group" aria-label="Camera">
+    <div class="views floor-views" role="group" aria-label="Floor view">
+      <button type="button" data-view="single" aria-pressed="false" title="One floor at a time">Single</button>
+      <button type="button" data-view="side" aria-pressed="false" title="Every floor as a flat plan, side by side">Side by side</button>
+      <button type="button" data-view="stacked" aria-pressed="false" title="Floors stacked at their real heights">Stacked</button>
+      <button type="button" data-view="exploded" aria-pressed="false" title="Stacked with the floors pulled apart">Exploded</button>
+    </div>
+    <div class="views camera-views" role="group" aria-label="Camera">
       <button id="orbit" type="button">Orbit</button>
       <button id="top" type="button">Top</button>
     </div>
@@ -29,6 +35,10 @@
   </header>
   <div id="stage">
     <dl id="title-block" class="title-block" hidden></dl>
+    <label id="spacing-control" class="spacing" hidden>Floor spacing
+      <input id="spacing" type="range" min="1" max="3" step="0.1" value="2" />
+      <output id="spacing-value">2.0x</output>
+    </label>
     <div id="split-captions" class="split-captions" hidden><span id="caption-a"></span><span id="caption-b"></span></div>
     <div id="transport" class="transport" role="group" aria-label="Replay" hidden>
       <button id="play" type="button" aria-label="Play">
@@ -73,6 +83,10 @@
       <h2>Run</h2>
       <div id="counters" class="counters"></div>
     </section>
+    <section id="floors" hidden>
+      <h2>People per floor</h2>
+      <ol id="floor-list" class="floor-list"></ol>
+    </section>
     <section id="agents" hidden>
       <h2>Occupants</h2>
       <div class="views color-by" role="group" aria-label="Color occupants by">
@@ -91,6 +105,14 @@
     </section>
     <section>
       <h2>Layers</h2>
+      <div class="walls-row">
+        <span>Walls</span>
+        <div class="views walls" role="group" aria-label="Walls">
+          <button type="button" data-walls="off" aria-pressed="false">Off</button>
+          <button type="button" data-walls="cutaway" aria-pressed="true" title="Walls cut at 1.2 m so you can see into every room">Cutaway</button>
+          <button type="button" data-walls="full" aria-pressed="false">Full</button>
+        </div>
+      </div>
       <label class="layer"><input id="show-nav" type="checkbox" checked /><i class="swatch swatch-walk"></i>Walkable floor</label>
       <label class="layer"><input id="show-rooms" type="checkbox" checked /><i class="swatch swatch-room"></i>Rooms</label>
       <label class="layer"><input id="show-doors" type="checkbox" checked /><i class="swatch swatch-door"></i>Doors</label>

@@ -6,7 +6,8 @@ import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import type { SceneDoc, ViewerContext } from "./context";
-import { buildNav, locate, nearestExit, onMesh, type Nav, type Vec2 } from "./nav";
+import { buildNav, locate, nearestExitAcross, onMesh, type Leg, type Nav, type Vec2 } from "./nav";
+import { buildFloors, type Floors, type LayerKey, type ViewMode, type WallMode } from "./floors";
 import { startReplay } from "./replay";
 import { startAnalysis } from "./analysis";
 
@@ -14,6 +15,8 @@ const params = new URLSearchParams(location.search);
 // An empty ?glb= skips the model and extrudes walls from scene.json (fixtures ship without a display.glb).
 const glbUrl = params.get("glb") ?? "/office/display.glb";
 const sceneUrl = params.get("scene") ?? "/office/scene.json";
+const VIEWS: ViewMode[] = ["single", "side", "stacked", "exploded"];
+const WALLS: WallMode[] = ["off", "cutaway", "full"];
 
 const stage = document.querySelector<HTMLDivElement>("#stage")!;
 const readout = document.querySelector<HTMLSpanElement>("#readout")!;
@@ -21,6 +24,7 @@ const levelSelect = document.querySelector<HTMLSelectElement>("#level")!;
 const warningList = document.querySelector<HTMLElement>("#warnings")!;
 const buildingName = document.querySelector<HTMLElement>("#building")!;
 const titleBlock = document.querySelector<HTMLElement>("#title-block")!;
+const spacingInput = document.querySelector<HTMLInputElement>("#spacing")!;
 
 // Colors come from design/tokens.css so the viewer and the replay UI share one palette.
 const css = getComputedStyle(document.documentElement);
@@ -31,6 +35,7 @@ const WALK_SPEED = 1.3;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(stage.clientWidth, stage.clientHeight);
+renderer.localClippingEnabled = true; // per-level cutaway planes on display.glb meshes
 stage.appendChild(renderer.domElement);
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(stage.clientWidth, stage.clientHeight);
@@ -40,8 +45,11 @@ stage.appendChild(labelRenderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = token("ground");
-const camera = new THREE.PerspectiveCamera(40, stage.clientWidth / stage.clientHeight, 0.05, 500);
-camera.position.set(8, 14, 12);
+const perspective = new THREE.PerspectiveCamera(40, stage.clientWidth / stage.clientHeight, 0.05, 2000);
+perspective.position.set(8, 14, 12);
+// Side by side is a set of 2D plans: orthographic, top-down, like a drawing sheet.
+const orthographic = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 2000);
+let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspective;
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(4, 0, 4);
 controls.enableDamping = true;
@@ -49,64 +57,88 @@ controls.update();
 
 scene.add(new THREE.HemisphereLight(token("text"), token("ground"), 2.2));
 const sun = new THREE.DirectionalLight(0xffffff, 3.2);
-sun.position.set(-6, 18, 10);
+sun.position.set(-60, 180, 100);
 scene.add(sun);
 
-const groups: Record<string, THREE.Object3D> = {
-  navmesh: new THREE.Group(),
-  rooms: new THREE.Group(),
-  doors: new THREE.Group(),
-  exits: new THREE.Group(),
-  warnings: new THREE.Group(),
-  path: new THREE.Group(),
-};
-for (const group of Object.values(groups)) scene.add(group);
-const pulses: THREE.Mesh[] = [];
+const pathGroup = new THREE.Group();
+scene.add(pathGroup);
+const grid = new THREE.Group();
+scene.add(grid);
 // The route draws over walls: it is the one thing the audience must always see.
 const pathMaterial = new LineMaterial({ color: token("route").getHex(), linewidth: 4, depthTest: false });
 pathMaterial.resolution.set(stage.clientWidth, stage.clientHeight);
 let drawStart = 0;
-let segmentCount = 0;
-
-const modelRoot = new THREE.Group();
-scene.add(modelRoot);
 
 let doc: SceneDoc | null = null;
 let nav: Nav | null = null;
+let floors: Floors | null = null;
 let activeLevel = "";
-// Distance that fits the whole model in view; set when display.glb loads.
-let fitDistance = 20;
-let fitRadius = 0;
+let view: ViewMode = "single";
+let walls: WallMode = WALLS.includes(params.get("walls") as WallMode) ? (params.get("walls") as WallMode) : "cutaway";
+let spacing = Math.min(3, Math.max(1, Number(params.get("spacing")) || 2));
+let bounds = new THREE.Box3(new THREE.Vector3(-5, 0, -5), new THREE.Vector3(5, 1, 5));
+let lastRoute: { legs: Leg[]; meters: number; exit: string; via: string[] } | null = null;
+const layoutHooks: ((mode: ViewMode) => void)[] = [];
 
-// Fit the model's footprint inside both the vertical and horizontal field of view (split halves are narrow).
-function refit() {
-  const halfV = THREE.MathUtils.degToRad(camera.fov / 2);
-  const halfH = Math.atan(Math.tan(halfV) * camera.aspect);
-  fitDistance = (fitRadius / Math.tan(Math.min(halfV, halfH))) * 1.05;
-}
-
-function frame(x: number, z: number, elevation = 0) {
-  controls.target.set(x, elevation, z);
-  camera.position.set(x + 6, elevation + 10, z + 8);
+function frame(x: number, z: number, level = activeLevel) {
+  const point = floors ? floors.place(level, x, z) : new THREE.Vector3(x, 0, z);
+  const offset = camera.position.clone().sub(controls.target);
+  controls.target.copy(point);
+  if (camera === perspective) camera.position.copy(point).add(offset.setLength(Math.min(offset.length(), 18)));
+  else {
+    camera.position.copy(point).add(offset);
+    orthographic.zoom = Math.max(orthographic.zoom, 4);
+    orthographic.updateProjectionMatrix();
+  }
   controls.update();
 }
 
+function stageSize() {
+  return { width: stage.clientWidth / (splitView ? 2 : 1), height: Math.max(stage.clientHeight, 1) };
+}
+
+// Fit the visible floors inside both the vertical and horizontal field of view.
+function fitDistance() {
+  const size = bounds.getSize(new THREE.Vector3());
+  const radius = Math.hypot(size.x, size.z) / 2 + size.y / 2;
+  const halfV = THREE.MathUtils.degToRad(perspective.fov / 2);
+  const halfH = Math.atan(Math.tan(halfV) * perspective.aspect);
+  return (radius / Math.tan(Math.min(halfV, halfH))) * 1.02;
+}
+
 function setTopDown() {
-  const target = controls.target.clone();
-  camera.position.set(target.x, target.y + fitDistance * 1.1, target.z + 0.01);
+  if (camera !== perspective) return;
+  const target = bounds.getCenter(new THREE.Vector3()).setY(bounds.min.y);
+  controls.target.copy(target);
+  camera.position.set(target.x, target.y + fitDistance() * 1.05, target.z + 0.01);
   camera.up.set(0, 0, -1);
   controls.update();
   markView("top");
 }
 
 function setOrbit() {
+  if (camera !== perspective) return;
   camera.up.set(0, 1, 0);
-  const target = controls.target.clone();
-  // Three-quarter view from the south-west, about 55 degrees above the floor so rooms stay visible.
-  const offset = new THREE.Vector3(-0.4, 1, 0.6).normalize().multiplyScalar(fitDistance);
+  const target = bounds.getCenter(new THREE.Vector3());
+  controls.target.copy(target);
+  // Three-quarter view from the south-west, about 50 degrees above the floor so rooms stay visible.
+  const offset = new THREE.Vector3(-0.45, 0.95, 0.75).normalize().multiplyScalar(fitDistance());
   camera.position.copy(target).add(offset);
   controls.update();
   markView("orbit");
+}
+
+function fitPlans() {
+  const { width, height } = stageSize();
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const half = Math.max(size.z / 2, size.x / 2 / (width / height)) * 1.06;
+  Object.assign(orthographic, { left: (-half * width) / height, right: (half * width) / height, top: half, bottom: -half, zoom: 1 });
+  orthographic.updateProjectionMatrix();
+  orthographic.position.set(center.x, 500, center.z + 0.001);
+  orthographic.up.set(0, 0, -1);
+  controls.target.set(center.x, 0, center.z);
+  controls.update();
 }
 
 function markView(active: "top" | "orbit") {
@@ -122,27 +154,12 @@ for (const [id, key] of [
   ["show-rooms", "rooms"],
   ["show-doors", "doors"],
   ["show-exits", "exits"],
-  ["show-warnings", "warnings"],
-] as const) {
+] as [string, LayerKey][]) {
   document.querySelector<HTMLInputElement>(`#${id}`)!.addEventListener("change", (event) => {
-    groups[key].visible = (event.target as HTMLInputElement).checked;
+    floors?.setLayer(key, (event.target as HTMLInputElement).checked);
+    scheduleDeclutter();
   });
 }
-groups.warnings.visible = false;
-
-function clear(group: THREE.Object3D) {
-  while (group.children.length) group.remove(group.children[0]);
-}
-
-function lineLoop(points: number[][], color: THREE.Color, y: number) {
-  const vectors = points.map((point) => new THREE.Vector3(point[0], y, point[1]));
-  if (vectors.length) vectors.push(vectors[0].clone());
-  const geometry = new THREE.BufferGeometry().setFromPoints(vectors);
-  return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
-}
-
-// ISO 7010 E001-style running figure, white on exit green.
-const EXIT_PICTOGRAM = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14.5" cy="4" r="2.2" fill="currentColor" stroke="none"/><path d="M6.5 10 9.5 7.6 13.5 7.5 16 11 19 11.5M13.5 7.5 10.5 14M4.5 20 8.5 17.5 10.5 14 14 16.5 13.5 21.5"/></svg>`;
 
 function label(className: string, build: (element: HTMLDivElement) => void) {
   const element = document.createElement("div");
@@ -163,7 +180,7 @@ function drawTitleBlock(data: SceneDoc) {
   const rows: [string, string, string?][] = [
     ["Source", data.meta?.source ?? "unknown"],
     ["Scale", data.meta?.scale_method.replace(/_/g, " ") ?? ""],
-    ["Rooms, exits", `${data.rooms.length}, ${data.exits.length}`],
+    [data.levels.length > 1 ? "Floors, rooms, exits" : "Rooms, exits", `${data.levels.length > 1 ? `${data.levels.length}, ` : ""}${data.rooms.length}, ${data.exits.length}`],
     ["Generated", date],
     ["Checks", errors ? `${errors} errors` : `${data.warnings.length} warnings`, errors ? "fail" : "pass"],
   ];
@@ -178,6 +195,33 @@ function drawTitleBlock(data: SceneDoc) {
   buildingName.textContent = data.meta?.name ?? "";
 }
 
+// ---- floors rail: one row per level with its live count; clicking a row focuses that floor ----
+const floorRows = new Map<string, HTMLElement>();
+function drawFloorList(data: SceneDoc) {
+  const list = document.querySelector<HTMLOListElement>("#floor-list")!;
+  for (const level of [...data.levels].reverse()) {
+    const button = document.createElement("button");
+    button.type = "button";
+    const count = text("span", "");
+    count.className = "fl-count";
+    button.append(text("b", level.name ?? level.id), count);
+    button.addEventListener("click", () => setLevel(level.id));
+    floorRows.set(level.id, count);
+    const item = document.createElement("li");
+    item.dataset.level = level.id;
+    item.append(button);
+    list.append(item);
+  }
+  document.querySelector<HTMLElement>("#floors")!.hidden = false;
+}
+
+function setFloorCount(level: string, people: number | null) {
+  floors?.setCount(level, people);
+  const row = floorRows.get(level);
+  const value = people === null ? "" : String(people);
+  if (row && row.textContent !== value) row.textContent = value;
+}
+
 function drawScene(data: SceneDoc) {
   doc = data;
   levelSelect.innerHTML = "";
@@ -187,10 +231,13 @@ function drawScene(data: SceneDoc) {
     option.textContent = level.name ?? level.id;
     levelSelect.appendChild(option);
   }
-  activeLevel = data.levels[0]?.id ?? "";
+  activeLevel = data.levels.some((level) => level.id === params.get("level")) ? params.get("level")! : data.levels[0]?.id ?? "";
+  levelSelect.value = activeLevel;
   nav = buildNav(data.navmesh);
-  rebuildOverlays();
+  floors = buildFloors(data, scene);
   drawTitleBlock(data);
+  if (data.levels.length > 1) drawFloorList(data);
+  else document.body.classList.add("one-level");
   warningList.innerHTML = "";
   if (!data.warnings.length) {
     warningList.append(text("p", "No warnings in this scene."));
@@ -202,98 +249,173 @@ function drawScene(data: SceneDoc) {
     button.append(text("code", warning.code), warning.message);
     button.addEventListener("click", () => {
       const room = data.rooms.find((item) => warning.message.includes(item.id));
-      if (room) frame(room.centroid[0], room.centroid[1]);
+      if (!room) return;
+      if (view === "single" && room.level !== activeLevel) setLevel(room.level);
+      frame(room.centroid[0], room.centroid[1], room.level);
     });
     warningList.appendChild(button);
   }
 }
 
-function rebuildOverlays() {
-  if (!doc) return;
-  const elevation = doc.levels.find((level) => level.id === activeLevel)?.elevation_m ?? 0;
-  clear(groups.rooms);
-  clear(groups.doors);
-  clear(groups.exits);
-  clear(groups.navmesh);
-  for (const room of doc.rooms.filter((item) => item.level === activeLevel)) {
-    groups.rooms.add(lineLoop(room.polygon, token("drafting"), elevation + 0.06));
-    const tag = label("room-label", (element) => {
-      element.append(text("b", room.name));
-      if (room.area_m2) element.append(text("span", `${room.area_m2.toFixed(1)} m²`));
-    });
-    tag.position.set(room.centroid[0], elevation + 0.1, room.centroid[1]);
-    groups.rooms.add(tag);
-  }
-  for (const door of doc.doors.filter((item) => item.level === activeLevel)) {
-    groups.doors.add(lineLoop(door.segment, door.is_exit ? token("exit-bright") : token("model"), elevation + 0.08));
-  }
-  pulses.length = 0;
-  for (const exit of doc.exits.filter((item) => item.level === activeLevel)) {
-    const marker = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.32, 0.32, 0.04, 32),
-      new THREE.MeshBasicMaterial({ color: token("exit-bright") }),
-    );
-    marker.position.set(exit.position[0], elevation + 0.1, exit.position[1]);
-    const pulse = new THREE.Mesh(
-      new THREE.RingGeometry(0.34, 0.42, 48).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ color: token("exit-bright"), transparent: true, depthWrite: false }),
-    );
-    pulse.position.copy(marker.position);
-    pulses.push(pulse);
-    const tag = label("exit-label", (element) => {
-      element.innerHTML = EXIT_PICTOGRAM;
-      element.append(exit.label);
-    });
-    tag.position.set(exit.position[0], elevation + 0.1, exit.position[1]);
-    tag.center.set(0.5, 1.7); // sit the sign just above its marker in every view
-    groups.exits.add(marker, pulse, tag);
-  }
-  const vertices = doc.navmesh.vertices;
-  const positions: number[] = [];
-  doc.navmesh.triangles.forEach((triangle, index) => {
-    if (doc!.navmesh.triangle_level[index] !== activeLevel) return;
-    for (const corner of triangle) {
-      const vertex = vertices[corner];
-      positions.push(vertex[0], vertex[1] + 0.04, vertex[2]);
-    }
-  });
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  groups.navmesh.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: token("walkable"), transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide })));
+function setLevel(level: string) {
+  activeLevel = level;
+  levelSelect.value = level;
+  applyView(view, view === "single");
 }
 
-levelSelect.addEventListener("change", () => {
-  activeLevel = levelSelect.value;
-  rebuildOverlays();
-  mirrorLabels();
-});
+levelSelect.addEventListener("change", () => setLevel(levelSelect.value));
 
-function routeFrom(start: THREE.Vector3) {
+// ---- views ----
+function updateUrl() {
+  const url = new URL(location.href);
+  url.searchParams.set("view", view);
+  url.searchParams.set("walls", walls);
+  if (view === "exploded") url.searchParams.set("spacing", String(spacing));
+  else url.searchParams.delete("spacing");
+  if (doc && doc.levels.length > 1) url.searchParams.set("level", activeLevel);
+  history.replaceState(null, "", url);
+}
+
+function rebuildGrid() {
+  grid.clear();
+  const size = bounds.getSize(new THREE.Vector3());
+  const center = bounds.getCenter(new THREE.Vector3());
+  const span = Math.ceil(Math.max(size.x, size.z) / 5) * 5 + 10;
+  const minor = new THREE.GridHelper(span, span, token("line"), token("line"));
+  const major = new THREE.GridHelper(span, span / 5, token("line-strong"), token("line-strong"));
+  for (const helper of [minor, major]) {
+    helper.position.set(Math.round(center.x), bounds.min.y - 0.12, Math.round(center.z));
+    (helper.material as THREE.Material).transparent = true;
+    (helper.material as THREE.Material).opacity = helper === major ? 0.35 : 0.5;
+    helper.raycast = () => {};
+    grid.add(helper);
+  }
+}
+
+function applyView(mode: ViewMode, refit = true) {
+  if (!floors) return;
+  const changed = mode !== view;
+  view = mode;
+  const { width, height } = stageSize();
+  bounds = floors.layout(mode, activeLevel, spacing, width / height);
+  floors.setWalls(walls);
+  const plans = mode === "side";
+  camera = plans ? orthographic : perspective;
+  controls.object = camera;
+  controls.enableRotate = !plans;
+  controls.mouseButtons.LEFT = plans ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+  if (refit || changed) {
+    if (plans) fitPlans();
+    else if (mode === "single" && doc && doc.levels.length === 1) setOrbit();
+    else setOrbit();
+  }
+  rebuildGrid();
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-view]")) button.setAttribute("aria-pressed", String(button.dataset.view === mode));
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-walls]")) button.setAttribute("aria-pressed", String(button.dataset.walls === walls));
+  for (const id of ["top", "orbit"]) (document.querySelector(`#${id}`) as HTMLButtonElement).disabled = plans;
+  for (const row of document.querySelectorAll<HTMLElement>("#floor-list li")) row.classList.toggle("focus", row.dataset.level === activeLevel && mode !== "side");
+  document.querySelector<HTMLElement>("#spacing-control")!.hidden = mode !== "exploded";
+  document.body.dataset.view = mode;
+  if (lastRoute) drawRoute(lastRoute.legs, false);
+  for (const hook of layoutHooks) hook(mode);
+  updateUrl();
+  scheduleDeclutter();
+}
+
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-view]")) {
+  button.addEventListener("click", () => applyView(button.dataset.view as ViewMode));
+}
+for (const button of document.querySelectorAll<HTMLButtonElement>("[data-walls]")) {
+  button.addEventListener("click", () => {
+    walls = button.dataset.walls as WallMode;
+    applyView(view, false);
+  });
+}
+spacingInput.value = String(spacing);
+spacingInput.addEventListener("input", () => {
+  spacing = Number(spacingInput.value);
+  document.querySelector("#spacing-value")!.textContent = `${spacing.toFixed(1)}x`;
+  applyView(view, false);
+});
+document.querySelector("#spacing-value")!.textContent = `${spacing.toFixed(1)}x`;
+
+// ---- labels follow the zoom: only rooms big enough on screen get a name ----
+let declutterQueued = false;
+function pxPerMeter() {
+  const { height } = stageSize();
+  if (camera === orthographic) return (height * orthographic.zoom) / (orthographic.top - orthographic.bottom);
+  const distance = camera.position.distanceTo(controls.target);
+  return height / (2 * Math.tan(THREE.MathUtils.degToRad(perspective.fov / 2)) * Math.max(distance, 0.1));
+}
+function scheduleDeclutter() {
+  if (declutterQueued) return;
+  declutterQueued = true;
+  setTimeout(() => {
+    declutterQueued = false;
+    floors?.declutter(pxPerMeter());
+  }, 120);
+}
+controls.addEventListener("change", scheduleDeclutter);
+
+// ---- route on click, across floors through the stairs ----
+function shaftLetter(linkId: string) {
+  const link = doc?.links?.find((item) => item.id === linkId);
+  if (!link || !floors) return "";
+  const shaft = floors.shafts.find((item) => {
+    const stop = item.stops.get(link.from.level);
+    return stop && Math.hypot(stop[0] - link.from.position[0], stop[1] - link.from.position[1]) < 3;
+  });
+  return shaft ? `Stair ${shaft.letter}` : "the stairs";
+}
+
+function routeFrom(point: THREE.Vector3, level: string) {
   if (!doc || !nav) return;
-  let from: Vec2 = [start.x, start.z];
+  let from: Vec2 = [point.x, point.z];
   // A click on furniture or a wall top starts from the nearest walkable triangle instead.
-  if (!onMesh(nav, from, activeLevel, 0.05)) from = nav.centroids[locate(nav, from, activeLevel)];
-  const best = nearestExit(nav, from, activeLevel, doc.exits);
+  if (!onMesh(nav, from, level, 0.05)) from = nav.centroids[locate(nav, from, level)];
+  const best = nearestExitAcross(nav, from, level, doc.exits, (doc.links ?? []).filter((link) => link.type === "stairs"));
   if (!best) {
     readout.textContent = "No walkable route from here to an exit.";
     readout.className = "";
     return;
   }
-  const y = start.y + 0.15;
-  const points = best.points.map(([x, z]) => new THREE.Vector3(x, y, z));
-  clear(groups.path);
-  const line = new Line2(new LineGeometry().setPositions(points.flatMap((point) => point.toArray())), pathMaterial);
-  line.computeLineDistances();
-  line.renderOrder = 10;
-  drawStart = performance.now();
-  segmentCount = points.length - 1;
+  const via = [...new Set(best.legs.filter((leg) => leg.via).map((leg) => shaftLetter(leg.via!)))];
+  lastRoute = { legs: best.legs, meters: best.meters, exit: best.exit.label, via };
+  drawRoute(best.legs, true);
+  showRoute(best.meters, best.exit.label, via);
+}
+
+function drawRoute(legs: Leg[], animate: boolean) {
+  if (!floors) return;
+  pathGroup.clear();
+  for (const leg of legs) {
+    const points = leg.points.map(([x, z]) => floors!.place(leg.level, x, z).setY(floors!.place(leg.level, x, z).y + 0.15));
+    const line = new Line2(new LineGeometry().setPositions(points.flatMap((point) => point.toArray())), pathMaterial);
+    line.computeLineDistances();
+    line.renderOrder = 10;
+    line.userData.segments = points.length - 1;
+    pathGroup.add(line);
+  }
+  // In 3D the stair legs join up vertically; in side by side the matching stair badges carry the jump.
+  for (let i = 0; i + 1 < legs.length && view !== "side"; i += 1) {
+    const a = legs[i].points[legs[i].points.length - 1];
+    const b = legs[i + 1].points[0];
+    const p = floors.place(legs[i].level, a[0], a[1]);
+    const q = floors.place(legs[i + 1].level, b[0], b[1]);
+    const line = new Line2(new LineGeometry().setPositions([p.x, p.y + 0.15, p.z, q.x, q.y + 0.15, q.z]), pathMaterial);
+    line.userData.segments = 1;
+    line.renderOrder = 10;
+    pathGroup.add(line);
+  }
+  const start = legs[0].points[0];
   const origin = new THREE.Mesh(
     new THREE.RingGeometry(0.18, 0.28, 32).rotateX(-Math.PI / 2),
-    new THREE.MeshBasicMaterial({ color: token("route") }),
+    new THREE.MeshBasicMaterial({ color: token("route"), depthTest: false }),
   );
-  origin.position.copy(points[0]);
-  groups.path.add(line, origin);
-  showRoute(best.meters, best.exit.label);
+  origin.renderOrder = 11;
+  origin.position.copy(floors.place(legs[0].level, start[0], start[1])).setY(origin.position.y + 0.16);
+  pathGroup.add(origin);
+  if (animate) drawStart = performance.now();
 }
 
 function figure(value: string, unit: string) {
@@ -303,8 +425,8 @@ function figure(value: string, unit: string) {
   return element;
 }
 
-function showRoute(meters: number, exitLabel: string) {
-  const note = text("span", `to ${exitLabel}, walking at ${WALK_SPEED} m/s`);
+function showRoute(meters: number, exitLabel: string, via: string[]) {
+  const note = text("span", `to ${exitLabel}${via.length ? `, down ${via.join(" and ")}` : ""}, walking at ${WALK_SPEED} m/s`);
   note.className = "route-note";
   readout.replaceChildren(figure(meters.toFixed(1), "m"), figure((meters / WALK_SPEED).toFixed(1), "s"), note);
   readout.className = "has-route";
@@ -318,10 +440,17 @@ let downAt: { x: number; y: number } | null = null;
 renderer.domElement.addEventListener("pointerdown", (event) => {
   downAt = { x: event.clientX, y: event.clientY };
 });
+
+function shown(object: THREE.Object3D) {
+  for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
+  return true;
+}
+
 // Only a click without a drag picks; orbiting the camera must not redraw the route.
 renderer.domElement.addEventListener("pointerup", (event) => {
   if (!downAt || Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) > CLICK_SLOP_PX) return;
   downAt = null;
+  if (!floors) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const halves = splitView ? 2 : 1;
   const width = rect.width / halves;
@@ -330,81 +459,15 @@ renderer.domElement.addEventListener("pointerup", (event) => {
   pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   if (pickers.some((pick) => pick(raycaster, side))) return;
-  const hits = raycaster.intersectObjects([...modelRoot.children, groups.navmesh], true);
-  if (!hits.length) return;
-  routeFrom(hits[0].point);
+  const targets = floors.levels.filter((level) => level.root.visible && !level.ghost).flatMap((level) => [level.layers.model, level.layers.navmesh]);
+  const hit = raycaster.intersectObjects(targets, true).find((item) => shown(item.object));
+  if (!hit) return;
+  const level = floors.levelOf(hit.object);
+  if (!level) return;
+  routeFrom(hit.point.clone().sub(level.root.position), level.id);
 });
 
-// Restyle display.glb as a white card model. Mesh names come from the exporters:
-// LiDAR writes "scan" plus one "w_*" per wall, blueprint writes walls/floors/doors/exits.
-function modelColor(name: string) {
-  if (name.startsWith("exits")) return token("exit");
-  if (name.startsWith("floors") || name.startsWith("scan")) return token("line-strong");
-  if (name.startsWith("doors") || name.startsWith("stairs")) return token("drafting");
-  return token("model");
-}
-
-function styleModel(root: THREE.Object3D) {
-  const meshes: THREE.Mesh[] = [];
-  root.traverse((object) => {
-    if (object instanceof THREE.Mesh) meshes.push(object);
-  });
-  for (const mesh of meshes) {
-    mesh.material = new THREE.MeshStandardMaterial({ color: modelColor(mesh.name), roughness: 0.9, metalness: 0 });
-    // Ink outlines on the clean walls give the model its drawing-set look; the raw scan is too dense.
-    if (mesh.name.startsWith("w_") || mesh.name.startsWith("walls")) {
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, 30), new THREE.LineBasicMaterial({ color: token("ground") }));
-      edges.raycast = () => {}; // clicks must land on the floor mesh, not on outlines
-      mesh.add(edges);
-    }
-  }
-}
-
-function addGrid(box: THREE.Box3, center: THREE.Vector3) {
-  const span = Math.ceil(Math.max(box.max.x - box.min.x, box.max.z - box.min.z) / 5) * 5 + 10;
-  const minor = new THREE.GridHelper(span, span, token("line"), token("line"));
-  const major = new THREE.GridHelper(span, span / 5, token("line-strong"), token("line-strong"));
-  for (const grid of [minor, major]) {
-    grid.position.set(Math.round(center.x), box.min.y - 0.02, Math.round(center.z));
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = grid === major ? 0.35 : 0.6;
-    scene.add(grid);
-  }
-}
-
-function showModel(root: THREE.Object3D) {
-  modelRoot.add(root);
-  const box = new THREE.Box3().setFromObject(root);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-  addGrid(box, center);
-  fitRadius = Math.hypot(size.x, size.z) / 2;
-  refit();
-  controls.target.copy(center).setY(box.min.y);
-  setOrbit();
-  readout.textContent = "Click any floor to draw the walking route to the nearest exit.";
-}
-
-// Stand-in model for scenes without display.glb: walls extruded from their footprints plus the floor,
-// cut at 1.2 m like an architect's cutaway model so occupants stay visible in orbit view.
-const CUTAWAY_HEIGHT_M = 1.2;
-function extrudeWalls(data: SceneDoc) {
-  const root = new THREE.Group();
-  for (const wall of data.walls ?? []) {
-    const elevation = data.levels.find((level) => level.id === wall.level)?.elevation_m ?? 0;
-    const shape = new THREE.Shape(wall.polygon.map(([x, z]) => new THREE.Vector2(x, -z)));
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth: Math.min(wall.height_m, CUTAWAY_HEIGHT_M), bevelEnabled: false }).rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geometry.translate(0, elevation, 0));
-    mesh.name = `walls_${wall.id}`;
-    root.add(mesh);
-  }
-  const floor = new THREE.Mesh(new THREE.BufferGeometry().copy((groups.navmesh.children[0] as THREE.Mesh).geometry).translate(0, -0.05, 0));
-  floor.name = "floors";
-  root.add(floor);
-  styleModel(root);
-  return root;
-}
-
+// ---- loading ----
 const sceneLoaded = fetch(sceneUrl)
   .then((response) => {
     if (!response.ok) throw new Error(`${response.status}`);
@@ -418,78 +481,88 @@ sceneLoaded.catch(() => {
   readout.textContent = `Could not load ${sceneUrl}. Pass ?scene=/path/scene.json and check the file is in public/.`;
 });
 
-if (glbUrl) {
-  new GLTFLoader().load(
-    glbUrl,
-    (gltf) => {
-      styleModel(gltf.scene);
-      showModel(gltf.scene);
-    },
-    undefined,
-    () => {
-      readout.textContent = `Could not load ${glbUrl}; showing walls from scene.json.`;
-      sceneLoaded.then((data) => showModel(extrudeWalls(data)));
-    },
-  );
-} else {
-  sceneLoaded.then((data) => showModel(extrudeWalls(data)));
-}
+const modelLoaded: Promise<THREE.Object3D | null> = glbUrl
+  ? new GLTFLoader()
+      .loadAsync(glbUrl)
+      .then((gltf) => gltf.scene)
+      .catch(() => {
+        readout.textContent = `Could not load ${glbUrl}; showing walls from scene.json.`;
+        return null;
+      })
+  : Promise.resolve(null);
 
+const ready = Promise.all([sceneLoaded, modelLoaded]).then(([data, model]) => {
+  floors!.attachModel(model);
+  const requested = params.get("view") as ViewMode;
+  const multi = data.levels.length > 1;
+  // Watching a multi-floor run reads best as one plan per floor; a building on its own reads best stacked.
+  const initial = multi ? (VIEWS.includes(requested) ? requested : params.get("replay") ? "side" : "stacked") : "single";
+  view = initial;
+  applyView(initial);
+  if (!readout.textContent?.startsWith("Could not")) readout.textContent = "Click any floor to draw the walking route to the nearest exit.";
+  return data;
+});
+ready.catch((error) => {
+  readout.textContent = `Could not build the scene (${error instanceof Error ? error.message : error}).`;
+});
+
+// ---- render loop, split view for ?compare= ----
 const frameHooks: ((now: number) => void)[] = [];
 // Split view (?compare=): one camera, two viewports; the right half gets its own label layer.
 let splitView: { left: THREE.Object3D; right: THREE.Object3D } | null = null;
 const rightLabelScene = new THREE.Scene();
 const rightLabelRenderer = new CSS2DRenderer();
-const mirrors: { source: THREE.Object3D; copy: THREE.Group }[] = [];
+const mirrorRoot = new THREE.Group();
+rightLabelScene.add(mirrorRoot);
+const mirrors = new Map<CSS2DObject, CSS2DObject>();
 
-function mirrorLabels() {
-  for (const { source, copy } of mirrors) {
-    clear(copy);
-    source.traverse((object) => {
-      if (!(object instanceof CSS2DObject)) return;
-      const clone = new CSS2DObject(object.element.cloneNode(true) as HTMLElement);
-      clone.position.copy(object.getWorldPosition(new THREE.Vector3()));
-      clone.center.copy(object.center);
-      copy.add(clone);
-    });
+// Static labels (rooms, exits, captions, analysis) are cloned into the right half each frame they change.
+function syncMirrors(left: THREE.Object3D) {
+  const seen = new Set<CSS2DObject>();
+  scene.traverseVisible((object) => {
+    if (!(object instanceof CSS2DObject)) return;
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) if (node === left) return;
+    seen.add(object);
+    let copy = mirrors.get(object);
+    if (!copy) {
+      copy = new CSS2DObject(object.element.cloneNode(true) as HTMLElement);
+      copy.center.copy(object.center);
+      mirrors.set(object, copy);
+      mirrorRoot.add(copy);
+    }
+    object.getWorldPosition(copy.position);
+  });
+  for (const [source, copy] of mirrors) {
+    if (seen.has(source)) continue;
+    copy.removeFromParent();
+    mirrors.delete(source);
   }
-}
-
-function addLayer(key: string, group: THREE.Group) {
-  groups[key] = group;
-  if (!scene.children.includes(group)) scene.add(group);
-  const copy = new THREE.Group();
-  rightLabelScene.add(copy);
-  mirrors.push({ source: group, copy });
-}
-
-function stageSize() {
-  return { width: stage.clientWidth / (splitView ? 2 : 1), height: Math.max(stage.clientHeight, 1) };
 }
 
 function resize() {
   const { width, height } = stageSize();
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  perspective.aspect = width / height;
+  perspective.updateProjectionMatrix();
   renderer.setSize(stage.clientWidth, stage.clientHeight);
   labelRenderer.setSize(width, height);
   rightLabelRenderer.setSize(width, height);
   pathMaterial.resolution.set(width, height);
+  if (floors) applyView(view, view === "side");
 }
 
-function renderSplit(view: { left: THREE.Object3D; right: THREE.Object3D }) {
+function renderSplit(split: { left: THREE.Object3D; right: THREE.Object3D }) {
   const { width, height } = stageSize();
   renderer.setScissorTest(true);
   for (const side of [0, 1]) {
-    view.left.visible = side === 0;
-    view.right.visible = side === 1;
+    split.left.visible = side === 0;
+    split.right.visible = side === 1;
     renderer.setViewport(side * width, 0, width, height);
     renderer.setScissor(side * width, 0, width, height);
     renderer.render(scene, camera);
   }
   renderer.setScissorTest(false);
-  view.left.visible = true;
-  for (const { source, copy } of mirrors) copy.visible = source.visible;
+  split.left.visible = true;
+  syncMirrors(split.left);
   labelRenderer.render(scene, camera);
   rightLabelRenderer.render(rightLabelScene, camera);
 }
@@ -501,12 +574,12 @@ function animate() {
   for (const hook of frameHooks) hook(now);
   // The route draws itself from the click point to the exit, one segment at a time.
   const progress = reduceMotion ? 1 : Math.min((now - drawStart) / 700, 1);
-  for (const child of groups.path.children) {
-    if (child instanceof Line2) child.geometry.instanceCount = Math.ceil(segmentCount * (1 - (1 - progress) ** 3));
+  for (const child of pathGroup.children) {
+    if (child instanceof Line2) child.geometry.instanceCount = Math.ceil(child.userData.segments * (1 - (1 - progress) ** 3));
   }
   // Exits pulse slowly so they can be found from across the room.
   const phase = reduceMotion ? 0.5 : (now % 2400) / 2400;
-  for (const pulse of pulses) {
+  for (const pulse of floors?.pulses ?? []) {
     pulse.scale.setScalar(1 + phase * 1.2);
     (pulse.material as THREE.MeshBasicMaterial).opacity = 0.7 * (1 - phase);
   }
@@ -521,10 +594,10 @@ animate();
 window.addEventListener("resize", resize);
 
 // Replay (?replay=, ?compare=) and analysis (?analysis=) build on the loaded scene.
-sceneLoaded.then((data) => {
+ready.then((data) => {
   const context: ViewerContext = {
     scene,
-    camera,
+    camera: perspective,
     doc: data,
     nav: nav!,
     level: () => activeLevel,
@@ -533,9 +606,8 @@ sceneLoaded.then((data) => {
     label,
     onFrame: (fn) => frameHooks.push(fn),
     onPick: (fn) => pickers.push(fn),
-    addLayer: (key, group) => {
-      addLayer(key, group);
-      mirrorLabels();
+    addLayer: (_key, group) => {
+      if (!group.parent) scene.add(group);
     },
     split: (left, right, rightLabels) => {
       splitView = { left, right };
@@ -545,15 +617,16 @@ sceneLoaded.then((data) => {
       stage.appendChild(rightLabelRenderer.domElement);
       stage.classList.add("split");
       resize();
-      if (fitRadius) {
-        refit();
-        setOrbit();
-      }
+      applyView(view);
     },
-    focus: (x, z) => frame(x, z, context.elevation()),
+    focus: (x, z) => frame(x, z),
+    place: (level, x, z, out) => floors!.place(level, x, z, out),
+    levelRoot: (level) => (floors!.byId.get(level) ?? floors!.levels[0]).root,
+    view: () => view,
+    onLayout: (fn) => layoutHooks.push(fn),
+    pxPerMeter,
+    setFloorCount,
   };
-  for (const key of ["rooms", "exits"]) addLayer(key, groups[key] as THREE.Group);
-  mirrorLabels();
   startAnalysis(context, params.get("analysis"));
   startReplay(context, params.get("replay"), params.get("compare"));
 });

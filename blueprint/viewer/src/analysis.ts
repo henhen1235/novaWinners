@@ -41,7 +41,7 @@ export async function startAnalysis(context: ViewerContext, url: string | null) 
   const { doc } = context;
   const level = context.level();
   const group = new THREE.Group();
-  const y = context.elevation() + 0.12;
+  const y = (doc.levels.find((item) => item.id === level)?.elevation_m ?? 0) + 0.12;
   const stage = document.querySelector<HTMLElement>("#stage")!;
   const materials: LineMaterial[] = [];
 
@@ -117,6 +117,7 @@ export async function startAnalysis(context: ViewerContext, url: string | null) 
   }
   window.addEventListener("resize", () => materials.forEach((material) => material.resolution.set(stage.clientWidth, stage.clientHeight)));
 
+  context.levelRoot(level).add(group); // follows the floor when the view moves it
   context.addLayer("analysis", group);
   const toggle = document.querySelector<HTMLInputElement>("#show-analysis")!;
   toggle.closest("label")!.hidden = false;

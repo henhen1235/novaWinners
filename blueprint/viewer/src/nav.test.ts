@@ -1,7 +1,7 @@
 // Run: node src/nav.test.ts  (Node 23.6+ strips the types)
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildNav, findPath, locate, nearestExit, onMesh, pathLength, type Vec2 } from "./nav.ts";
+import { buildNav, findPath, locate, nearestExit, nearestExitAcross, onMesh, pathLength, type Vec2 } from "./nav.ts";
 
 const scene = JSON.parse(readFileSync(new URL("../../../fixtures/tiny_office.scene.json", import.meta.url), "utf8"));
 const nav = buildNav(scene.navmesh);
@@ -30,4 +30,14 @@ for (const room of scene.rooms) {
   const crow = Math.hypot(start[0] - best.exit.position[0], start[1] - best.exit.position[1]);
   assert.ok(pathLength(best.points) <= crow * 1.6 + 1, `${room.id}: ${pathLength(best.points)} m vs ${crow} m`);
 }
+// Two floors: a start upstairs must route down a stair link to a ground-floor exit.
+const school = JSON.parse(readFileSync(new URL("../../../fixtures/two_floor_school.scene.json", import.meta.url), "utf8"));
+const schoolNav = buildNav(school.navmesh);
+const upstairs = school.rooms.find((room: { level: string }) => room.level === "L2");
+const upStart = schoolNav.centroids[locate(schoolNav, [upstairs.centroid[0], upstairs.centroid[1]], "L2")];
+const across = nearestExitAcross(schoolNav, upStart, "L2", school.exits, school.links)!;
+assert.ok(across, "no cross-floor route from L2");
+assert.deepEqual(across.legs.map((leg) => leg.level), ["L2", "L1"], `legs ${JSON.stringify(across.legs.map((leg) => leg.level))}`);
+assert.equal(across.exit.level, "L1");
+assert.ok(across.legs[0].via, "first leg must end at a stair link");
 console.log("nav ok");

@@ -237,3 +237,54 @@ p.badge { display: inline-block; margin: var(--space-2) 0 0; }
 }
 .smoke-badge b { font: 500 var(--size-xs) var(--font-mono); }
 .analysis-error { margin: 0 0 var(--space-2); color: var(--color-warn); }
+
+/* ---- Floors ---- */
+.floor-views { margin-left: auto; }
+.camera-views { margin-left: 0; }
+.views button:disabled { opacity: 0.4; cursor: default; }
+.views button:disabled:hover { background: var(--color-raised); }
+body.one-level .floor-views { display: none; }
+body.one-level .camera-views { margin-left: auto; }
+.walls-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); color: var(--color-text-muted); }
+.walls { margin-left: 0; }
+.walls button { padding: 4px 10px; font-size: var(--size-xs); }
+
+.spacing {
+  position: absolute; top: var(--space-5); left: var(--space-5); z-index: 3; display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3); color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent); border: 1px solid var(--color-line-strong);
+}
+.spacing input { width: 140px; accent-color: var(--color-drafting); }
+.spacing output { font: 500 var(--size-sm) var(--font-mono); color: var(--color-text); min-width: 3ch; }
+
+.floor-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.floor-list button {
+  display: flex; justify-content: space-between; align-items: baseline; width: 100%; padding: 4px var(--space-2);
+  background: none; border: 0; border-left: 2px solid transparent; cursor: pointer; text-align: left;
+}
+.floor-list button:hover { background: var(--color-raised); }
+.floor-list li.focus button { border-left-color: var(--color-text); background: var(--color-raised); }
+.floor-list b { font-weight: 500; }
+.fl-count { font: 500 var(--size-md) var(--font-mono); font-variant-numeric: tabular-nums; color: var(--color-text); }
+
+/* Drawing title under each plan, as on an architectural sheet: reference bubble, name, then the live count. */
+.floor-caption {
+  display: flex; align-items: center; gap: var(--space-2); pointer-events: none; white-space: nowrap;
+  padding-top: 4px; border-top: 1.5px solid var(--color-drafting);
+}
+.fc-bubble {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--color-drafting); font: 600 var(--size-sm)/1 var(--font-sans); color: var(--color-text);
+}
+.fc-name { font: 600 var(--size-lg)/1 var(--font-sans); color: var(--color-text); }
+.fc-count { font: 500 var(--size-md)/1 var(--font-mono); color: var(--color-route); font-variant-numeric: tabular-nums; }
+
+.stair-badge {
+  display: grid; place-items: center; width: 20px; height: 20px; pointer-events: auto; cursor: help;
+  font: 700 var(--size-xs)/1 var(--font-sans); color: var(--color-ground); background: var(--stair);
+  border: 1.5px solid var(--color-ground); border-radius: 3px; box-shadow: 0 0 0 1px var(--stair);
+}
+
+/* Zoomed out, exits keep the pictogram and drop the words. */
+body.zoomed-out .exit-label { padding: 2px; }
+body.zoomed-out .exit-label .exit-text { display: none; }

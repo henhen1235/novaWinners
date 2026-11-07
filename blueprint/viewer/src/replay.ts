@@ -8,7 +8,8 @@ export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: strin
 type ReplayDoc = {
   meta: { dt: number; duration_s: number; llm_calls?: number; cost_usd?: number; label?: string; run_id?: string; scenario?: string; seed?: number };
   agents: { id: string; persona: string; model?: string; color?: string }[];
-  frames: { t: number; a: [string, number, number, string][] }[];
+  // The 5th element is the level id; older replays have 4 elements (first level).
+  frames: { t: number; a: [string, number, number, string, string?][] }[];
   events: ReplayEvent[];
 };
 
@@ -20,6 +21,7 @@ export interface Run {
   xs: Float32Array[]; // per frame, per agent; NaN when the agent is absent
   zs: Float32Array[];
   states: string[][];
+  levels: Uint8Array[]; // per frame, per agent: index into scene.levels
   decisions: DecisionRecord[];
   live: THREE.InstancedMesh;
   ghosts: THREE.InstancedMesh;
@@ -46,11 +48,13 @@ const KIND_LABEL: Record<string, string> = {
 // Agent colors follow design/DESIGN.md: calm text, moving route green, deciding amber, trapped hazard.
 const STATE_TOKEN: Record<string, string> = {
   waiting: "text", hiding: "text", helping: "model", moving: "route", deciding: "warn", queued: "drafting",
+  on_stairs: "drafting", waiting_at_refuge: "warn", carried: "model",
   trapped: "hazard-bright", hurt: "hazard-bright", blocked: "hazard-bright",
 };
 const STATE_LABEL: Record<string, string> = {
   waiting: "Waiting", hiding: "Hiding", helping: "Helping", moving: "Moving", deciding: "Deciding", queued: "Queued at a door",
-  trapped: "Trapped", hurt: "Hurt", blocked: "Blocked", exited: "Evacuated",
+  trapped: "Trapped", hurt: "Hurt", blocked: "Blocked", on_stairs: "On the stairs", waiting_at_refuge: "Waiting at refuge",
+  carried: "Being carried", exited: "Evacuated",
 };
 const PERSONA_FALLBACK = ["drafting", "model", "walkable", "text-muted", "line-strong"];
 
@@ -89,6 +93,8 @@ function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisi
   const xs: Float32Array[] = [];
   const zs: Float32Array[] = [];
   const states: string[][] = [];
+  const levels: Uint8Array[] = [];
+  const levelIndex = new Map(context.doc.levels.map((level, i) => [level.id, i]));
   const exitOf: (string | null)[] = new Array(count).fill(null);
   const exitTime: number[] = new Array(count).fill(Infinity);
   const exits = context.doc.exits;
@@ -96,16 +102,18 @@ function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisi
     const x = new Float32Array(count).fill(NaN);
     const z = new Float32Array(count).fill(NaN);
     const s: string[] = new Array(count).fill("");
-    for (const [id, ax, az, state] of frame.a) {
+    const l = new Uint8Array(count);
+    for (const [id, ax, az, state, level] of frame.a) {
       const i = index.get(id);
       if (i === undefined) continue;
       x[i] = ax;
       z[i] = az;
       s[i] = state;
+      l[i] = (level && levelIndex.get(level)) || 0;
       if (state === "exited" && exitOf[i] === null) {
         exitTime[i] = frame.t;
         let best = Infinity;
-        for (const exit of exits) {
+        for (const exit of exits.filter((item) => item.level === (level ?? item.level))) {
           const d = Math.hypot(exit.position[0] - ax, exit.position[1] - az);
           if (d < best) {
             best = d;
@@ -117,6 +125,7 @@ function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisi
     xs.push(x);
     zs.push(z);
     states.push(s);
+    levels.push(l);
   }
   const body = new THREE.CapsuleGeometry(0.2, 0.8, 4, 12).translate(0, 0.6, 0);
   const live = new THREE.InstancedMesh(body, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6 }), Math.max(count, 1));
@@ -141,22 +150,31 @@ function buildRun(context: ViewerContext, url: string, source: ReplayDoc, decisi
   const name = doc.meta.label ?? url.split("/").slice(-2, -1)[0] ?? url;
   // cognition.serve names a run by its directory under --runs (out/<run>/replay.json).
   const runId = url.split("/").slice(-2, -1)[0] || doc.meta.run_id || url;
-  return { url, doc, name, runId, xs, zs, states, decisions, live, ghosts, root, labels, exitOf, exitTime, exitCounts: new Map(), ring };
+  return { url, doc, name, runId, xs, zs, states, levels, decisions, live, ghosts, root, labels, exitOf, exitTime, exitCounts: new Map(), ring };
 }
 
+// One "N out" tag per exit; hidden until someone uses that exit so 29 zeros do not crowd the plan.
 function addExitCounts(context: ViewerContext, run: Run) {
-  const elevation = context.elevation();
-  for (const exit of context.doc.exits.filter((item) => item.level === context.level())) {
+  for (const exit of context.doc.exits) {
     const tag = context.label("exit-count", (element) => {
       const value = document.createElement("b");
       value.textContent = "0";
       element.append(value, " out");
       run.exitCounts.set(exit.id, value);
     });
-    tag.position.set(exit.position[0], elevation + 0.1, exit.position[1]);
     tag.center.set(0.5, -0.5);
+    tag.visible = false;
+    tag.userData.exit = exit;
     run.labels.add(tag);
   }
+  const place = () => {
+    for (const tag of run.labels.children) {
+      const exit = tag.userData.exit;
+      if (exit) context.place(exit.level, exit.position[0], exit.position[1], tag.position).setY(tag.position.y + 0.1);
+    }
+  };
+  place();
+  context.onLayout(place);
 }
 
 export async function startReplay(context: ViewerContext, replayUrl: string | null, compareUrl: string | null) {
@@ -182,6 +200,21 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
     addExitCounts(context, run);
   }
   runs[0].root.add(runs[0].labels);
+  // In stacked and exploded views people draw over every floor so the ghosted floors never hide them.
+  const onTop = (view: string) => {
+    const xray = view === "stacked" || view === "exploded";
+    for (const run of runs) {
+      for (const mesh of [run.live, run.ghosts]) {
+        (mesh.material as THREE.Material).depthTest = !xray;
+        mesh.renderOrder = xray ? 20 : 0;
+      }
+    }
+  };
+  onTop(context.view());
+  context.onLayout((view) => {
+    onTop(view);
+    refresh(true);
+  });
   if (runs[1]) {
     context.split(runs[0].root, runs[1].root, runs[1].labels);
     $("#caption-a").textContent = runs[0].name;
@@ -212,29 +245,48 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
 
   const stateAt = (run: Run, agent: number, t: number) => run.states[frameIndex(run, t).i][agent] ?? "";
 
+  const levelIds = context.doc.levels.map((level) => level.id);
+  const p0 = new THREE.Vector3();
+  const p1 = new THREE.Vector3();
+  const scale = new THREE.Vector3();
+  const noTurn = new THREE.Quaternion();
+  const perFloor = new Map<string, number>();
   function placeAgents(run: Run, t: number) {
     const { i, j, frac } = frameIndex(run, t);
-    const y = context.elevation();
+    const view = context.view();
+    const focus = context.level();
+    // Zoomed out over a 150 m building a 0.4 m person is under a pixel; keep each one at least ~7 px wide.
+    scale.setScalar(Math.min(10, Math.max(1, 7 / (0.4 * context.pxPerMeter()))));
+    if (run === runs[0]) for (const id of levelIds) perFloor.set(id, 0);
     run.doc.agents.forEach((agent, k) => {
       const x0 = run.xs[i][k];
       const z0 = run.zs[i][k];
       const state = run.states[i][k];
-      if (Number.isNaN(x0)) {
+      const level0 = levelIds[run.levels[i][k]];
+      const level1 = levelIds[run.levels[j][k]];
+      if (Number.isNaN(x0) || (view === "single" && level0 !== focus)) {
         run.live.setMatrixAt(k, hidden);
         run.ghosts.setMatrixAt(k, hidden);
         return;
       }
       const x1 = Number.isNaN(run.xs[j][k]) ? x0 : run.xs[j][k];
       const z1 = Number.isNaN(run.zs[j][k]) ? z0 : run.zs[j][k];
-      matrix.makeTranslation(x0 + (x1 - x0) * frac, y, z0 + (z1 - z0) * frac);
+      context.place(level0, x0, z0, p0);
+      context.place(level1, x1, z1, p1);
+      // Plans jump between panels at a floor change; in 3D the agent slides down the stair link.
+      if (level0 !== level1 && view === "side") p1.copy(frac < 0.5 ? p0 : p1), p0.copy(p1);
+      p0.lerp(p1, frac);
+      matrix.compose(p0, noTurn, scale);
       const exited = state === "exited";
+      if (!exited && run === runs[0]) perFloor.set(level0, (perFloor.get(level0) ?? 0) + 1);
       run.live.setMatrixAt(k, exited ? hidden : matrix);
       run.ghosts.setMatrixAt(k, exited ? matrix : hidden);
       color.copy(clock.colorBy === "state" ? stateColor(state) : personaColors.get(agent.persona) ?? stateColor(""));
       run.live.setColorAt(k, color);
       if (selection && selection.run === run && selection.agent === k) {
         run.ring.visible = true;
-        run.ring.position.set(x0 + (x1 - x0) * frac, y + 0.05, z0 + (z1 - z0) * frac);
+        run.ring.position.copy(p0).setY(p0.y + 0.05);
+        run.ring.scale.set(scale.x, 1, scale.z);
       }
     });
     run.live.instanceMatrix.needsUpdate = true;
@@ -244,6 +296,13 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
       const value = String(run.exitOf.filter((id, k) => id === exitId && run.exitTime[k] <= t).length);
       if (element.textContent !== value) element.textContent = value;
     }
+    for (const tag of run.labels.children) {
+      const exit = tag.userData.exit;
+      if (!exit) continue;
+      const used = run.exitCounts.get(exit.id)!.textContent !== "0";
+      tag.visible = used && (view !== "single" || exit.level === focus);
+    }
+    if (run === runs[0] && levelIds.length > 1) for (const [id, n] of perFloor) context.setFloorCount(id, n);
   }
 
   // ---- rail and transport ----
