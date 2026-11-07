@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import type { SceneDoc, ViewerContext } from "./context";
 import "./edit.css";
+import { canonicalPersona } from "./people";
 
 type At = { room?: string; exit?: string; door?: string; stair?: string; point?: number[]; level?: string };
 export type ScenarioEvent = { id: string; type: string; t_start_s: number; at: At; params: Record<string, unknown> };
@@ -15,7 +16,7 @@ export type Occupant = {
 };
 type Hit = { level: string; x: number; z: number };
 type Person = Hit & { persona: string };
-type Item = { label: string; sent: boolean; event?: ScenarioEvent; occupants?: Occupant[]; people: Person[]; marker?: THREE.Object3D; populate?: boolean };
+type Item = { label: string; sent: boolean; event?: ScenarioEvent; occupants?: Occupant[]; people: Person[]; marker?: THREE.Object3D; populate?: boolean; notes?: string[] };
 type Tool = "fire" | "smoke" | "block" | "rumor" | "pa" | "open" | "type" | "people";
 
 const TOOLS: [Tool, string, string][] = [
@@ -249,7 +250,7 @@ export function startEdit(context: ViewerContext) {
     input.addEventListener("input", () => (input.nextElementSibling!.textContent = input.value));
   }
   const personaColor = (id: string) => {
-    const [, , token, shift] = PERSONAS.find((p) => p[0] === id) ?? PERSONAS[1];
+    const [, , token, shift] = PERSONAS.find((p) => p[0] === canonicalPersona(id)) ?? PERSONAS[1];
     return context.token(token).offsetHSL(0, 0, shift);
   };
   const paintSwatch = () => (swatch.style.background = `#${personaColor(persona.value).getHexString()}`);
@@ -468,7 +469,7 @@ export function startEdit(context: ViewerContext) {
   }
 
   // ---- draft vs live ----
-  function commit(change: { label: string; event?: ScenarioEvent; occupants?: Occupant[]; people?: Person[]; hit?: Hit; populate?: boolean }) {
+  function commit(change: { label: string; event?: ScenarioEvent; occupants?: Occupant[]; people?: Person[]; hit?: Hit; populate?: boolean; notes?: string[] }) {
     const payload = { type: "edit", t_s: null, ...(change.event && { event: change.event }), ...(change.occupants && { occupants: change.occupants }) };
     const sent = !window.dispatchEvent(new CustomEvent("nova:edit", { detail: payload, cancelable: true }));
     if (!sent) {
@@ -478,7 +479,7 @@ export function startEdit(context: ViewerContext) {
       };
     }
     const people = change.people ?? (change.occupants ?? []).flatMap(peopleFor);
-    items.push({ label: change.label, sent, event: change.event, occupants: change.occupants, people, marker: change.event && eventMarker(change.event, change.hit), populate: change.populate });
+    items.push({ label: change.label, sent, event: change.event, occupants: change.occupants, people, marker: change.event && eventMarker(change.event, change.hit), populate: change.populate, notes: change.notes });
     if (people.length) drawPeople();
     renderList();
     showFloorCounts();
@@ -521,21 +522,32 @@ export function startEdit(context: ViewerContext) {
   /** Offline stand-in for POST /scenario/populate: rooms weighted by area (or occupant load), largest remainder. */
   function localPopulate(total: number, mode: PopulateMode, mix: Record<string, number>, levels: string[], seed: number): Occupant[] {
     const random = rng(seed);
-    const rooms = doc.rooms.filter((room) => levels.includes(room.level) && (room.area_m2 ?? 0) > 1);
+    const rooms = doc.rooms.filter((room) => levels.includes(room.level) && (room.area_m2 ?? 0) >= 1);
     const weights = rooms.map((room) => {
       const per = LOAD_M2[room.type ?? "unknown"] ?? 9.3;
       if (!per) return 0;
       const area = room.area_m2 ?? 0;
       return mode === "random" ? area * (0.5 + random()) : area / per;
     });
-    const sum = weights.reduce((a, b) => a + b, 0);
-    if (!sum) return [];
-    const exact = weights.map((w) => (total * w) / sum);
-    const counts = exact.map(Math.floor);
-    let left = total - counts.reduce((a, b) => a + b, 0);
-    for (const i of exact.map((e, i) => [e - Math.floor(e), i]).sort((a, b) => b[0] - a[0]).map(([, i]) => i)) {
-      if (left-- <= 0) break;
-      counts[i] += 1;
+    // The server rejects more than 2 people per m2, so full rooms are capped and the rest spread to the others.
+    const caps = rooms.map((room) => Math.floor(2 * (room.area_m2 ?? 0)));
+    const counts = rooms.map(() => 0);
+    for (let left = total, round = 0; left > 0 && round < 20; round += 1) {
+      const open = weights.map((w, i) => (counts[i] < caps[i] ? w : 0));
+      const sum = open.reduce((a, b) => a + b, 0);
+      if (!sum) break;
+      const exact = open.map((w) => (left * w) / sum);
+      const add = exact.map((e, i) => Math.min(Math.floor(e), caps[i] - counts[i]));
+      let spare = left - add.reduce((a, b) => a + b, 0);
+      for (const i of exact.map((e, i) => [e - Math.floor(e), i]).sort((a, b) => b[0] - a[0]).map(([, i]) => i)) {
+        if (spare <= 0) break;
+        if (open[i] && counts[i] + add[i] < caps[i]) {
+          add[i] += 1;
+          spare -= 1;
+        }
+      }
+      add.forEach((n, i) => (counts[i] += n));
+      left = total - counts.reduce((a, b) => a + b, 0);
     }
     return rooms.flatMap((room, i) => (counts[i] ? [{ where: { room: room.id }, count: counts[i], personas: mix }] : []));
   }
@@ -550,14 +562,28 @@ export function startEdit(context: ViewerContext) {
     const seed = 42 + items.filter((item) => item.populate).length;
     const where = levels.length === 1 ? levelName(levels[0]) : "the building";
     const status = $<HTMLElement>("#pop-floors");
+    // Same hard cap as the server (2 people per m2 in rooms of 1 m2 or more), checked here so no request fails.
+    const cap = doc.rooms.filter((room) => levels.includes(room.level) && (room.area_m2 ?? 0) >= 1).reduce((n, room) => n + Math.floor(2 * (room.area_m2 ?? 0)), 0);
+    if (total > cap) {
+      status.textContent = `Not placed: ${total} people exceed the hard cap of ${cap} (2 per m²) on ${where}.`;
+      return;
+    }
     status.textContent = "Placing people...";
     let occupants: Occupant[];
     let source = "";
+    let notes: string[] = [];
     try {
       const data = await post("populate", { scene_path: SCENE_PATH, total, mode, preset, levels, seed, ...(custom && { personas: mix, traits: traits() }) });
       occupants = data.occupants ?? [];
-    } catch {
-      // ponytail: no AI offline; "AI-proposed" falls back to occupant load until scenario.serve has /populate.
+      notes = Array.isArray(data.notes) ? data.notes : data.notes ? [String(data.notes)] : [];
+    } catch (error) {
+      // The server answered with a reason (e.g. over the 2 per m2 cap): show it instead of guessing locally.
+      const reason = error instanceof Error ? error.message : String(error);
+      if (!/offline|HTTP 404|HTTP 50|Failed to fetch/i.test(reason)) {
+        status.textContent = `Not placed: ${reason}.`;
+        return;
+      }
+      // ponytail: no AI offline; "AI-proposed" falls back to occupant load when scenario.serve is down.
       occupants = localPopulate(total, mode === "ai" ? "load" : mode, mix, levels, seed);
       source = " (offline spread)";
     }
@@ -565,7 +591,7 @@ export function startEdit(context: ViewerContext) {
     const placed = occupants.reduce((n, occupant) => n + occupant.count, 0);
     if (!placed) { status.textContent = "No rooms to place people in on that floor."; return; }
     const modeName = { load: "by occupant load", random: "at random", ai: "AI-proposed" }[mode];
-    commit({ label: `${placed} people in ${where}, ${PRESETS[preset][0].toLowerCase()}, ${modeName}${source}`, occupants, populate: true });
+    commit({ label: `${placed} people in ${where}, ${PRESETS[preset][0].toLowerCase()}, ${modeName}${source}`, occupants, populate: true, notes });
   }
   $<HTMLButtonElement>("#pop-run").addEventListener("click", () => void populate());
   $<HTMLButtonElement>("#pop-clear").addEventListener("click", () => {
@@ -583,6 +609,12 @@ export function startEdit(context: ViewerContext) {
       const status = document.createElement("small");
       status.textContent = item.sent ? "Sent to the live run" : "Added to scenario";
       text.append(name, status);
+      for (const note of item.notes ?? []) {
+        const line = document.createElement("small");
+        line.className = /exceed|over|warn/i.test(note) ? "edit-note warn" : "edit-note";
+        line.textContent = note;
+        text.append(line);
+      }
       li.append(text);
       if (!item.sent) {
         const button = document.createElement("button");
@@ -613,7 +645,8 @@ export function startEdit(context: ViewerContext) {
     });
     const data = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
     // The vite proxy answers {offline: true} when nothing listens on 8792 (see vite.config.ts).
-    if (!response.ok || data.offline || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
+    if (data.offline) throw new Error("offline");
+    if (!response.ok || data.error) throw new Error(data.error ?? `HTTP ${response.status}`);
     return data;
   }
   /** Commit server events and occupants; returns a one-line summary. */

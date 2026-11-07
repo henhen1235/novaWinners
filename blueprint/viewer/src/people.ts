@@ -25,6 +25,14 @@ const KERNEL = (() => {
 const VEST = new THREE.Color("#FF5FD2"); // staff: not exit green, hazard red or warning amber
 const FLY_SCALE = 3; // a 1 cm fly drawn the size of a hand so it can be found
 
+// The scenario server uses canonical persona names; the viewer's short names are what the cues key on.
+const PERSONA_ALIASES: Record<string, string> = {
+  regular_employee: "regular", first_time_visitor: "visitor", warden: "staff", committed: "committed_task", parent: "parent_with_child", fly: "fruit_fly",
+};
+export function canonicalPersona(persona: string): string {
+  return PERSONA_ALIASES[persona] ?? persona;
+}
+
 export function lodFor(pxPerMeter: number): Lod {
   return pxPerMeter < MID_PX_PER_M ? "far" : pxPerMeter < NEAR_PX_PER_M ? "mid" : "near";
 }
@@ -234,7 +242,7 @@ export class People {
   }
 
   set(k: number, a: AgentSample, now: number) {
-    const persona = this.personas[k] ?? "";
+    const persona = canonicalPersona(this.personas[k] ?? "");
     const exited = a.state === "exited";
     const px = this.pxPerMeter;
     for (const mesh of Object.values(this.meshes)) mesh.setMatrixAt(k, this.hidden);
@@ -254,7 +262,7 @@ export class People {
     }
     a.world.toArray(this.worldPositions, k * 3);
     this.q.setFromAxisAngle(this.up, a.heading);
-    const isFly = persona === "fruit_fly" || persona === "fly";
+    const isFly = persona === "fruit_fly";
     if (this.lod === "far") {
       this.s.setScalar(Math.max(0.25, DOT_PX / px));
       this.m.compose(a.world, this.q, this.s);
@@ -297,7 +305,7 @@ export class People {
     this.meshes.body.setMatrixAt(k, this.m);
     this.meshes.body.setColorAt(k, a.fill);
     if (persona === "staff") this.meshes.vest.setMatrixAt(k, this.m);
-    if (persona === "parent" || persona === "parent_with_child") {
+    if (persona === "parent_with_child") {
       this.meshes.child.setMatrixAt(k, this.m);
       this.meshes.child.setColorAt(k, a.fill);
     }
