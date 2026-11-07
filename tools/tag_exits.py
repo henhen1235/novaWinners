@@ -16,14 +16,31 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+TOKENS_CSS = (Path(__file__).resolve().parents[1] / "design" / "tokens.css").read_text()
 PAGE = """<!doctype html><meta charset=utf-8><title>Tag exits</title>
-<style>body{font:14px sans-serif;margin:12px}img{cursor:crosshair;border:1px solid #888;max-width:none}</style>
-<p>Click a doorway to add an exit tag. Red: auto-detected exits. Blue lines: interior doors.
-<button onclick=save()>Save exit_tags.json</button> <span id=s></span></p>
-<ol id=l></ol><img id=i src="/overview.png">
+<style>%TOKENS%
+body{margin:0;background:var(--color-ground);color:var(--color-text);font:var(--size-sm)/1.45 var(--font-sans)}
+header{display:flex;align-items:center;gap:var(--space-4);padding:var(--space-3) var(--space-4);
+background:var(--color-surface);border-bottom:1px solid var(--color-line)}
+h1{margin:0;font:600 var(--size-xl)/1 var(--font-sans)}
+header p{flex:1;margin:0;color:var(--color-text-muted)}
+button{font:600 var(--size-sm) var(--font-sans);background:var(--color-exit);color:var(--color-on-signal);
+border:0;border-radius:var(--radius-sm);padding:8px 14px;cursor:pointer}
+button:focus-visible,a:focus-visible{outline:none;box-shadow:var(--shadow-focus)}
+#s{font:var(--size-xs) var(--font-mono);color:var(--color-exit-bright)}
+main{display:flex;gap:var(--space-4);padding:var(--space-4);align-items:flex-start}
+ol{margin:0;padding:0 0 0 var(--space-5);min-width:240px}
+li{padding:var(--space-2) 0;border-bottom:1px solid var(--color-line)}
+li span{font:var(--size-xs) var(--font-mono);color:var(--color-text-muted)}
+li a{color:var(--color-hazard-bright);margin-left:var(--space-2)}
+img{cursor:crosshair;border:1px solid var(--color-line-strong);max-width:none}</style>
+<header><h1>Tag exits</h1><p>Click a doorway to add an exit, name it, then save.
+Red marks are exits the pipeline found; blue lines are interior doors.</p>
+<span id=s></span><button onclick=save()>Save exit_tags.json</button></header>
+<main><img id=i src="/overview.png"><ol id=l></ol></main>
 <script>
 const G=%GRID%; let tags=%TAGS%;
-const draw=()=>{l.innerHTML=tags.map((t,k)=>`<li>${t[2]} at (${t[0]}, ${t[1]}) <a href=# onclick="tags.splice(${k},1);draw()">remove</a>`).join('')};
+const draw=()=>{l.innerHTML=tags.map((t,k)=>`<li>${t[2]} <span>(${t[0]}, ${t[1]}) m</span> <a href=# onclick="tags.splice(${k},1);draw()">Remove</a>`).join('')};
 i.onclick=e=>{const r=i.getBoundingClientRect();const x=+(G.x0+(e.clientX-r.left)*G.res).toFixed(2),
 z=+(G.z0+(e.clientY-r.top)*G.res).toFixed(2);const lab=prompt('Exit label',`Exit ${tags.length+1}`);
 if(lab){tags.push([x,z,lab]);draw()}};
@@ -43,7 +60,7 @@ def serve(run_dir: Path, port: int) -> None:
     grid = scene["extensions"]["lidar"]["grid"]
     tag_file = run_dir / "exit_tags.json"
     tags = json.loads(tag_file.read_text()) if tag_file.exists() else []
-    page = PAGE.replace("%GRID%", json.dumps(grid)).replace("%TAGS%", json.dumps(tags))
+    page = PAGE.replace("%TOKENS%", TOKENS_CSS).replace("%GRID%", json.dumps(grid)).replace("%TAGS%", json.dumps(tags))
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802 (stdlib API)
