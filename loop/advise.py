@@ -44,6 +44,7 @@ MAX_FLOW = 1.3  # p/s/m, the sim's door flow (research/EVAC_PSYCHOLOGY.md 2, SFP
 WIDTH_PER_OCC_M = 0.2 * 0.0254  # IBC 1005.3.2, 0.2 in per occupant [U] (research/MAPPING_IDEAS.md)
 FLOW_WINDOW_S = 10.0
 QUEUE_ZONE_M = 5.0
+SIGN_RADIUS_M = 30.0  # rooms whose centre is this close to a new exit get signs pointing to it
 MAX_STRAGGLER_ITEMS = 10
 PRINCIPLES = {
     "P1": "Door flow is capped near 1.3 persons/s per m of clear width (SFPE hydraulic model, research/EVAC_PSYCHOLOGY.md s2); more or wider exits raise capacity.",
@@ -433,7 +434,14 @@ def to_patch(rec: dict, scene: dict, scenario: dict, cands: list[dict]) -> tuple
                 nd["is_exit"] = True
         if _scene_errors(new) - _scene_errors(scene):
             return None
-        return new, scenario
+        # occupants mostly know their entry exit, so an unsigned new exit is ignored: sign it from nearby rooms
+        mid = Point((x0 + x1) / 2, (z0 + z1) / 2)
+        near = [r["id"] for r in scene["rooms"] if r["level"] == d["level"]
+                and Polygon(r["polygon"]).centroid.distance(mid) <= SIGN_RADIUS_M]
+        sc = copy.deepcopy(scenario)
+        sc.setdefault("interventions", []).extend({"type": "signage", "exit": f"exit_new_{d['id']}", "p": 0.8, "room": r}
+                                                   for r in near)
+        return (new, sc) if not validate_scenario(sc, new) else None
     if kind == "widen_door" and door:
         w = round(min(2.4, doors[door]["width_m"] * 1.5), 2)
         iv = {"kind": "widen_door", "args": {"door": door, "width_m": w}}
@@ -487,6 +495,15 @@ def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], see
             combo, titles = p, titles + [rec["title"]]
     combined = {"recommendations": titles, "verified": {"simulated": bool(titles), "seeds": len(seeds), "before": before,
                 "after": _stat(_runs(combo[0], combo[1], seeds, work / "combined", n0)) if titles else None}}
+    lay, lay_titles = (scene, scenario), []
+    for rec in recs:  # layout case: every new exit (with its signs) plus the assisted evacuation plan
+        if rec["kind"] in ("add_exit", "assisted_plan"):
+            p = to_patch(rec, lay[0], lay[1], cands)
+            if p is not None:
+                lay, lay_titles = p, lay_titles + [rec["title"]]
+    combined["exits_and_assisted_plan"] = {"recommendations": lay_titles, "verified": {
+        "simulated": bool(lay_titles), "seeds": len(seeds), "before": before,
+        "after": _stat(_runs(lay[0], lay[1], seeds, work / "exits_assisted", n0)) if lay_titles else None}}
 
     def gain(r: dict) -> tuple:
         v = r["verified"]
@@ -518,6 +535,12 @@ def report_md(res: dict) -> str:
     c = res.get("combined") or {}
     if c.get("recommendations"):
         lines += ["", "## All testable changes together", "", f"{'; '.join(c['recommendations'])}. Measured: {eff(c)}."]
+    e = c.get("exits_and_assisted_plan") or {}
+    if e.get("recommendations"):
+        lines += ["", "## New exits (with signs) plus the assisted evacuation plan", "",
+                  f"{'; '.join(e['recommendations'])}. Measured: {eff(e)}."]
+    lines += ["", "A new exit is always tested together with signs toward it in rooms within "
+              f"{SIGN_RADIUS_M:g} m, because occupants mostly know only the exit they came in by."]
     lines += ["", "## Evidence", ""] + [f"- {e['id']}: {e['text']}" for e in res["evidence"]]
     lines += ["", "Principles: " + " ".join(f"{k}: {v}" for k, v in PRINCIPLES.items()), "",
               f"Model {res['model']}; LLM cost ${res['cost_usd']:.4f}. Screening checks are not a code review; "
