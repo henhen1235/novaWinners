@@ -4,7 +4,7 @@
 
 ```bash
 scripts/demo/setup.sh            # .venv, requirements, npm ci, builds blueprint/viewer/public/
-scripts/demo/start.sh            # interview API :8770 + viewer :5173, prints and opens the URLs
+scripts/demo/start.sh            # interview API :8771 + viewer :5173, prints and opens the URLs
 scripts/demo/stop.sh             # afterwards
 ```
 
@@ -52,7 +52,7 @@ On 30 synthetic scans door recall is 0.996 and ingest takes 2 to 8 seconds."
 ### 0:50-1:30 Moment 2: Tepper, five floors, the accessibility finding
 
 Open (side by side floors):
-`http://localhost:5173/?glb=/tepper/display.glb&scene=/tepper/scene.json&replay=/replays/tepper_fire/replay.json&view=side`
+`http://localhost:5173/?glb=/tepper/display.glb&scene=/tepper/scene.json&replay=/replays/tepper_fire_noplan/replay.json&view=side`
 
 Click: play, speed 16x. Point at the per-floor counts and the stair badges.
 
@@ -60,7 +60,7 @@ Say: "Tepper at CMU, floors 1 to 5, built from the facilities sheets: 576
 rooms, 915 doors, 29 exits, 12 stair links. Fire on floor 3, 170 occupants."
 
 Then open (no plan vs assisted plan):
-`http://localhost:5173/?glb=/tepper/display.glb&scene=/tepper/scene.json&replay=/replays/tepper_fire/replay.json&compare=/replays/tepper_fire_assisted/replay.json&names=No%20plan,Assisted%20plan&view=side`
+`http://localhost:5173/?glb=/tepper/display.glb&scene=/tepper/scene.json&replay=/replays/tepper_fire_noplan/replay.json&compare=/replays/tepper_fire_plan/replay.json&names=No%20plan,Assisted%20plan&view=side`
 
 Click: play to the end; point at the floor 4 stair refuge on the left.
 

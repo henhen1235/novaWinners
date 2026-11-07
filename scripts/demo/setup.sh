@@ -107,7 +107,7 @@ sim run      sim/examples/school_stairs.json    "$PUBLIC/fixtures/two_floor_scho
 sim run      sim/examples/office_fire.json      "$PUBLIC/office/scene.json"                    office_fire
 sim run      sim/examples/hall_alarm.json       "$PUBLIC/hall/scene.json"                      hall_alarm
 sim baseline sim/examples/hall_alarm.json       "$PUBLIC/hall/scene.json"                      hall_alarm_baseline
-sim run      sim/examples/tepper_fire.json      "$PUBLIC/tepper/scene.json"                    tepper_fire
+sim run      sim/examples/tepper_fire.json      "$PUBLIC/tepper/scene.json"                    tepper_fire_noplan
 
 # Tepper with the assisted-evacuation plan: same scenario plus one intervention.
 "$PY" - <<'EOF' || fail "could not write the assisted-plan scenario"
@@ -115,9 +115,9 @@ import json, pathlib
 s = json.loads(pathlib.Path("sim/examples/tepper_fire.json").read_text())
 s["interventions"] = list(s.get("interventions", [])) + [{"type": "assisted_evacuation_plan"}]
 s["assumptions"] = list(s.get("assumptions", [])) + ["Assisted evacuation plan: trained staff carry people who cannot use stairs."]
-pathlib.Path("out/demo/tepper_fire_assisted.json").write_text(json.dumps(s, indent=1))
+pathlib.Path("out/demo/tepper_fire_plan.json").write_text(json.dumps(s, indent=1))
 EOF
-sim run out/demo/tepper_fire_assisted.json "$PUBLIC/tepper/scene.json" tepper_fire_assisted
+sim run out/demo/tepper_fire_plan.json "$PUBLIC/tepper/scene.json" tepper_fire_plan
 
 # ---------- 5. Adversary vs optimizer runs ----------
 say "Adversary vs optimizer"

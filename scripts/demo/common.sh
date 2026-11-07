@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VIEWER="$ROOT/blueprint/viewer"
 PUBLIC="$VIEWER/public"
 DEMO_OUT="$ROOT/out/demo"
-SERVE_PORT="${SERVE_PORT:-8770}"
+SERVE_PORT="${INTERVIEW_PORT:-8771}"  # macOS sharingd owns 8770; vite proxies /interview here
 VITE_PORT="${VITE_PORT:-5173}"
 
 # The venv interpreter: bin/python on macOS/Linux, Scripts/python.exe on Windows.

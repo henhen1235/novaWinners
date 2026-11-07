@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the interview API (cognition.serve, port 8770) and the viewer (vite, port 5173),
+# Start the interview API (cognition.serve, port 8771) and the viewer (vite, port 5173),
 # wait until both answer, then print and open the demo URLs. Stop with scripts/demo/stop.sh.
 #   scripts/demo/start.sh [--no-open]
 set -uo pipefail
@@ -18,12 +18,12 @@ for port in "$SERVE_PORT" "$VITE_PORT"; do
 done
 
 # Interview server, from the repo root so replay meta.scene paths resolve.
-"$PY" -m cognition.serve --runs blueprint/viewer/public/replays --port "$SERVE_PORT" \
+INTERVIEW_PORT="$SERVE_PORT" "$PY" -m cognition.serve --runs blueprint/viewer/public/replays --port "$SERVE_PORT" \
   >"$DEMO_OUT/serve.log" 2>&1 &
 echo $! >"$DEMO_OUT/serve.pid"
 
 # Vite via node directly so the PID is the server itself.
-(cd "$VIEWER" && exec node node_modules/vite/bin/vite.js --port "$VITE_PORT" --strictPort) \
+(cd "$VIEWER" && INTERVIEW_PORT="$SERVE_PORT" exec node node_modules/vite/bin/vite.js --port "$VITE_PORT" --strictPort) \
   >"$DEMO_OUT/vite.log" 2>&1 &
 echo $! >"$DEMO_OUT/vite.pid"
 
@@ -44,8 +44,8 @@ else
   M1="$B/?glb=/office/display.glb&scene=/office/scene.json&analysis=/office/analysis.json"
 fi
 T="glb=/tepper/display.glb&scene=/tepper/scene.json"
-M2a="$B/?$T&replay=/replays/tepper_fire/replay.json&view=side"
-M2b="$B/?$T&replay=/replays/tepper_fire/replay.json&compare=/replays/tepper_fire_assisted/replay.json&names=No%20plan,Assisted%20plan&view=side"
+M2a="$B/?$T&replay=/replays/tepper_fire_noplan/replay.json&view=side"
+M2b="$B/?$T&replay=/replays/tepper_fire_noplan/replay.json&compare=/replays/tepper_fire_plan/replay.json&names=No%20plan,Assisted%20plan&view=side"
 M3="$B/?scene=$LOOP_SCENE&replay=/replays/loop_${LOOP}_r1_attack/replay.json&compare=/replays/loop_${LOOP}_r1_fixed/replay.json&names=Attacked,Fixed"
 M4="$B/?scene=$LOOP_SCENE&replay=/replays/loop_${LOOP}_r1_fixed/replay.json"
 
