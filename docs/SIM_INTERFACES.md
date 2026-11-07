@@ -127,6 +127,15 @@ alarm_only, fire, smoke or pa_announcement event, the alarm cue starts at t = 0.
 Event kinds added by the sim: alarm, opened, waiting_at_refuge, help_assigned, helping,
 help_released. metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
 
+Occupant placement and sliders: `where` is a room, a point (+ level; spread about 1 m) or a box
+`{"box": [[x1, z1], [x2, z2]], "level": id}` (uniform walkable points inside it). `traits`:
+speed_mps, sign_follow_p, premove_s and other sampled traits override the draws;
+exit_familiarity (0-1) is the chance of knowing each exit besides the entry exit;
+social_threshold on 0-1 maps to a count of people seen leaving, round(1 + 9 x) (values above 1 are
+taken as counts); risk_tolerance and ocean pass through to view.agent.traits for cognition.
+Personas fruit_fly and fruit_fly_scrambled are kept as such (walk like regulars, no crowd shortcut);
+`--decide flyagent` decides for occupants whose model or persona is one of them.
+
 Groups (sim/groups.py): `occupants[].group: "family" | "coworkers"` (optional `group_size`, default
 3 / 4) groups consecutive occupants; every `parent` gets a `child` (persona child) next to them, or
 in `occupants[].children: {"room": id}` so the parent fetches it first (`children: false` opts out).

@@ -9,6 +9,7 @@ import logging
 from dataclasses import dataclass, field
 
 import numpy as np
+import shapely
 
 from sim.personas import PERSONAS, resolve, sample_traits
 from sim.world import World
@@ -132,7 +133,7 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
             else:
                 known = [entry] + ([nearest] if nearest != entry and rng.random() < persona.knows_nearest_p else [])
             traits = sample_traits(persona, rng)
-            traits.update({k: v for k, v in (g.get("traits") or {}).items() if k in traits})  # viewer sliders
+            known = _apply_slider_traits(traits, g.get("traits") or {}, known, entry, world, rng)
             if omniscient:
                 traits.update(premove_s=0.0, notice_s=0.0)
             a = Agent(f"a_{row + 1:0{width}d}", row, persona.name, model, traits, rng, r, entry, known)
@@ -147,6 +148,24 @@ def spawn(world: World, occupants: list[dict], seed: int, omniscient: bool = Fal
 
 
 GROUP_SIZE = {"family": 3, "coworkers": 4}
+PASS_THROUGH = ("risk_tolerance", "ocean")  # not used by the sim; cognition reads them from view traits
+
+
+def _apply_slider_traits(traits: dict, sliders: dict, known: list[str], entry: str, world: World,
+                         rng: np.random.Generator) -> list[str]:
+    """Viewer/scenario traits: overrides, exit_familiarity (chance to know each other exit),
+    social_threshold on 0-1 mapped to a count round(1 + 9 x) (values above 1 are counts)."""
+    for k, v in sliders.items():
+        if v is None:
+            continue
+        if k == "social_threshold":
+            traits[k] = int(round(1 + 9 * v)) if v <= 1 else int(v)
+        elif k == "exit_familiarity":
+            traits[k] = float(v)
+            known = [entry] + [e for e in world.exits if e != entry and rng.random() < float(v)]
+        elif k in traits or k in PASS_THROUGH:
+            traits[k] = v
+    return known
 
 
 def _declared_groups(g: dict, made: list[Agent]) -> None:
@@ -184,6 +203,17 @@ def _add_child(world: World, g: dict, parent: Agent, p: np.ndarray, lv: int, age
     lvs.append(lv_c)
 
 
+def _box_point(world: World, box: list, lv: int, rng: np.random.Generator, tries: int = 200) -> np.ndarray:
+    """Uniform walkable point inside an axis-aligned box [[x1, z1], [x2, z2]] on level lv."""
+    (x1, z1), (x2, z2) = box
+    lo, hi = [min(x1, x2), min(z1, z2)], [max(x1, x2), max(z1, z2)]
+    pts = rng.uniform(lo, hi, size=(tries, 2))
+    ok = world.nav.is_walkable(pts, lv) & shapely.contains_xy(world.nav.walk[lv], pts[:, 0], pts[:, 1])
+    if ok.any():
+        return pts[int(np.argmax(ok))]
+    return world.nav.snap([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2], lv)
+
+
 def _spawn_point(world: World, room: str | None, lv: int, where: dict, rng: np.random.Generator,
                  taken: list[np.ndarray], tries: int = 20) -> np.ndarray:
     """Random walkable point in the room (or near `where.point`), avoiding overlap when possible."""
@@ -191,6 +221,8 @@ def _spawn_point(world: World, room: str | None, lv: int, where: dict, rng: np.r
     for _ in range(tries):
         if room is not None:
             p = world.room_point(room, rng)
+        elif "box" in where:
+            return _box_point(world, where["box"], lv, rng)
         elif "point" in where:
             p = world.nav.snap(np.asarray(where["point"], float) + rng.normal(0, 1.0, 2), lv)
         else:

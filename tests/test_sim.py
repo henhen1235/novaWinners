@@ -364,3 +364,19 @@ def test_occupant_evacuation_elevators_carry_wheelchair_users() -> None:
     sim.run()
     assert sum(e["kind"] == "elevator_ride" for e in sim.replay_events) == 2
     assert all(a.exit_t is not None for a in sim.agents)
+
+
+def test_box_spawn_fly_personas_and_slider_traits() -> None:
+    from sim.personas import resolve
+    assert resolve("fruit_fly").name == "fruit_fly" and resolve("fruit_fly_scrambled").name == "fruit_fly_scrambled"
+    occ = [{"where": {"box": [[1.0, 4.4], [6.0, 5.6]], "level": "L1"}, "count": 8,
+            "personas": {"regular": 1.0}, "children": False,
+            "traits": {"social_threshold": 0.5, "exit_familiarity": 1.0, "risk_tolerance": 0.7,
+                       "ocean": {"O": 0.2, "C": 0.1, "E": 0.0, "A": 0.5, "N": -0.3}, "speed_mps": 1.1}}]
+    sim = Sim(SCENE, _scenario([], occ, 10), 4)
+    assert all(1.0 <= x <= 6.0 and 4.4 <= z <= 5.6 for x, z in sim.pos)
+    for a in sim.agents:
+        assert a.traits["social_threshold"] == 6 and a.traits["speed_mps"] == 1.1
+        assert sorted(a.known_exits) == ["exit_01", "exit_02"]
+    view = __import__("sim.perception", fromlist=["build_view"]).build_view(sim, sim.agents[0])
+    assert view["agent"]["traits"]["risk_tolerance"] == 0.7 and view["agent"]["traits"]["ocean"]["N"] == -0.3
