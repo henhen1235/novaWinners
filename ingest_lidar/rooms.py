@@ -3,9 +3,10 @@ Hydra-style distance-transform split for big rooms whose door was missed."""
 
 from __future__ import annotations
 
+import heapq
+
 import cv2
 import numpy as np
-from scipy import ndimage
 from shapely.geometry import Polygon
 
 from .geometry import ring
@@ -56,6 +57,25 @@ def _boundary_segment(g: Grid, cells: np.ndarray) -> tuple[list[list[float]], fl
     return [a.tolist(), b.tolist()], float(span[along])
 
 
+def _flood(elev: np.ndarray, markers: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Priority-flood watershed (Meyer) of `markers` over `mask`, 4-connected.
+
+    scipy's watershed_ift mislabels plateaus here, so this is done by hand;
+    ponytail: Python heap, ~0.2 s per 50k cells, use skimage if it gets slow.
+    """
+    lab = markers.copy()
+    heap = [(float(elev[r, c]), int(r), int(c)) for r, c in zip(*np.nonzero(lab))]
+    heapq.heapify(heap)
+    nr, nc = lab.shape
+    while heap:
+        _, r, c = heapq.heappop(heap)
+        for rr, cc in ((r - 1, c), (r + 1, c), (r, c - 1), (r, c + 1)):
+            if 0 <= rr < nr and 0 <= cc < nc and mask[rr, cc] and not lab[rr, cc]:
+                lab[rr, cc] = lab[r, c]
+                heapq.heappush(heap, (float(elev[rr, cc]), rr, cc))
+    return lab
+
+
 def _split(g: Grid, comp: np.ndarray) -> tuple[np.ndarray, list[tuple[int, int, list, float]]]:
     """Watershed split of one component; returns (labels 1..k inside comp, doors (a, b, seg, w)).
 
@@ -74,14 +94,10 @@ def _split(g: Grid, comp: np.ndarray) -> tuple[np.ndarray, list[tuple[int, int, 
     if n < 2:
         return comp.astype(np.int32), []
     _, lab, keep = next(s for s in seeds if s[0] == n)
-    markers = np.zeros(comp.shape, np.int16)
+    markers = np.zeros(comp.shape, np.int32)
     for j, i in enumerate(keep):
         markers[lab == i] = j + 1
-    markers[~comp] = -1
-    elev = np.clip((dist.max() - dist) / max(dist.max(), 1e-6) * 1000, 0, 1000).astype(np.uint16)
-    parts = ndimage.watershed_ift(elev, markers).astype(np.int32)
-    parts[~comp] = 0
-    parts[parts < 0] = 0
+    parts = _flood(-dist, markers, comp)
     # union-find merge of parts whose shared boundary is not door-like
     parent = list(range(n + 1))
 

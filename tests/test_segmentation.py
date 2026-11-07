@@ -77,3 +77,23 @@ def test_deterministic() -> None:
     w1, w2 = detect_walls(g, m, 3.0), detect_walls(g, m, 3.0)
     assert w1 == w2
     assert segment_rooms(g, m, w1) == segment_rooms(g, m, w2)
+
+
+def test_missed_door_split() -> None:
+    """Two 3 x 3 m rooms joined by a 0.8 m opening in a 0.15 m wall split into 2 with a door.
+
+    With deltas 0.30-0.55 the median seed count only splits openings narrower
+    than ~0.85 m (half width below the 4th delta)."""
+    from ingest_lidar.rooms import _split
+
+    g = _plan()
+    comp = np.zeros(g.shape, bool)
+    comp[_cells(0.5, 3.5, 0.5, 3.5)] = True
+    comp[_cells(3.65, 6.65, 0.5, 3.5)] = True
+    comp[_cells(3.5, 3.65, 1.6, 2.4)] = True
+    parts, doors = _split(g, comp)
+    assert len(np.unique(parts[parts > 0])) == 2
+    assert len(doors) == 1 and abs(doors[0][3] - 0.8) < 0.1, doors
+    big = np.zeros(g.shape, bool)
+    big[_cells(0.5, 5.5, 0.5, 4.5)] = True
+    assert len(_split(g, big)[1]) == 0

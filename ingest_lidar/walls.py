@@ -191,7 +191,7 @@ def find_gaps(g: Grid, m: Masks, walls: list[dict]) -> list[dict]:
                 continue
             gap = {"axis": w["axis"], "c": w["c"], "lo": span[0], "hi": span[1], "t": w["t"]}
             mid = (gap["lo"] + gap["hi"]) / 2
-            if any(o["axis"] == gap["axis"] and abs(o["c"] - gap["c"]) < 0.15
+            if any(o["axis"] == gap["axis"] and abs(o["c"] - gap["c"]) < 0.4
                    and abs((o["lo"] + o["hi"]) / 2 - mid) < 0.3 for o in gaps):
                 continue
             gaps.append(gap)
