@@ -1,0 +1,10 @@
+{
+ "_comment": "Mudge House (CMU 050), a residence hall on a hillside. A is the basement below ground floor 1. Room numbers are wing letter + floor + two digits (C205A); floor A uses wing + number (C19). Stairs are found from the drawn treads.",
+ "extends": "cmu",
+ "name": "mudge_house",
+ "ext_key": "mudge",
+ "floors": ["A", "1", "2", "3"],
+ "floor_height_m": 3.4,
+ "ceiling_m": 2.8,
+ "room_number": "^[A-C]\\d{1,3}[A-H]?$"
+}

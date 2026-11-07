@@ -1,31 +1,29 @@
-"""Multi-level contract scene for the Tepper Building from CMU ESIM CAD sheets (floors 1-5).
+"""Multi-level contract scene from CMU-style ESIM CAD floor plan PDFs.
 
-Inputs (CMU-internal, never committed): data/cmu/raw/tepper/TSB-<f>-ESIM-Base.pdf (CAD layers as
-PDF optional content: A-AREA room boundaries, ARCH|A-DOOR door symbols, A-SPAC-EXTR gross outline,
-room number and "<n>sf" labels) and TSB-<f>-ESIM-Type.pdf (rooms hatched by FICM space type, color
-key in TSB-1/2-ESIM-TypeChart.pdf).
+Inputs per floor: <BLDG>-<floor>-ESIM-Base.pdf (CAD layers kept as PDF optional content:
+A-AREA room boundaries, ARCH|A-DOOR door symbols, ARCH|A-FLOR-STRS stair treads, A-SPAC-EXTR
+gross outline, room number and "<n>sf" labels) and optionally <BLDG>-<floor>-ESIM-Type.pdf
+(rooms hatched by FICM space type) plus TypeChart sheets with the color key (when there is no
+chart, the key printed on the Type sheets is used).
 
-Method, per floor: rooms = polygonized A-AREA linework holding a room-number label; scale =
-median of sqrt(labeled sf * 0.092903 / traced area); type = majority hatch color under the room;
-doors = A-DOOR symbols placed on the wall strip between the two spaces they touch (outside when
-the strip faces the exterior); walls = gross outline minus rooms minus door openings. Floors
-stack at FLOOR_TO_FLOOR_M; stairwells (W07) that overlap on consecutive floors become stairs +
-links. Rooms with no door/stair path to an exit are left out of `rooms` (listed in
-extensions.tepper.unreachable) so the scene stays valid.
+Per floor: rooms = polygonized A-AREA linework holding a room-number label; scale = median of
+sqrt(labeled sf * 0.092903 / traced area); type = majority hatch color under the room; doors =
+A-DOOR symbols placed on the wall strip between the two spaces they touch; walls = gross outline
+minus rooms minus door openings. Floors are aligned on vertical cores, stacked at the configured
+floor height, and joined by stairs where stair rooms overlap on consecutive floors. Exits are
+exterior doors at grade only. Rooms with no path to an exit (doors, stairs going down) are left
+out of `rooms` and listed in extensions.<key>.unreachable, so the scene validates.
 
-WS-A's generic pipeline finds no rooms on these sheets (blueprint/FAILURES_CMU.md #3), so this
-is a Tepper-specific reader that writes the standard contract.
-
-    python -m tools.tepper_to_scene data/cmu/raw/tepper -o samples/cmu/tepper
+Building specifics (floor order, grade floors, core room numbers, color overrides) come from a
+small JSON config; see ingest_plans/configs/ and ingest_plans/README.md.
 """
 
 from __future__ import annotations
 
-import argparse
 import collections
-import json
 import re
 import subprocess
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -39,28 +37,58 @@ import trimesh
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 from shapely.ops import polygonize, split, unary_union
 
-from contract.validate_scene import validate
-from ingest_lidar.geometry import (door_gap_box, exit_reachable_parts, extrude_xz, navmesh_from_walkable, ring,
-                                   walkable_from_parts, walkable_to_contract)
+from ingest_lidar.geometry import (door_gap_box, extrude_xz, navmesh_from_walkable, ring, walkable_from_parts,
+                                   walkable_to_contract)
 from tools.layouts import _round
 
-FLOORS = ["1", "2", "3", "4", "5"]
-FLOOR_TO_FLOOR_M = 4.3  # OSM has no height/levels for Tepper; typical for this building class
-CEILING_M = 3.5
 SQFT_M2 = 0.092903
 R = 0.25
-EXIT_FLOORS = {"1", "2"}  # 1 = Forbes Ave grade, 2 = main entrance from the quad (cmu.edu/tepper directions)
-ROOM_NO = re.compile(r"^(\d{4}[A-Z]?|[A-Z]{3}\d-\d+[A-Z]?)$")
 SF = re.compile(r"^([\d,]+)\s*sf$", re.I)
+SHELL_CLOSE_M = 0.6  # closes walls up to 1.2 m thick when the outline comes from the rooms
+TREAD_MIN_M = 8.0  # tread linework inside a room that makes it a stairwell (auto stair detection)
 
-# FICM code -> contract room type. Codes not listed map to "unknown".
+# FICM code -> contract room type. Codes not listed map to "unknown". Residential sleeping rooms
+# (9xx) have no contract type; they stay "unknown" with their FICM code in extensions.
 FICM_TYPE = {"110": "classroom", "115": "storage", "210": "classroom", "215": "storage", "220": "classroom",
              "225": "storage", "250": "office", "310": "office", "310.1": "office", "315": "storage",
              "315.1": "storage", "350": "office", "455": "storage", "520": "unknown", "525": "storage",
              "610": "lobby", "615": "storage", "615.1": "storage", "630": "lobby", "635": "storage",
              "650": "lobby", "655": "storage", "680": "office", "685": "storage", "710": "mechanical",
-             "730": "storage", "880": "lobby", "W02": "unknown", "W06": "corridor", "W07": "stairwell",
-             "X02": "storage", "X03": "restroom", "X03.3": "restroom", "Y04": "mechanical", "070.1": "unknown"}
+             "730": "storage", "880": "lobby", "935": "storage", "W02": "unknown", "W06": "corridor",
+             "W07": "stairwell", "X02": "storage", "X03": "restroom", "X03.3": "restroom", "Y04": "mechanical",
+             "070.1": "unknown"}
+
+
+@dataclass
+class Config:
+    """Building settings. Defaults suit any ESIM sheet set; configs/*.json override them."""
+
+    name: str = "building"
+    ext_key: str = "esim"
+    floors: list[str] | str = "auto"  # bottom to top, or "auto" (see floor_order)
+    floor_order: str = "numeric"  # "numeric": numbers ascending, others before them alphabetically;
+    #                               "cmu": C < B < A < 1 < 2 ... (letters are basements)
+    ground_floor: str | None = None  # elevation 0; default the first numbered floor, else the lowest
+    floor_height_m: float = 4.0
+    ceiling_m: float = 3.0
+    grade_floors: list[str] | None = None  # floors whose exterior doors may be exits; None = all
+    room_number: str = r"^([A-Z]{0,3}\d{2,4}[A-Z]?|[A-Z]{3}\d-\d+[A-Z]?)$"
+    skip_prefixes: list[str] = field(default_factory=lambda: ["VPN"])
+    open_to_below_rgb: list[float] | None = None
+    color_types: dict[str, str] = field(default_factory=dict)  # "r,g,b" -> contract type
+    big_room_retype: dict[str, list] = field(default_factory=dict)  # type -> [min m^2, new type]
+    stair_suffixes: list[str] | None = None  # room number[1:4]; None = detect stairs by treads
+    elevator_suffixes: list[str] = field(default_factory=list)
+    align_suffixes: list[str] | None = None  # None = auto (room numbers that repeat, then stairs)
+    source_note: str = "ESIM floor plan PDFs (not redistributed)"
+
+    @property
+    def room_re(self) -> re.Pattern:
+        return re.compile(self.room_number)
+
+    @property
+    def open_rgb(self) -> tuple | None:
+        return tuple(self.open_to_below_rgb) if self.open_to_below_rgb else None
 
 
 def _rgb(c) -> tuple:
@@ -87,14 +115,15 @@ def _lines(d: dict) -> list[LineString]:
 
 
 def legend(chart_pdfs: list[Path]) -> dict[tuple, list[str]]:
-    """Hatch color -> FICM codes, from the swatch beside each code line on the type charts."""
+    """Hatch color -> FICM codes, from the swatch beside each code line on the type charts (or on
+    the Type sheets themselves, which print the same key)."""
     out: dict[tuple, set] = collections.defaultdict(set)
     for pdf in chart_pdfs:
         page = fitz.open(pdf)[0]
         codes = [w for w in page.get_text("words") if re.fullmatch(r"[0-9WXY]\d{2}(\.\d)?", w[4])]
         for d in page.get_drawings():
             r = d["rect"]
-            if not d.get("fill") or r.width > 60 or r.width < 3:
+            if not d.get("fill") or r.width > 60 or r.width < 3 or d.get("layer") == "A-SPAC-PATT":
                 continue
             cy = (r.y0 + r.y1) / 2
             # The code sits just right of its swatch on the same row (the chart has two columns).
@@ -104,13 +133,13 @@ def legend(chart_pdfs: list[Path]) -> dict[tuple, list[str]]:
     return {k: sorted(v) for k, v in out.items()}
 
 
-def _labels(page: fitz.Page, leaders: list[LineString]) -> list[dict]:
+def _labels(page: fitz.Page, leaders: list[LineString], room_re: re.Pattern) -> list[dict]:
     """Room number + sf pairs with the point that identifies their room (leader end when present)."""
     words = page.get_text("words")
     sfs = [w for w in words if SF.match(w[4])]
     out = []
     for w in words:
-        if not ROOM_NO.match(w[4]):
+        if not room_re.match(w[4]) or SF.match(w[4]):
             continue
         cx, cy = (w[0] + w[2]) / 2, (w[1] + w[3]) / 2
         below = [s for s in sfs if 0 < s[1] - w[1] < 10 and abs((s[0] + s[2]) / 2 - cx) < 12]
@@ -119,7 +148,21 @@ def _labels(page: fitz.Page, leaders: list[LineString]) -> list[dict]:
     return out
 
 
-def read_floor(base_pdf: Path, type_pdf: Path, colors: dict) -> dict:
+def _shell(gross: list[Polygon], faces: list[Polygon], m_per_pt: float) -> Polygon:
+    """Building outline in PDF units: the largest gross-area polygon when the rooms fill most of
+    it, else the rooms closed over their walls. Some sheets draw the gross line open (no polygon)
+    or around a courtyard; a hull would turn the courtyard into floor."""
+    rooms = unary_union(faces)
+    full = [p for p in gross if p.intersection(rooms).area >= 0.6 * p.area]
+    if full:
+        return max(full, key=lambda p: p.area)
+    c = SHELL_CLOSE_M / m_per_pt
+    closed = rooms.buffer(c, join_style="mitre").buffer(-c, join_style="mitre")
+    parts = [Polygon(p.exterior) for p in getattr(closed, "geoms", [closed]) if p.area > 0.02 * closed.area]
+    return unary_union(parts)
+
+
+def read_floor(base_pdf: Path, type_pdf: Path | None, colors: dict, cfg: Config) -> dict:
     page = fitz.open(base_pdf)[0]
     drawings = page.get_drawings()
     by_layer: dict[str, list] = collections.defaultdict(list)
@@ -128,11 +171,13 @@ def read_floor(base_pdf: Path, type_pdf: Path, colors: dict) -> dict:
     area_lines = [ln for d in by_layer["A-AREA"] for ln in _lines(d)]
     faces = [f for f in polygonize(unary_union(area_lines)) if f.area > 1.0]
     leaders = [ln for d in by_layer["A-SPAC-IDEN-LEDR"] for ln in _lines(d)]
+    ext_lines = [ln for d in by_layer["A-SPAC-EXTR"] for ln in _lines(d)]
+    # Per path and all paths together: one building draws its outline as one path, another as many.
     gross = [p for d in by_layer["A-SPAC-EXTR"] for p in polygonize(unary_union(_lines(d)))]
-    shell = max(gross, key=lambda p: p.area) if gross else unary_union(faces).convex_hull
+    gross += list(polygonize(unary_union(ext_lines))) if ext_lines else []
 
     rooms: dict[str, dict] = {}
-    for lab in _labels(page, leaders):
+    for lab in _labels(page, leaders, cfg.room_re):
         hit = [f for f in faces if f.contains(lab["at"])]
         if not hit:  # label outside its room: follow the leader that starts at the label
             for ln in leaders:
@@ -149,9 +194,10 @@ def read_floor(base_pdf: Path, type_pdf: Path, colors: dict) -> dict:
 
     ratios = [np.sqrt(r["sf"] * SQFT_M2 / r["poly"].area) for r in rooms.values() if r["sf"] and r["sf"] >= 50]
     m_per_pt = float(np.median(ratios))
+    shell = _shell(gross, faces, m_per_pt)
 
     # Type: majority hatch color inside each room on the Type sheet.
-    fills = [(box(*d["rect"]), _rgb(d["fill"])) for d in fitz.open(type_pdf)[0].get_drawings()
+    fills = [(box(*d["rect"]), _rgb(d["fill"])) for d in (fitz.open(type_pdf)[0].get_drawings() if type_pdf else [])
              if d.get("fill") and d.get("layer") == "A-SPAC-PATT"]
     tree = shapely.STRtree([p for p, _ in fills])
     for r in rooms.values():
@@ -172,6 +218,8 @@ def read_floor(base_pdf: Path, type_pdf: Path, colors: dict) -> dict:
     merged = unary_union([g.buffer(0.6) for g in doors])
     symbols = [unary_union([g for g in doors if g.intersects(part)]) for part in getattr(merged, "geoms", [merged])]
     stairs_layer = unary_union([ln for d in by_layer["ARCH|A-FLOR-STRS"] for ln in _lines(d)])
+    for r in rooms.values():
+        r["tread_m"] = r["poly"].intersection(stairs_layer).length  # PDF units; scaled by the caller
     used = [r["poly"] for r in rooms.values()]
     others = [f for f in faces if not any(f.equals(u) for u in used)]
     return {"rooms": rooms, "unlabeled": others, "shell": shell, "doors": symbols, "m_per_pt": m_per_pt,
@@ -179,18 +227,6 @@ def read_floor(base_pdf: Path, type_pdf: Path, colors: dict) -> dict:
             "treads": stairs_layer}
 
 
-# Hatch color -> contract type, decided from the FICM codes each color carries on the charts
-# (legend() output); where one color covers several codes we take the evacuation-relevant or
-# dominant one. Gray is W07 stairway only when stair treads are drawn in the room.
-COLOR_TYPE = {(1.0, 0.75, 0.5): "classroom", (1.0, 1.0, 0.5): "storage", (0.5, 0.62, 1.0): "office",
-              (0.84, 0.84, 0.84): "storage", (1.0, 0.0, 0.0): "unknown", (0.62, 1.0, 0.5): "storage",
-              (1.0, 0.5, 0.62): "lobby", (1.0, 1.0, 0.0): "storage", (0.5, 1.0, 1.0): "office",
-              (0.25, 1.0, 0.0): "corridor", (0.52, 0.52, 0.52): "storage", (1.0, 0.0, 0.75): "restroom",
-              (1.0, 0.5, 0.5): "mechanical"}
-OPEN_TO_BELOW = (0.0, 0.25, 1.0)  # FICM 070.1: atrium void, not floor
-STAIR_SUFFIX = ("901", "902", "903")
-ELEVATOR_SUFFIX = ("912", "913", "914")
-CORE_SUFFIX = STAIR_SUFFIX + ("911",) + ELEVATOR_SUFFIX
 WALL_REACH_M = 0.6  # widest wall a door symbol may cross
 DOOR_W = (0.8, 2.0)
 EXTERIOR_WALL_M = 0.3  # A-SPAC-EXTR is the outer face of the exterior wall
@@ -201,34 +237,105 @@ GAP_OVERLAP_M = 0.8  # door boxes extend 0.4 m into each room so off-center symb
 OPEN_GAP_M = 0.08  # spaces closer than this have no wall between them
 
 
-def room_type(number: str, r: dict, s: float) -> str:
-    suffix = number[1:4]
-    if suffix in STAIR_SUFFIX:
-        return "stairwell"
-    if suffix in ELEVATOR_SUFFIX:
+def color_type(color: tuple | None, colors: dict, cfg: Config) -> str:
+    """Contract type for a hatch color: config override, else the FICM codes the key gives it
+    when they all agree, else "unknown"."""
+    if color is None:
         return "unknown"
-    t = COLOR_TYPE.get(r["color"], "unknown")
-    if t == "mechanical" and r["poly"].area * s * s > 60:
-        return "lobby"  # 650 lounge / 635 food service share the Y04 color; big ones are not shafts
+    key = ",".join(str(c) for c in color)
+    if key in cfg.color_types:
+        return cfg.color_types[key]
+    types = {FICM_TYPE.get(c, "unknown") for c in colors.get(color, [])}
+    return types.pop() if len(types) == 1 else "unknown"
+
+
+def _suffix(number: str) -> str:
+    return number[1:4]
+
+
+def is_stair(number: str, r: dict, s: float, cfg: Config) -> bool:
+    if cfg.stair_suffixes is not None:
+        return _suffix(number) in cfg.stair_suffixes
+    return r.get("tread_m", 0.0) * s >= TREAD_MIN_M
+
+
+def room_type(number: str, r: dict, s: float, colors: dict, cfg: Config) -> str:
+    if is_stair(number, r, s, cfg):
+        return "stairwell"
+    if _suffix(number) in cfg.elevator_suffixes:
+        return "unknown"
+    t = color_type(r["color"], colors, cfg)
+    big = cfg.big_room_retype.get(t)
+    if big and r["poly"].area * s * s > big[0]:
+        return big[1]
     return t
 
 
-def _align(floors: dict) -> dict[str, tuple[float, float, float]]:
-    """Per floor (scale m/pt, dx, dz): the sheets are each fit to the page, so scale and origin
-    differ; translation is the median shift of the vertical core rooms (stairs x901-903,
-    elevators x911-914) onto floor 1."""
-    out = {}
-    base = floors[FLOORS[0]]
-    for f, fd in floors.items():
-        s = fd["m_per_pt"]
-        shifts = []
-        for suf in CORE_SUFFIX:
-            a, b = base["rooms"].get(FLOORS[0] + suf), fd["rooms"].get(f + suf)
-            if a and b:
-                ca, cb = a["poly"].centroid, b["poly"].centroid
-                shifts.append((ca.x * base["m_per_pt"] - cb.x * s, ca.y * base["m_per_pt"] - cb.y * s))
-        dx, dz = np.median(np.array(shifts), axis=0)
-        out[f] = (s, float(dx), float(dz))
+def _floor_key(number: str, floor: str) -> str | None:
+    """Room number with its floor digit taken out (2611 -> 611 on floor 2, C205A -> C05A on 2),
+    so the same position on another floor has the same key; None when the floor id is absent."""
+    i = number.find(floor)
+    return number[:i] + number[i + 1:] if i >= 0 and len(number) > 2 else None
+
+
+def _shift_by_keys(base: dict, fd: dict, bf: str, f: str, keys: list[str] | None) -> np.ndarray | None:
+    shifts = []
+    for num, r in fd["rooms"].items():
+        k = _suffix(num) if keys is not None else _floor_key(num, f)
+        if k is None or (keys is not None and (k not in keys or not num.startswith(f))):
+            continue
+        twin = (bf + k) if keys is not None else next((n for n in base["rooms"] if _floor_key(n, bf) == k), None)
+        a = base["rooms"].get(twin) if twin else None
+        if not a or (keys is None and not (a["sf"] and r["sf"] and abs(a["sf"] - r["sf"]) <= 0.15 * a["sf"])):
+            continue
+        ca, cb = a["poly"].centroid, r["poly"].centroid
+        shifts.append((ca.x * base["m_per_pt"] - cb.x * fd["m_per_pt"], ca.y * base["m_per_pt"] - cb.y * fd["m_per_pt"]))
+    if keys is not None:
+        return np.median(np.array(shifts), axis=0) if shifts else None
+    if len(shifts) < 3:
+        return None
+    arr = np.array(shifts)
+    med = np.median(arr, axis=0)
+    inl = arr[np.linalg.norm(arr - med, axis=1) < 0.5]
+    return np.median(inl, axis=0) if len(inl) >= 3 else None
+
+
+def _shift_by_stairs(base: dict, fd: dict, cfg: Config) -> np.ndarray | None:
+    """Translation that lands the most stair rooms of `fd` on stair rooms of `base`."""
+    def stairs(d):
+        return [np.array(r["poly"].centroid.coords[0]) * d["m_per_pt"]
+                for n, r in d["rooms"].items() if is_stair(n, r, d["m_per_pt"], cfg)]
+    sa, sb = stairs(base), stairs(fd)
+    best = None
+    for a in sa:
+        for b in sb:
+            t = a - b
+            hits = [min(np.linalg.norm(x + t - y) for y in sa) for x in sb]
+            score = (sum(h < 1.5 for h in hits), -sum(h for h in hits if h < 1.5))
+            if best is None or score > best[0]:
+                best = (score, t)
+    return best[1] if best and best[0][0] >= 2 else None
+
+
+def _align(floors: dict, order: list[str], cfg: Config) -> dict[str, tuple[float, float, float]]:
+    """Per floor (scale m/pt, dx, dz). Sheets are each fit to the page, so scale and origin
+    differ; the translation lands each floor's vertical cores on the lowest floor's: configured
+    core rooms (align_suffixes), else room numbers that repeat floor to floor with similar area,
+    else stair rooms. Floors chain through their neighbor when the lowest floor shares no keys."""
+    out = {order[0]: (floors[order[0]]["m_per_pt"], 0.0, 0.0)}
+    for i, f in enumerate(order[1:], 1):
+        fd = floors[f]
+        shift = None
+        for bf in [order[0]] + order[1:i][::-1]:
+            shift = _shift_by_keys(floors[bf], fd, bf, f, cfg.align_suffixes)
+            if shift is None and cfg.align_suffixes is None:
+                shift = _shift_by_stairs(floors[bf], fd, cfg)
+            if shift is not None:
+                shift = shift + np.array(out[bf][1:])
+                break
+        if shift is None:
+            raise ValueError(f"floor {f}: no shared cores to align it")
+        out[f] = (fd["m_per_pt"], float(shift[0]), float(shift[1]))
     return out
 
 
@@ -326,9 +433,10 @@ def _outside_probe(door: dict, shell: Polygon, dist: float = 1.5) -> Point:
     return a if shell.distance(a) > shell.distance(b) or not shell.contains(a) and shell.contains(b) else b
 
 
-def _reach(per: dict, stairs: list) -> set:
+def _reach(per: dict, pairs: list, below_ground: set[str] = frozenset()) -> set:
     """(floor, space) nodes with a path to outside through doors (either way) and stairs taken
-    downward only: evacuees do not climb to get out."""
+    downward only: evacuees do not climb to get out, except from basements (below_ground), which
+    climb toward the ground floor. pairs: (lo, room_lo, hi, room_hi)."""
     g = nx.DiGraph()
     g.add_node("outside")
     for f, pf in per.items():
@@ -336,29 +444,29 @@ def _reach(per: dict, stairs: list) -> set:
         for d in pf["doors"]:
             a, b = ((f, x) if x != "outside" else "outside" for x in d["connects"])
             g.add_edges_from([(a, b), (b, a)])
-    for st in stairs:
-        lo, hi = st["from_level"][1:], st["to_level"][1:]
-        suf = st["id"].rsplit("_", 1)[1]
-        g.add_edge((hi, f"r_{hi}{suf}"), (lo, f"r_{lo}{suf}"))
+    for lo, rlo, hi, rhi in pairs:
+        g.add_edge((hi, rhi), (lo, rlo))
+        if lo in below_ground:
+            g.add_edge((lo, rlo), (hi, rhi))
     return nx.ancestors(g, "outside") | {"outside"}
 
 
-def fill_stair_cores(per: dict) -> None:
+def fill_stair_cores(per: dict, order: list[str], suffixes: list[str]) -> None:
     """Give every floor between a stair core's lowest and highest appearance its core room.
 
     Stair shafts are vertical, but a floor's core label sometimes fails to match its A-AREA face
     (e.g. 2903, 3903, 4902), which left floors without a way down. Take the core outline from the
     nearest floor that has it; reuse the space there if one covers it, else add it as a room.
     """
-    for suf in STAIR_SUFFIX:
-        have = [f for f in FLOORS if f"r_{f}{suf}" in per[f]["spaces"]]
+    for suf in suffixes:
+        have = [f for f in order if f"r_{f}{suf}" in per[f]["spaces"]]
         if len(have) < 2:
             continue
-        for f in FLOORS[FLOORS.index(have[0]):FLOORS.index(have[-1]) + 1]:
+        for f in order[order.index(have[0]):order.index(have[-1]) + 1]:
             rid = f"r_{f}{suf}"
             if rid in per[f]["spaces"]:
                 continue
-            src = min(have, key=lambda h: abs(int(h) - int(f)))
+            src = min(have, key=lambda h: abs(order.index(h) - order.index(f)))
             core = per[src]["spaces"][f"r_{src}{suf}"]
             spaces, info = per[f]["spaces"], per[f]["info"]
             over = [(spaces[k].intersection(core).area, k) for k in spaces if spaces[k].intersects(core)]
@@ -383,7 +491,7 @@ def infer_door(rid: str, pf: dict, reachable: set[str]) -> dict | None:
     reachable space; corridors and lobbies win over other rooms. None when nothing qualifies."""
     a = pf["spaces"][rid]
     best = None
-    for other in reachable:
+    for other in sorted(reachable):  # sorted: set order follows the hash seed
         b = pf["spaces"][other]
         if a.distance(b) > INFER_REACH_M:
             continue
@@ -446,6 +554,26 @@ def merge_open_circulation(spaces: dict, info: dict, doors: list) -> tuple[dict,
     return spaces, info, out
 
 
+def _stair_pairs(per: dict, lo: str, hi: str, cfg: Config) -> list[tuple[str, str, str]]:
+    """(key, room on lo, room on hi) for each stair that continues from lo to hi: configured core
+    numbers, or any stair rooms overlapping by 30% of the smaller one."""
+    out = []
+    if cfg.stair_suffixes:
+        for suf in cfg.stair_suffixes:
+            a, b = per[lo]["spaces"].get(f"r_{lo}{suf}"), per[hi]["spaces"].get(f"r_{hi}{suf}")
+            if a is not None and b is not None and a.intersection(b).area >= 0.3 * min(a.area, b.area):
+                out.append((suf, f"r_{lo}{suf}", f"r_{hi}{suf}"))
+        return out
+    lows = [r for r, i in per[lo]["info"].items() if i.get("stair")]
+    highs = [r for r, i in per[hi]["info"].items() if i.get("stair")]
+    for rl in lows:
+        a = per[lo]["spaces"][rl]
+        best = max(((a.intersection(per[hi]["spaces"][rh]).area, rh) for rh in highs), default=(0.0, None))
+        if best[1] and best[0] >= 0.3 * min(a.area, per[hi]["spaces"][best[1]].area):
+            out.append((per[lo]["info"][rl]["number"], rl, best[1]))
+    return out
+
+
 def _hole_free(geom) -> list[Polygon]:
     """Split polygons with holes by vertical cuts through each hole until none remain."""
     out, todo = [], [p for p in getattr(geom, "geoms", [geom]) if isinstance(p, Polygon) and not p.is_empty]
@@ -460,26 +588,31 @@ def _hole_free(geom) -> list[Polygon]:
     return out
 
 
-def build(raw: Path) -> tuple[dict, dict]:
-    colors = legend(sorted(raw.glob("TSB-*-ESIM-TypeChart.pdf")))
-    floors = {f: read_floor(raw / f"TSB-{f}-ESIM-Base.pdf", raw / f"TSB-{f}-ESIM-Type.pdf", colors) for f in FLOORS}
-    align = _align(floors)
+def build(sheets: dict[str, dict], charts: list[Path], cfg: Config, generated_by: str = "ingest_plans") -> tuple[dict, dict]:
+    """sheets: floor id -> {"base": Path, "type": Path | None}, already in bottom-to-top order.
+    charts: PDFs carrying the hatch color key (TypeChart sheets, else the Type sheets)."""
+    FLOORS = list(sheets)
+    colors = legend(charts)
+    floors = {f: read_floor(sh["base"], sh.get("type"), colors, cfg) for f, sh in sheets.items()}
+    align = _align(floors, FLOORS, cfg)
     lid = {f: f"L{f}" for f in FLOORS}
-    elev = {f: (int(f) - 1) * FLOOR_TO_FLOOR_M for f in FLOORS}
+    ground = cfg.ground_floor if cfg.ground_floor in FLOORS else next((f for f in FLOORS if f.isdigit()), FLOORS[0])
+    elev = {f: (i - FLOORS.index(ground)) * cfg.floor_height_m for i, f in enumerate(FLOORS)}
+    below_ground = set(FLOORS[:FLOORS.index(ground)])
+    grade = set(cfg.grade_floors) if cfg.grade_floors is not None else set(FLOORS)
+    ext = cfg.ext_key
     stats: dict = {"floors": {}}
     per: dict[str, dict] = {}
     for f, fd in floors.items():
         t = align[f]
         spaces, info = {}, {}
         for num, r in fd["rooms"].items():
-            if r["color"] == OPEN_TO_BELOW or num.startswith("VPN"):
+            if (cfg.open_rgb and r["color"] == cfg.open_rgb) or any(num.startswith(x) for x in cfg.skip_prefixes):
                 continue  # atrium voids and shafts are not floor
             rid = f"r_{num}"
             spaces[rid] = _tf(r["poly"], t)
-            info[rid] = {"number": num, "type": room_type(num, r, 1.0), "sf": r["sf"],
-                         "ficm": r["ficm"], "color": r["color"]}
-            if info[rid]["type"] == "mechanical" and spaces[rid].area > 60:
-                info[rid]["type"] = "lobby"
+            info[rid] = {"number": num, "type": room_type(num, r, t[0], colors, cfg), "sf": r["sf"],
+                         "ficm": r["ficm"], "color": r["color"], "stair": is_stair(num, r, t[0], cfg)}
         # A-AREA faces with no label are mostly circulation (corridors are often unnumbered).
         for i, poly in enumerate(sorted(fd["unlabeled"], key=lambda p: (p.bounds[0], p.bounds[1])), 1):
             pm = _tf(poly, t)
@@ -504,11 +637,11 @@ def build(raw: Path) -> tuple[dict, dict]:
         faces_m = faces_m.union(opened)
         outside = box(*shell.buffer(50).bounds).difference(shell)
         doors = place_doors([_tf(g, t) for g in fd["doors"]], spaces, outside)
-        if f not in EXIT_FLOORS:
+        if f not in grade:
             doors = [d for d in doors if "outside" not in d["connects"]]
         # An exterior door whose outside lies over a lower floor opens onto a roof or terrace,
         # not grade: it is not an exit and the terrace is not on the map, so drop it.
-        below = unary_union([per[b]["shell"] for b in FLOORS[:FLOORS.index(f)]])
+        below = unary_union([per[b]["shell"] for b in FLOORS[:FLOORS.index(f)] if b not in below_ground])
         doors = [d for d in doors if "outside" not in d["connects"] or not below.contains(_outside_probe(d, shell))]
         doors += open_connections(spaces, doors)
         spaces, info, doors = merge_open_circulation(spaces, info, doors)
@@ -519,14 +652,14 @@ def build(raw: Path) -> tuple[dict, dict]:
                               "labeled_rooms": len(fd["rooms"]), "door_symbols": len(fd["doors"]),
                               "doors": len(doors), "exits": sum("outside" in d["connects"] for d in doors)}
 
-    fill_stair_cores(per)
-    # Stairs: the same stair core (x901-x903) on consecutive floors.
-    stairs, links = [], []
+    if cfg.stair_suffixes:
+        fill_stair_cores(per, FLOORS, cfg.stair_suffixes)
+    # Stairs: stair rooms that overlap on consecutive floors.
+    stairs, links, pairs = [], [], []
     for lo, hi in zip(FLOORS, FLOORS[1:]):
-        for suf in STAIR_SUFFIX:
-            a, b = per[lo]["spaces"].get(f"r_{lo}{suf}"), per[hi]["spaces"].get(f"r_{hi}{suf}")
-            if a is None or b is None or a.intersection(b).area < 0.3 * min(a.area, b.area):
-                continue
+        for suf, rlo, rhi in _stair_pairs(per, lo, hi, cfg):
+            a, b = per[lo]["spaces"][rlo], per[hi]["spaces"][rhi]
+            pairs.append((lo, rlo, hi, rhi))
             poly = a.intersection(b)
             poly = max(getattr(poly, "geoms", [poly]), key=lambda p: p.area)
             bot, top = a.buffer(-0.6).representative_point(), b.buffer(-0.6).representative_point()
@@ -539,7 +672,7 @@ def build(raw: Path) -> tuple[dict, dict]:
             links.append({"id": f"link_{sid}", "type": "stairs", "from": {"level": lid[lo], "position": [bot.x, bot.y]},
                           "to": {"level": lid[hi], "position": [top.x, top.y]}, "cost_multiplier": 2.0, "bidirectional": True})
 
-    reach = _reach(per, stairs)
+    reach = _reach(per, pairs, below_ground)
     # Every office/classroom has a door; when its symbol was not matched, infer one on the
     # longest wall shared with a reachable space (circulation first), and say so.
     while True:
@@ -552,7 +685,7 @@ def build(raw: Path) -> tuple[dict, dict]:
                     added += 1
         if not added:
             break
-        reach = _reach(per, stairs)
+        reach = _reach(per, pairs, below_ground)
     build.debug = (per, reach, stairs)  # for ad-hoc inspection
 
     scene_rooms, scene_doors, exits, walls, walkable, unreachable, inferred = [], [], [], [], {}, [], []
@@ -591,7 +724,7 @@ def build(raw: Path) -> tuple[dict, dict]:
             w = shapely.set_precision(w, 0.001)
             if w.area > 0.02 and w.is_valid and isinstance(w, Polygon) and not w.interiors:
                 walls.append({"id": f"wall_{f}_{len(walls) + 1:04d}", "level": L, "polygon": ring(w),
-                              "height_m": CEILING_M})
+                              "height_m": cfg.ceiling_m})
         free = [per[f]["spaces"][r] for r in keep] + gaps
         walk = walkable_from_parts(free, [], R)
         # ponytail: a 1 cm opening plus a 1 cm simplify drops hair-thin spikes and near-collinear
@@ -611,31 +744,32 @@ def build(raw: Path) -> tuple[dict, dict]:
     exits = [e for e in exits if e["door_id"] in kept_doors]
     scene = {
         "schema_version": "1.0",
-        "meta": {"name": "tepper_building", "source": "blueprint",
-                 "source_file": "CMU ESIM TSB-{1..5}-ESIM-Base.pdf + -Type.pdf (CMU-internal, not redistributed)",
+        "meta": {"name": cfg.name, "source": "blueprint", "source_file": cfg.source_note,
                  "units": "meters", "up_axis": "y", "scale_method": "manual", "scale_confidence": 0.95,
-                 "generated_by": f"tools.tepper_to_scene {_git_sha()}",
+                 "generated_by": f"{generated_by} {_git_sha()}",
                  "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
-        "levels": [{"id": lid[f], "name": f"Floor {f}", "elevation_m": elev[f], "ceiling_height_m": CEILING_M} for f in FLOORS],
+        "levels": [{"id": lid[f], "name": f"Floor {f}", "elevation_m": elev[f], "ceiling_height_m": cfg.ceiling_m} for f in FLOORS],
         "walls": walls, "rooms": scene_rooms, "doors": scene_doors, "exits": exits, "stairs": stairs,
         "elevators": [{"id": f"elev_{suf}", "levels": [lid[f] for f in FLOORS if f"r_{f}{suf}" in per[f]["spaces"]],
-                       "position": list(per[FLOORS[0]]["spaces"][f"r_1{suf}"].centroid.coords[0]), "usable_in_fire": False}
-                      for suf in ELEVATOR_SUFFIX if f"r_1{suf}" in per[FLOORS[0]]["spaces"]],
+                       "position": list(per[FLOORS[0]]["spaces"][f"r_{FLOORS[0]}{suf}"].centroid.coords[0]),
+                       "usable_in_fire": False}
+                      for suf in cfg.elevator_suffixes if f"r_{FLOORS[0]}{suf}" in per[FLOORS[0]]["spaces"]],
         "obstacles": [], "points_of_interest": [],
         "walkable": {L: walkable_to_contract(w) for L, w in walkable.items()},
         "navmesh": navmesh_from_walkable(walkable, {lid[f]: elev[f] for f in FLOORS}, R),
         "links": links,
         "assets": {"display_model": "display.glb", "floorplan_overlay": "plan.svg", "navmesh_debug": "display.glb"},
         "warnings": [],
-        "extensions": {"tepper": {
+        "extensions": {ext: {
             "rooms": {rid: {"ficm_candidates": inf["ficm"], "sf": inf["sf"], "hatch_rgb": inf["color"],
                             **({"merged_open_members": inf["members"]} if inf.get("members") else {})}
                       for f in FLOORS for rid, inf in per[f]["info"].items()},
             "scale_method": "room_area_labels", "unreachable": unreachable,
-            "inferred_stair_cores": [inf["number"] for f in FLOORS for inf in per[f]["info"].values() if inf.get("inferred")], "inferred_doors": inferred, "floor_to_floor_m": FLOOR_TO_FLOOR_M,
+            "inferred_stair_cores": [inf["number"] for f in FLOORS for inf in per[f]["info"].values() if inf.get("inferred")], "inferred_doors": inferred, "floor_to_floor_m": cfg.floor_height_m,
             "scale": {f: stats["floors"][f]["m_per_pt"] for f in FLOORS},
             "alignment_shift_m": {f: stats["floors"][f]["shift_m"] for f in FLOORS},
-            "outline": {lid[f]: ring(per[f]["shell"].simplify(0.05)) for f in FLOORS}}},
+            "outline": {lid[f]: ring(max(getattr(per[f]["shell"], "geoms", [per[f]["shell"]]), key=lambda p: p.area).simplify(0.05))
+                        for f in FLOORS}}},
     }
     stats["unreachable"] = len(unreachable)
     kinds = collections.Counter("inferred" if d["id"] in {i["door"] for i in inferred} else d["kind"] for d in scene_doors)
@@ -688,21 +822,9 @@ def write_glb(scene: dict, path: Path) -> None:
     out.export(path)
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("raw", type=Path, help="folder with TSB-<f>-ESIM-{Base,Type}.pdf and TypeChart PDFs")
-    ap.add_argument("-o", "--out", type=Path, required=True)
-    a = ap.parse_args(argv)
-    scene, stats = build(a.raw)
-    a.out.mkdir(parents=True, exist_ok=True)
-    (a.out / "scene.json").write_text(json.dumps(scene, indent=1) + "\n")
-    write_glb(scene, a.out / "display.glb")
-    issues = validate(scene)
-    errors = [i for i in issues if i["severity"] == "error"]
-    print(json.dumps(stats, indent=1))
-    print(f"validator: {len(errors)} errors, {len(issues) - len(errors)} warnings")
-    return 1 if errors else 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+def order_floors(ids: list[str], how: str) -> list[str]:
+    """Bottom-to-top order of floor ids."""
+    if how == "cmu":
+        letters = sorted((f for f in ids if not f.isdigit()), reverse=True)  # C below B below A
+        return letters + sorted((f for f in ids if f.isdigit()), key=int)
+    return sorted((f for f in ids if not f.isdigit())) + sorted((f for f in ids if f.isdigit()), key=int)

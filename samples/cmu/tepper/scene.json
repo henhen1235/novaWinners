@@ -8,8 +8,8 @@
   "up_axis": "y",
   "scale_method": "manual",
   "scale_confidence": 0.95,
-  "generated_by": "tools.tepper_to_scene 4c03b57",
-  "generated_at": "2026-11-07T19:42:03Z"
+  "generated_by": "ingest_plans b494988",
+  "generated_at": "2026-11-07T19:51:41Z"
  },
  "levels": [
   {
@@ -54314,7 +54314,7 @@
    "id": "r_1013A",
    "level": "L1",
    "name": "1013A",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      119.359,
@@ -54360,7 +54360,7 @@
    "id": "r_1013B",
    "level": "L1",
    "name": "1013B",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      120.176,
@@ -54808,7 +54808,7 @@
    "id": "r_1017",
    "level": "L1",
    "name": "1017",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      126.51,
@@ -54902,7 +54902,7 @@
    "id": "r_1018",
    "level": "L1",
    "name": "1018",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      123.306,
@@ -55586,7 +55586,7 @@
    "id": "r_1022",
    "level": "L1",
    "name": "1022",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      110.619,
@@ -55648,7 +55648,7 @@
    "id": "r_1023",
    "level": "L1",
    "name": "1023",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      107.32,
@@ -56272,7 +56272,7 @@
    "id": "r_1041",
    "level": "L1",
    "name": "1041",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      106.193,
@@ -60000,7 +60000,7 @@
    "id": "r_1214",
    "level": "L1",
    "name": "1214",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      113.072,
@@ -60078,7 +60078,7 @@
    "id": "r_1215",
    "level": "L1",
    "name": "1215",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      116.22,
@@ -60650,7 +60650,7 @@
    "id": "r_1217",
    "level": "L1",
    "name": "1217",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      120.702,
@@ -60696,7 +60696,7 @@
    "id": "r_1218",
    "level": "L1",
    "name": "1218",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      122.469,
@@ -65432,7 +65432,7 @@
    "id": "r_1923",
    "level": "L1",
    "name": "1923",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      110.854,
@@ -65588,7 +65588,7 @@
    "id": "r_1926",
    "level": "L1",
    "name": "1926",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      109.989,
@@ -65686,7 +65686,7 @@
    "id": "r_1927",
    "level": "L1",
    "name": "1927",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      113.551,
@@ -65732,7 +65732,7 @@
    "id": "r_1928",
    "level": "L1",
    "name": "1928",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      111.324,
@@ -68054,7 +68054,7 @@
    "id": "r_2011",
    "level": "L2",
    "name": "2011",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      87.619,
@@ -69354,7 +69354,7 @@
    "id": "r_2113",
    "level": "L2",
    "name": "2113",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      58.17,
@@ -69392,7 +69392,7 @@
    "id": "r_2114",
    "level": "L2",
    "name": "2114",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      55.098,
@@ -80462,7 +80462,7 @@
    "id": "r_3108",
    "level": "L3",
    "name": "3108",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      39.846,
@@ -85706,7 +85706,7 @@
    "id": "r_3701",
    "level": "L3",
    "name": "3701",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      120.056,
@@ -85776,7 +85776,7 @@
    "id": "r_3702",
    "level": "L3",
    "name": "3702",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      120.361,
@@ -86026,7 +86026,7 @@
    "id": "r_3707",
    "level": "L3",
    "name": "3707",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      134.766,
@@ -86088,7 +86088,7 @@
    "id": "r_3709",
    "level": "L3",
    "name": "3709",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      129.213,
@@ -97526,7 +97526,7 @@
    "id": "r_4921",
    "level": "L4",
    "name": "4921",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      101.836,
@@ -100518,7 +100518,7 @@
    "id": "r_5108",
    "level": "L5",
    "name": "5108",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      87.116,
@@ -104306,7 +104306,7 @@
    "id": "r_5238",
    "level": "L5",
    "name": "5238",
-   "type": "lobby",
+   "type": "mechanical",
    "polygon": [
     [
      92.865,

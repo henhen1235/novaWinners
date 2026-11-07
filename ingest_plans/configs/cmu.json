@@ -1,0 +1,7 @@
+{
+ "_comment": "CMU ESIM convention: floors 1 and up are at or above ground; A, B, C are basements (A one storey below 1). Exits default to floor 1 only.",
+ "floor_order": "cmu",
+ "ground_floor": "1",
+ "grade_floors": ["1"],
+ "source_note": "CMU ESIM floor plan PDFs (CMU-internal, not redistributed)"
+}
