@@ -8,6 +8,7 @@ applies after DEADLINE_TICKS (logged as validation.status = "fallback_deadline")
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import time
@@ -34,17 +35,24 @@ def load_records(path: str | Path) -> list[dict]:
 def branch(scene: dict, scenario: dict, seed: int, records: list[dict], t_branch: float,
            events: list[dict] | None = None, occupants: list[dict] | None = None,
            decider: Callable[[dict], dict] = default_decide, decide_batch: Callable | None = None,
-           run_id: str = "branch", omniscient: bool = False) -> Sim:
+           run_id: str = "branch", omniscient: bool = False, history: list[dict] | None = None) -> Sim:
     """A Sim replayed to t_branch from `records`, with edits applied for the next tick.
 
     With no edits, running the returned Sim to the end reproduces the recorded run exactly
-    (given the same decider for the live part when it is deterministic).
+    (given the same decider for the live part when it is deterministic). `history` holds
+    earlier live edits ({"t_s", "events", "occupants"}) that are re-applied at their ticks.
     """
     sim = Sim(scene, scenario, seed, decider, decide_batch, omniscient=omniscient, run_id=run_id)
     sim.replay = {(int(r["tick"]), r["agent_id"]): r for r in records}
     sim.replay_until = max(0, int(round(t_branch / DT)))
-    while sim.tick < sim.replay_until and sim.advance():
-        pass
+    todo = sorted(history or [], key=lambda x: x["t_s"])
+    while sim.tick < sim.replay_until:
+        while todo and int(round(todo[0]["t_s"] / DT)) <= sim.tick:
+            past = todo.pop(0)
+            sim.add_events(copy.deepcopy(past.get("events", [])))
+            sim.add_occupants(copy.deepcopy(past.get("occupants", [])))
+        if not sim.advance():
+            break
     if events:
         sim.add_events(events)
     if occupants:

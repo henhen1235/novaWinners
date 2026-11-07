@@ -127,6 +127,46 @@ alarm_only, fire, smoke or pa_announcement event, the alarm cue starts at t = 0.
 Event kinds added by the sim: alarm, opened, waiting_at_refuge, help_assigned, helping,
 help_released. metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
 
+## Live mode (sim/live.py, sim/serve.py; design in docs/LIVE_MODE.md)
+
+Branch: `sim.live.branch(scene, scenario, seed, records, t, events, occupants, decider, history=...)`
+re-runs ticks 0..t with the decisions in `records` (decisions.jsonl; no decider calls), re-applies
+earlier live edits at their ticks, adds the new events/occupants for the next tick and returns a
+Sim to continue (`sim.run()` or `sim.advance()` per tick). With no edit it reproduces the original
+replay.json exactly. `Sim.add_events` (scenario-schema events; past t_start_s means the next tick)
+and `Sim.add_occupants` (scenario-schema occupant groups, optional `"traits": {"speed_mps": 1.1,
+"premove_s": 30, ...}` overriding the draws; they notice the alarm after their own notice delay from
+the moment they appear; event "spawned") work on any Sim between ticks.
+
+Async decisions: `sim.async_dec = AsyncDecisions(decide)` sends each decide(view) to a thread pool
+(24 workers); an answer applies at the first tick after it returns, within 4 ticks (2 s). Otherwise
+the rule policy applies and the record's validation.status is "fallback_deadline"; late answers
+are dropped. Records keep the request tick and the real apply_tick, so a branch replays them exactly.
+
+Server: `python -m sim.serve --port 8790` (needs the `websockets` package for uvicorn's WebSocket
+support). One session per WebSocket at `ws://127.0.0.1:8790/ws`; `GET /health`.
+
+Client to server (JSON):
+- `{"type": "start", "scene": path|object, "scenario": path|object, "seed": 42, "decide": "policy"|"cognition", "no_llm": true, "speed": 1.0}`
+- `{"type": "pause"}`, `{"type": "resume"}`, `{"type": "speed", "value": 2.0}`
+- `{"type": "edit", "events": [...], "occupants": [...]}`: validated with scenario.schema.validate
+  against the scenario plus earlier edits; applied at the next tick.
+- `{"type": "branch", "t": 30.0, "events": [...], "occupants": [...]}`: branch from this session's
+  decisions at an earlier t (the current branch is written out first).
+- `{"type": "end"}`: stop and write the run directory.
+
+Server to client: JSON `meta` (session, branch, dt, duration_s, levels, states, agents with index),
+`agents` (newly spawned, appended in index order), `events` (replay event objects, new since the
+last message), `status` (about 1 Hz: t, tick, speed, warp, paused, ticks_per_s, decisions, evacuated,
+total, pending, async stats incl. fallback_rate and latency), `edit_ok`, `error` (for, errors),
+`finished` (run reached its end; the session pauses), `ended` (run_dir). Binary frames, at most 5 Hz,
+little-endian: float32 t, uint32 n, float32[2n] x,z per agent in index order, uint8[n] state code
+(index into meta.states: waiting, moving, deciding, queued, exited, helping, hiding,
+waiting_at_refuge, carried, at_elevator_lobby), uint8[n] level index (into meta.levels).
+Each branch is written to `out/live/<session>/branch_<k>/` (replay.json, decisions.jsonl,
+metrics.json, edits.json; NOVA_LIVE_RUNS overrides out/live), so the viewer replay, compare and
+interviews work on it.
+
 ## Viewer
 
 `blueprint/viewer` loads `/?glb=...&scene=...&replay=...`; plays frames with a time

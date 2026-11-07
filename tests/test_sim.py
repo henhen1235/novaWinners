@@ -277,3 +277,32 @@ def test_async_decisions_fall_back_after_deadline() -> None:
     st = sim.async_dec.summary()
     assert st["fallback_deadline"] > 0
     assert any(r["validation"]["status"] == "fallback_deadline" for r in sim.records)
+
+
+def test_live_server_streams_edits_and_writes_the_branch(tmp_path, monkeypatch) -> None:
+    import struct
+    from starlette.testclient import TestClient
+    import sim.serve as serve
+    monkeypatch.setattr(serve, "RUNS_DIR", tmp_path)
+    with TestClient(serve.app).websocket_connect("/ws") as ws:
+        ws.send_json({"type": "start", "scene": "fixtures/tiny_office.scene.json",
+                      "scenario": "sim/examples/tiny_office_fire.json", "seed": 1, "speed": 200})
+        meta = ws.receive_json()
+        assert meta["type"] == "meta" and len(meta["agents"]) == 30
+        ws.send_json({"type": "edit", "occupants": [{"where": {"room": "L1_office_s2"}, "count": 2,
+                                                       "personas": {"staff": 1.0}}]})
+        n, got_ok = 0, False
+        while n <= 30 or not got_ok:
+            m = ws.receive()
+            if m.get("bytes"):
+                t, n = struct.unpack("<fI", m["bytes"][:8])
+                assert len(m["bytes"]) == 8 + 10 * n
+            elif json.loads(m["text"])["type"] == "edit_ok":
+                got_ok = True
+        ws.send_json({"type": "end"})
+        while True:
+            m = ws.receive()
+            if m.get("text") and json.loads(m["text"])["type"] == "ended":
+                break
+    out = next(tmp_path.glob("*/branch_0"))
+    assert (out / "replay.json").exists() and len(json.loads((out / "replay.json").read_text())["agents"]) == 32
