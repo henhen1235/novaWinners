@@ -46,10 +46,31 @@ The demo building (Tepper, 5 floors) is multi-level. Replay frames are getting a
 element with the level id: `["a_01", x, z, state, "L2"]` (older replays have 4
 elements; treat missing level as the scene's first level).
 
-1. Floor selector (already a `Level` dropdown): add an "All floors" option that stacks
-   levels at their `elevation_m` with an exploded spacing slider (0x to 3x), and a
-   single-floor mode that shows only that level's geometry, navmesh, rooms, doors and
-   agents.
+1. Floor views (the user asked for these specifically; this is the most visible part of
+   the demo). Add a view switch with four modes, sharing one camera control and the
+   replay clock:
+   - **Single floor** (existing `Level` dropdown): only that level's geometry, navmesh,
+     rooms, doors and agents.
+   - **Side by side** (default for multi-level replays): every level laid flat in a
+     row or grid (auto layout by aspect ratio, ~2 m gap scaled to building size), each
+     with a caption ("Floor 3 - 12 people") and its own live count; top-down
+     orthographic camera; stair links drawn as small connector badges between panels
+     (same color per stair id) and agents on stairs shown at the badge. This is the
+     view for watching the simulation.
+   - **Stacked (real-life)**: levels at their `elevation_m`; walls rendered
+     semi-transparent (opacity ~0.15, depth write off) with crisp edge outlines so
+     occupants stay visible; non-focused floors fade to ghost outlines, the hovered or
+     selected floor becomes solid; agents always drawn on top (depthTest off or a
+     separate render pass) with a soft glow; people on stairs drawn along the stair link
+     between levels. Optional section cut: a slider that clips everything above a
+     height (three.js clipping planes) to look into a floor.
+   - **Exploded**: stacked view with a vertical spacing slider (1x to 3x floor height)
+     so floors separate, same transparency rules.
+   Persist the chosen mode in the URL (`&view=side|stacked|exploded|single`). Check
+   how professional tools present multi-floor evacuations (e.g. Thunderhead Pathfinder
+   and Oasys MassMotion screenshots/docs: stacked floors with transparency, per-floor
+   2D views) and match those conventions. Declutter room labels: show labels only above
+   a zoom threshold or for rooms > 30 m^2 when zoomed out (Tepper has 580 rooms).
 2. Agents: draw each agent on its frame's level (y = level elevation_m); hide agents
    not on the selected level in single-floor mode; show a per-floor count
    ("L3: 12 people") in the rail.
