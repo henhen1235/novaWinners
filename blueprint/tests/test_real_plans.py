@@ -71,3 +71,6 @@ def test_open_to_below_faces_are_not_floor():
     notes: dict = {}
     kept = _drop_voids([box(0, 0, 1, 1), box(1.5, 1.5, 2.5, 2.5)], page, ScaleEstimate(100.0, "manual", 1.0), notes)
     assert len(kept) == 1 and notes["void_faces_dropped"] == 1
+    # The same void merged into a numbered circulation face stays.
+    page.texts.append(TextSpan("3000", (160, 160, 240, 240), 2.0))
+    assert len(_drop_voids([box(1.5, 1.5, 2.5, 2.5)], page, ScaleEstimate(100.0, "manual", 1.0), {})) == 1

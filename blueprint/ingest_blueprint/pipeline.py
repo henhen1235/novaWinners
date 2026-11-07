@@ -19,7 +19,7 @@ from shapely.geometry import LineString, Point, Polygon
 
 from contract.validate_scene import validate
 from export.assemble import assemble_scene
-from geometry.rooms import attach_doors, faces_from_walls, label_faces, room_type_from_name
+from geometry.rooms import _ROOM_NUMBER, attach_doors, faces_from_walls, label_faces, room_type_from_name
 from geometry.infer_doors import doors_from_arcs, infer_doors, needs_inference
 from geometry.stairs import align_levels, stair_room_indexes, tread_clusters
 from geometry.vectorize import snap_segments, split_gaps
@@ -205,10 +205,20 @@ _VOID = re.compile(r"\bOTB|OPEN TO BELOW|^OPEN$", re.IGNORECASE)
 
 
 def _drop_voids(faces, page: PlanPage, scale: ScaleEstimate, notes: dict):
-    """Remove faces tagged open-to-below ("OTB3-4"): atria and shafts are not floor."""
+    """Remove faces tagged open-to-below ("OTB3-4"): atria and shafts are not floor.
 
-    tags = [Point(span.center[0] / scale.px_per_m, span.center[1] / scale.px_per_m) for span in page.texts if _VOID.search(span.text.strip())]
-    kept = [face for face in faces if not any(face.contains(tag) for tag in tags)]
+    A face that also holds a room number is a room the void merged into
+    (an atrium inside a circulation space); it stays.
+    """
+
+    def anchors(pattern):
+        return [Point(span.center[0] / scale.px_per_m, span.center[1] / scale.px_per_m) for span in page.texts if pattern.search(span.text.strip())]
+
+    voids, numbers = anchors(_VOID), anchors(_ROOM_NUMBER)
+    kept = [
+        face for face in faces
+        if not any(face.contains(tag) for tag in voids) or any(face.contains(tag) for tag in numbers)
+    ]
     if len(kept) < len(faces):
         notes["void_faces_dropped"] = len(faces) - len(kept)
     return kept
