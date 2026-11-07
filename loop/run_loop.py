@@ -105,8 +105,9 @@ class Loop:
 
     def run(self, rounds: int) -> dict:
         self.out.mkdir(parents=True, exist_ok=True)
-        analysis = analyze(self.scene)
-        _dump(self.out / "analysis.json", analysis)
+        cached = self.out / "analysis.json"  # same scene, same result; the big scenes take minutes
+        analysis = json.loads(cached.read_text()) if cached.exists() else analyze(self.scene)
+        _dump(cached, analysis)
         scene, sc = self.scene, copy.deepcopy(self.scenario)
         sums = self.stage("r0_baseline", "baseline", scene, sc)
         rounds_log = []

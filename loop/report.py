@@ -152,7 +152,7 @@ def write_report(d: Path) -> Path:
         shutil.copy(scene, d / "scene.json")
     glb = scene.with_name("display.glb")
     if glb.exists() and not (d / "display.glb").exists():
-        shutil.copy(glb, d / "display.glb")
+        (d / "display.glb").symlink_to(glb.resolve())
     out = d / "report.html"
     out.write_text(render(board, d))
     return out

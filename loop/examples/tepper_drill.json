@@ -1,0 +1,11 @@
+{"schema_version": "0.1", "scene": "samples/cmu/tepper/scene.json", "seed": 42, "duration_s": 300,
+ "events": [
+  {"id": "ev_alarm", "type": "alarm_only", "t_start_s": 0, "at": {"room": "r_1042"}, "params": {}}
+ ],
+ "occupants": [
+  {"where": {"room": "r_2611"}, "count": 14, "personas": {"regular": 0.5, "visitor": 0.4, "staff": 0.1}, "models": {"google/gemini-2.5-flash-lite": 1.0}},
+  {"where": {"room": "r_2112"}, "count": 10, "personas": {"regular": 0.6, "visitor": 0.4}, "models": {"google/gemini-2.5-flash-lite": 1.0}},
+  {"where": {"room": "r_3500"}, "count": 10, "personas": {"regular": 0.7, "older_adult": 0.2, "mobility_impaired": 0.1}, "models": {"google/gemini-2.5-flash-lite": 1.0}},
+  {"where": {"room": "r_5254"}, "count": 6, "personas": {"regular": 0.8, "staff": 0.2}, "models": {"google/gemini-2.5-flash-lite": 1.0}}
+ ],
+ "assumptions": ["Fire alarm at t=0, 40 people on floors 2, 3 and 5 of Tepper; no hazard: the adversary adds failures."]}
