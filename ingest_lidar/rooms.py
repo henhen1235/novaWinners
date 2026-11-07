@@ -7,11 +7,12 @@ import heapq
 
 import cv2
 import numpy as np
+import shapely
 from shapely.geometry import Polygon
 
 from .geometry import ring
-from .grid import Grid, Masks, components, vectorize
-from .walls import DOOR_MAX_M, DOOR_MIN_M, find_gaps, wall_mask
+from .grid import AGENT_RADIUS_M, Grid, Masks, components, vectorize
+from .walls import DOOR_FLOOR_FRAC, DOOR_MAX_M, DOOR_MIN_M, find_gaps, wall_mask
 
 LEVEL = "L1"
 MIN_ROOM_M2 = 1.0
@@ -149,10 +150,14 @@ def _round_seg(seg: list) -> list[list[float]]:
 def segment_rooms(g: Grid, m: Masks, walls: list[dict]) -> tuple[list[dict], list[dict]]:
     """(rooms, interior doors) as contract dicts; exit doors are added by the pipeline."""
     wm = wall_mask(g, walls)
-    gaps = [q for q in find_gaps(g, m, walls) if q["door"]]
+    pieces = find_gaps(g, m, walls)
+    gaps = [q for q in pieces if q["door"]]
     barrier = wm.copy()
-    for q in gaps:
-        barrier[_door_strip(g, q)] = True
+    # non-door pieces too: detect_walls bridged the first pass's pieces, but re-snapped walls
+    # shift the gaps, and an unbridged sliver next to a door strip leaks one room into the next (D25)
+    for q in pieces:
+        if q["door"] or q["hi"] - q["lo"] <= DOOR_MAX_M:
+            barrier[_door_strip(g, q)] = True
     near_wall = cv2.dilate(wm.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
     interior = ((m.free | (m.occupied & ~near_wall)) & ~wm) | m.floor_supported
     interior &= ~barrier
@@ -220,3 +225,75 @@ def segment_rooms(g: Grid, m: Masks, walls: list[dict]) -> tuple[list[dict], lis
             "is_exit": False, "kind": "opening", "fire_rated": None, "opens_toward": None}
            for i, (a, b, seg, w) in enumerate(doors)]
     return rooms, out
+
+
+def _room_labels(g: Grid, rooms: list[dict]) -> np.ndarray:
+    """Grid of 1-based room indices (cell centers inside the room polygon), 0 elsewhere."""
+    lab = np.zeros(g.shape, np.int32)
+    for i, r in enumerate(rooms, 1):
+        x0, z0, x1, z1 = Polygon(r["polygon"]).bounds
+        (r0, c0), (r1, c1) = g.rc([[x0, z0], [x1, z1]])
+        r0, c0 = max(0, r0), max(0, c0)
+        rr, cc = np.mgrid[r0:r1 + 1, c0:c1 + 1]
+        rr, cc = rr.ravel(), cc.ravel()
+        ok = (rr < g.shape[0]) & (cc < g.shape[1])
+        rr, cc = rr[ok], cc[ok]
+        xz = g.cell_xz(rr, cc)
+        inside = shapely.contains_xy(Polygon(r["polygon"]), xz[:, 0], xz[:, 1])
+        lab[rr[inside], cc[inside]] = i
+    return lab
+
+
+def connect_unreachable(g: Grid, m: Masks, rooms: list[dict], doors: list[dict], start: int) -> list[dict]:
+    """Opening doors for rooms with no door path to an exit whose walkable area reaches a
+    reachable room's walkable area across a barrier (a missed door, D28). Walkable cells
+    outside every room polygon are the crossings; each room reached first through a crossing
+    (floor-backed, then narrowest first) gets one door on that crossing's long axis,
+    width = crossing + agent diameter. `start` numbers the new door ids."""
+    adj: dict[str, set[str]] = {r["id"]: set() for r in rooms}
+    adj["outside"] = set()
+    for d in doors:
+        a, b = d["connects"]
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    reach: set[str] = set()
+
+    def spread(src: str) -> None:
+        reach.add(src)
+        todo = [src]
+        while todo:
+            for nb in sorted(adj[todo.pop()] - reach):
+                reach.add(nb)
+                todo.append(nb)
+
+    spread("outside")
+    if all(r["id"] in reach for r in rooms):
+        return []
+    lab = _room_labels(g, rooms)
+    n, cross = cv2.connectedComponents((m.walkable & (lab == 0)).astype(np.uint8), connectivity=8)
+    edges = []  # (no floor seen, crossing length m, room a, room b, segment)
+    for k in range(1, n):
+        cells = np.argwhere(cross == k)
+        # a wall hole filled as floor (D10) has no floor points; big scans are sampled too thin
+        # to require them (0.5 points per floor cell), so they only rank first
+        holey = (g.floor[cells[:, 0], cells[:, 1]] >= 1).mean() < DOOR_FLOOR_FRAC
+        ring_ = cv2.dilate((cross == k).astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+        touched = sorted(set(lab[ring_ & m.walkable].tolist()) - {0})
+        if len(touched) < 2:
+            continue
+        seg, length = _boundary_segment(g, cells)
+        edges += [(holey, round(length, 3), rooms[a - 1]["id"], rooms[b - 1]["id"], seg)
+                  for i, a in enumerate(touched) for b in touched[i + 1:]]
+    edges.sort(key=lambda e: e[:4])
+    out = []
+    while True:  # narrowest floor-backed crossing out of the reachable set first
+        e = next((e for e in edges if (e[2] in reach) != (e[3] in reach)), None)
+        if e is None:
+            return out
+        _, length, a, b, seg = e
+        a, b = (a, b) if a in reach else (b, a)
+        out.append({"id": f"d_{start + len(out):03d}", "level": LEVEL, "segment": _round_seg(seg),
+                    "width_m": round(float(np.clip(length + 2 * AGENT_RADIUS_M, DOOR_MIN_M, DOOR_MAX_M)), 3),
+                    "connects": [a, b], "is_exit": False, "kind": "opening", "fire_rated": None,
+                    "opens_toward": None})
+        spread(b)

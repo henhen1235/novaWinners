@@ -16,6 +16,7 @@ from .grid import Grid, Masks, components
 LEVEL = "L1"
 CLOSE_CELLS = 7  # bridges gaps < 0.3 m along a wall
 OPEN_CELLS = 11  # keeps runs >= ~0.5 m
+ACROSS_MAX_CELLS = 20  # 1 m: anything thicker across a run is a perpendicular wall, not this one
 MIN_LEN_M = 0.4
 T_MIN, T_MAX = 0.10, 0.35
 SNAP_M = 0.55
@@ -41,6 +42,11 @@ def _runs(g: Grid, tall: np.ndarray, axis: str) -> list[dict]:
     m = cv2.morphologyEx(t.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((CLOSE_CELLS, 1), np.uint8))
     m = cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((1, CLOSE_CELLS), np.uint8))
     m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((1, OPEN_CELLS), np.uint8))
+    # a perpendicular wall wider than OPEN_CELLS (two faces closed into one >= 0.55 m block)
+    # survives the opening and would join the runs it touches into one component whose bbox
+    # becomes a phantom wall across the rooms; no wall is 1 m thick, so cut those out (D26)
+    m &= ~cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((ACROSS_MAX_CELLS, 1), np.uint8))
+    m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((1, OPEN_CELLS), np.uint8))
     n, lab, st = components(m, 8)
     o_across, o_along = (g.z0, g.x0) if axis == "h" else (g.x0, g.z0)
     out = []
@@ -57,22 +63,24 @@ def _runs(g: Grid, tall: np.ndarray, axis: str) -> list[dict]:
     return out
 
 
-def _snap(walls: list[dict]) -> list[dict]:
+def _snap(walls: list[dict], fixed: list[dict] = ()) -> list[dict]:
     """Extend ends onto the far face of a perpendicular wall whose centerline is within
     SNAP_M beyond the end and whose own extent reaches this wall's line within SNAP_M.
     Closes T and L junctions with scan holes at the corner; SNAP_M < 0.6 m keeps the
-    extension out of door gaps (a door gap is at least 0.6 m)."""
+    extension out of door gaps (a door gap is at least 0.6 m). `fixed` lines are snap
+    targets returned unchanged."""
     out = []
+    targets = list(walls) + list(fixed)
     for w in walls:
         ends = {"lo": w["lo"], "hi": w["hi"]}
         for end, sign in (("lo", -1), ("hi", 1)):
-            cand = [p for p in walls if p["axis"] != w["axis"] and p["lo"] - SNAP_M <= w["c"] <= p["hi"] + SNAP_M
+            cand = [p for p in targets if p["axis"] != w["axis"] and p["lo"] - SNAP_M <= w["c"] <= p["hi"] + SNAP_M
                     and -0.25 <= sign * (p["c"] - w[end]) <= SNAP_M]
             if cand:
                 p = min(cand, key=lambda p: abs(p["c"] - w[end]))
                 ends[end] = p["c"] + sign * p["t"] / 2
         out.append({**w, **ends})
-    return out
+    return out + list(fixed)
 
 
 def wall_lines(walls: list[dict]) -> list[dict]:
@@ -167,13 +175,20 @@ def _classify(g: Grid, m: Masks, gap: dict) -> list[dict]:
         ok = (DOOR_MIN_M <= hi - lo <= DOOR_MAX_M and floor_cols[j0:j1 + 1].mean() >= DOOR_FLOOR_FRAC
               and occ_cols[j0:j1 + 1].mean() < DOOR_OCC_FRAC)
         if ok:
+            # a non-door piece shorter than the wall is thick reads back (wall_lines) as a wall on
+            # the other axis, so the T junction it closes looks like a free end and find_gaps
+            # marches across the next room; grow it into the wall it abuts (D27)
+            span = gap["t"] + g.res
             pieces = [{**gap, "lo": lo, "hi": hi, "door": True}]
             if lo > gap["lo"]:
-                pieces.append({**gap, "hi": lo + g.res / 2, "door": False})
+                pieces.append({**gap, "lo": min(gap["lo"], lo + g.res / 2 - span), "hi": lo + g.res / 2,
+                               "door": False})
             if hi < gap["hi"]:
-                pieces.append({**gap, "lo": hi - g.res / 2, "door": False})
+                pieces.append({**gap, "lo": hi - g.res / 2, "hi": max(gap["hi"], hi - g.res / 2 + span),
+                               "door": False})
             return pieces
-    return [{**gap, "door": False}]
+    pad = max(0.0, (gap["t"] + g.res - (gap["hi"] - gap["lo"])) / 2)
+    return [{**gap, "lo": gap["lo"] - pad, "hi": gap["hi"] + pad, "door": False}]
 
 
 def find_gaps(g: Grid, m: Masks, walls: list[dict]) -> list[dict]:
@@ -222,5 +237,6 @@ def detect_walls(g: Grid, m: Masks, ceiling_height_m: float) -> list[dict]:
     lines = _snap(_runs(g, tall, "h") + _runs(g, tall, "v"))
     walls = _to_contract(lines, ceiling_height_m)
     bridges = [q for q in find_gaps(g, m, walls) if not q["door"] and q["hi"] - q["lo"] <= DOOR_MAX_M]
-    # re-snap: a bridge can be the perpendicular wall a corner end was missing
-    return _to_contract(_snap(wall_lines(walls) + bridges), ceiling_height_m) if bridges else walls
+    # re-snap: a bridge can be the perpendicular wall a corner end was missing. Bridges already
+    # span wall to wall; snapping them could trim a short one to its neighbour's faces (D27)
+    return _to_contract(_snap(wall_lines(walls), bridges), ceiling_height_m) if bridges else walls

@@ -184,7 +184,7 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     if input_path.suffix.lower() == ".json" or input_path.is_dir():
         from .roomplan_to_scene import convert  # Path A
 
-        return convert(input_path, out_dir, no_llm=no_llm)
+        return convert(input_path, out_dir, no_llm=no_llm, exit_tags=Path(exit_tags) if exit_tags else None)
     corr, tags = _load_inputs(corrections, exit_tags, input_path)
     scale = scale or corr.get("scale")
     scan = load_scan(input_path)
@@ -210,6 +210,10 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
                  for w in wide]
     exit_doors, exits = _exits(openings, rooms, tags, len(doors) + 1)
     doors = doors + exit_doors
+    if rooms and exits:  # walkable is the ground truth of passability (D28)
+        from .rooms import connect_unreachable
+
+        doors = doors + connect_unreachable(g, m, rooms, doors, len(doors) + 1)
     walk = G.vectorize(m.walkable, g)
     # vectorize's simplify can pinch a narrow neck to zero width; its collinear triangles are
     # dropped as degenerate and the navmesh splits (NAVMESH_ISLAND). A mitre opening removes

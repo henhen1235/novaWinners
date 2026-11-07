@@ -54,8 +54,10 @@ rooms within +-1.
 | wide_corridor after | 0.00 | 0.0 | 0.972 | 1.00 / 1.00 | +0 / 7 | none | 1.4 |
 | ifc_duplex before | 0.00 | 90.0 | 0.979 | 0.67 / 0.57 | +2 / 4 | ROOM_UNREACHABLE | 1.3 |
 | ifc_duplex after | 0.00 | 90.0 | 0.979 | 0.67 / 0.57 | +2 / 4 | ROOM_UNREACHABLE | 1.5 |
+| ifc_duplex after D25-D28 | 0.00 | 90.0 | 0.979 | 1.00 / 0.86 | +1 / 4 | none | 1.5 |
 | ifc_clinic before | 0.00 | 90.0 | 0.965 | 0.78 / 0.81 | +0 / 120 | ROOM_UNREACHABLE | 6.6 |
 | ifc_clinic after | 0.00 | 90.0 | 0.965 | 0.78 / 0.81 | +0 / 120 | ROOM_UNREACHABLE | 8.8 |
+| ifc_clinic after D25-D28 | 0.00 | 90.0 | 0.965 | 0.89 / 0.89 | +4 / 120 | none | 7.7 |
 | ceiling_2_3 before | 0.00 | -180.0 | 0.963 | 1.00 / 0.38 | +12 / 7 | ROOM_UNREACHABLE | 1.4 |
 | ceiling_2_3 after | 0.00 | -180.0 | 0.963 | 1.00 / 1.00 | +0 / 7 | none | 1.6 |
 | ceiling_4_0 before | 0.02 | -180.0 | 0.971 | 1.00 / 1.00 | +0 / 7 | none | 1.8 |
@@ -72,8 +74,10 @@ rooms within +-1.
 | cropped_room after | 0.01 | 0.1 | 0.920 | 1.00 / 0.80 | +0 / 7 | none | 1.7 |
 | holes_20 before | 0.01 | -0.0 | 0.902 | 0.75 / 0.86 | -2 / 7 | none | 1.4 |
 | holes_20 after | 0.01 | -0.0 | 0.902 | 0.75 / 0.86 | -2 / 7 | none | 1.5 |
+| holes_20 after D25-D28 | 0.01 | -0.0 | 0.902 | 1.00 / 0.89 | +1 / 7 | none | 1.6 |
 | noise_5cm before | 6.39 | 0.7 | 0.310 | 0.75 / 1.00 | +1 / 7 | ROOM_UNREACHABLE | 1.9 |
 | noise_5cm after | 0.82 | 0.7 | 0.875 | 0.88 / 0.88 | +1 / 7 | ROOM_UNREACHABLE | 2.1 |
+| noise_5cm after D25-D28 | 0.82 | 0.7 | 0.875 | 1.00 / 0.89 | +1 / 7 | none | 2.3 |
 
 The yaw column is the scene's yaw relative to the truth (any multiple of 90 deg is fine; the
 scorer undoes it). centimeters_scaled IoU 0.000 before was half a pipeline bug (D22: the
@@ -117,15 +121,49 @@ found, including doors on the 45 deg walls (via the exit-opening detector and th
 split). I did not check which door was missed. Obstacles at scan edges were not
 seen to fail. Closets of 1.5 m, 1.8 m double doors and a 2.4 m corridor all score perfectly.
 
+## IFC plans: root causes and fixes (DECISIONS.md D25-D28)
+
+The truth was checked first: every truth door has no wall across it and floor under it, and
+both truth scenes pass the validator, so the failures were in ingest_lidar.
+
+6. Phantom walls (D26, Duplex). A double wall (two 0.15 m faces around the void between IFC
+   spaces, 0.55-0.65 m after closing) survives the perpendicular 1 x 11 opening in walls.py,
+   so it joined the exterior and bathroom walls it touches into one run component. That
+   component's bounding box became a 10-11 m wall through both units. Result: two strip rooms
+   (+2), both bathroom doors placed 0.8 m off (recall 0.67), and an unreachable strip room.
+   Runs now drop anything at least 1 m long across their own axis.
+7. Room leaks through unbridged slivers (D25, Clinic). segment_rooms found 155 door gaps but
+   emitted 124 doors; most of the rest had the same room on both probes. Rooms leaked
+   through 1-2 cells between a door strip and the next wall, a non-door gap piece that
+   detect_walls had not bridged because the second gap pass runs on re-snapped walls. All gap
+   pieces up to 2.2 m are now barriers. This alone recovered 16 of the 31 missed doors.
+8. False corridor doors (D27, Clinic). At a T junction whose perpendicular wall has a door on
+   each side, only a short bridge piece marks the junction. _snap trimmed it to 0.2 x 0.25 m,
+   it read back on the wrong axis, the abutting wall end looked free, and find_gaps marched
+   across the 1.7 m corridor: 1.6-1.65 m doors that cut corridors into extra rooms (+11).
+   Bridges are no longer snapped and are at least wall thickness + 1 cell long.
+9. Missed doors in thick walls (D28, Clinic). With the above fixed, 4 rooms still had no door
+   path to an exit. Three were doors through double walls whose reveals look like T
+   junctions; the fourth was a 1.6 m^2 sliver behind a wall detected through a tall cabinet.
+   A room with no exit path whose walkable area crosses into a reachable room's walkable area
+   now gets an "opening" door on the crossing. It placed the three real doors within 2 cm;
+   the sliver's opening is a false positive. With D25-D28, noise_5cm is validator-clean
+   (door recall 0.88 -> 1.00) and holes_20 goes from recall 0.75 and rooms -2 to 1.00 and +1.
+
+The 30-scan benchmark is unchanged by D25-D28 (same numbers as above, all targets pass) and
+no other stress case changed.
+
 ## What is still unsupported or weak
 
 - Real scanner data. Every case here is still a synthetic scan. The IFC cases test real plan
   geometry only. No Redwood or ISPRS run yet.
-- IFC plans: door recall 0.67 (Duplex) and 0.78 (Clinic), and a ROOM_UNREACHABLE validator
-  error on both. Not root-caused, for lack of time. The likely cause: the Duplex exterior walls
-  are 0.42 m thick but walls.py clamps thickness to 0.35 m, and the converter puts doors on
-  merged open-plan rooms. Missed doors leave rooms with no exit path. This is the next thing to
-  look at.
+- IFC plans after D25-D28: both validator-clean. Clinic door recall 0.89 (15 of 141 missed),
+  precision 0.89, rooms +4; Duplex rooms +1 (a 2 m watershed split of the merged B unit).
+  The main open cause is doors through 0.4-0.6 m double walls: their reveals become short
+  perpendicular walls, so find_gaps treats both jambs as T junctions and never marches across
+  (D28 recovers the ones that strand a room). Fixing it needs a thickness-aware junction test
+  and walls.py's 0.35 m thickness clamp raised; the clamp itself was not the cause of these
+  failures (the truth walls are 0.15 m; thick blocks come from the void between IFC spaces).
 - Diagonal walls are not emitted as `walls` (D11 stands). Their wall_centerline error and the
   display's walls_clean are wrong for non-Manhattan parts. Doors in diagonal walls are
   found only as watershed splits or exit openings, so a 0.6-2.2 m diagonal gap between two

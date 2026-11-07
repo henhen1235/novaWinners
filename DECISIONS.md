@@ -141,3 +141,49 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   validator reads as NAVMESH_ISLAND.
 - D24. Face-less PLY files load as point clouds (trimesh force="mesh" returned
   0 vertices and crashed).
+
+## IFC plans (stress set, research/GENERALIZATION.md)
+
+The IFC truth was checked first: every truth door in both plans has no wall
+on rays across it and floor under it (exits: on the inside half), and both
+truth scenes pass the validator. The failures were pipeline bugs.
+
+- D25. segment_rooms blocks every gap piece up to 2.2 m, not only the door
+  pieces. detect_walls bridges the non-door pieces of its first gap pass, but
+  the re-snapped walls shift the gaps, so the second pass (in segment_rooms)
+  left 1-2 cell slivers between a door strip and the next wall unblocked.
+  Rooms leaked through them, both probes of a door landed in the same room and
+  the door was dropped: 16 of the 31 doors the Clinic missed (recall 0.78 ->
+  0.89).
+- D26. Wall runs drop anything at least 1 m long across their own axis
+  (ACROSS_MAX_CELLS) before labeling. Double walls (two faces with a void
+  between IFC spaces, 0.55-0.65 m after closing) survive the perpendicular
+  1 x 11 opening, so one thick vertical wall joined the Duplex's exterior and
+  bathroom walls into one component; its bounding box became a 10-11 m
+  horizontal wall through both units at the weighted mean row. That made the
+  two strip rooms (+2), the mislocated bathroom doors (recall 0.67) and the
+  unreachable strip room. No wall is 1 m thick, and thin walls never survive
+  the opening, so the benchmark is unchanged.
+- D27. Bridges are snap targets but are not snapped themselves, and a non-door
+  gap piece is grown into the wall it abuts to at least wall thickness + 1
+  cell. Where a perpendicular wall has doors on both sides of a T junction,
+  the junction is only a short bridge piece; _snap trimmed it to its
+  neighbour's faces (0.2 m long, 0.25 m thick), wall_lines read it back on the
+  other axis, and the abutting wall's end looked free. find_gaps then marched
+  across the corridor to the next stub: 1.6-1.65 m false doors that split
+  corridors (Clinic rooms +11 -> +4, door precision 0.85 -> 0.89).
+- D28. After exits are known, a room with no door path to an exit whose
+  walkable area reaches a reachable room's walkable area across walkable cells
+  outside every room polygon gets a door of kind "opening" on that crossing
+  (long axis of the crossing cells, width = crossing + 0.5 m agent diameter,
+  clipped to 0.6-2.2 m). Crossings with floor points rank before ones without
+  (a wall hole filled as floor by D10), then narrowest first. The walkable
+  area is the ground truth of passability; an opening it shows is better than
+  a ROOM_UNREACHABLE error. Remaining cause on the Clinic: a door through a
+  0.4-0.6 m double wall has reveal faces as deep as the wall; they become
+  short perpendicular wall runs, both jamb ends look like T junctions, and
+  find_gaps never marches across the door. The fallback recovered 3 such doors
+  within 2 cm (1D25, 1B07, 1E27). The fourth was a 1.6 m^2 sliver behind a
+  wall found through a tall cabinet; its opening matches no truth door. A
+  thickness-aware junction test needs T_MAX above 0.35 m and a correct
+  thickness estimate for walls with one weak face; not done.

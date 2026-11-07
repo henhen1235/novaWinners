@@ -11,7 +11,7 @@ from shapely.geometry import Polygon
 
 from ingest_lidar.grid import Grid, build_masks
 from ingest_lidar.obstacles import detect_obstacles
-from ingest_lidar.rooms import segment_rooms
+from ingest_lidar.rooms import connect_unreachable, segment_rooms
 from ingest_lidar.walls import detect_walls, wall_lines
 
 RES = 0.05
@@ -97,3 +97,16 @@ def test_missed_door_split() -> None:
     big = np.zeros(g.shape, bool)
     big[_cells(0.5, 5.5, 0.5, 4.5)] = True
     assert len(_split(g, big)[1]) == 0
+
+
+def test_unreachable_room_gets_an_opening_on_its_walkable_crossing() -> None:
+    # D28: room B has no door path to the exit, but the walkable area crosses the door strip
+    g = _plan()
+    m = build_masks(g)
+    rooms, doors = segment_rooms(g, m, detect_walls(g, m, 3.0))
+    exit_ = {**doors[0], "id": "d_001", "connects": [rooms[0]["id"], "outside"], "is_exit": True}
+    added = connect_unreachable(g, m, rooms, [exit_], 2)
+    assert [d["connects"] for d in added] == [[rooms[0]["id"], rooms[1]["id"]]]
+    (a, b), z = added[0]["segment"], np.mean([p[1] for p in added[0]["segment"]])
+    assert abs(a[0] - 5.0) < 0.1 and abs(b[0] - 5.0) < 0.1 and abs(z - 2.45) < 0.1
+    assert connect_unreachable(g, m, rooms, [exit_] + added, 3) == []
