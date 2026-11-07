@@ -239,11 +239,12 @@ def _stair_options(sim: "Sim", a: "Agent") -> list[dict]:
     if on_exit_floor and a.traits["uses_stairs"]:
         return []
     out = []
+    costs = sim.world.nav.costs_from(sim.tri_of(a), use_links=False)  # one search for every stair
     for sid in sim.world.stairs:
         link = sim.world.stair_link(sid, lv)
         if link is None:
             continue
-        walk = sim.world.route_to_point_m(sim.pos[a.row], lv, link.a_pt)
+        walk = float(costs[sim.world.nav.locate(link.a_pt[None], lv)[0]])
         if not np.isfinite(walk):
             continue
         if not a.traits["uses_stairs"] and not a.carrying:

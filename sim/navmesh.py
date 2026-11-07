@@ -18,7 +18,10 @@ from shapely.ops import nearest_points, unary_union
 from typing import NamedTuple
 
 INF = math.inf
-MAX_EDGE_M = 2.0  # refine coarse meshes so door and room hazards stay local
+MAX_EDGE_M = 2.0  # refine coarse triangles near doors so blocking a door stays local
+DOOR_ZONE_M = 0.05
+SEARCH_LIMIT_M = 600.0  # point-to-point searches stop beyond this cost
+REFINE_PASSES = 5  # each pass halves long door-side edges; slivers would otherwise cascade
 DEFAULT_STAIR_WIDTH_M = 1.2
 
 
@@ -63,7 +66,8 @@ class NavMesh:
         uniq[inverse.ravel()] = raw3[:, [0, 2]]
         tris = inverse.ravel()[np.asarray(nav["triangles"], dtype=int)]
         tri_lv = np.array([lv_index.get(lv, 0) for lv in nav["triangle_level"]], dtype=int)
-        self.verts, self.tris, self.tri_level = refine(uniq, tris, tri_lv, MAX_EDGE_M)
+        zones = [_door_zone(scene, lid) for lid in self.level_ids]
+        self.verts, self.tris, self.tri_level = refine(uniq, tris, tri_lv, MAX_EDGE_M, zones)
         self.centroids = self.verts[self.tris].mean(axis=1)
         self.polys = [Polygon(self.verts[t]) for t in self.tris]
         self.lv_tris = [np.flatnonzero(self.tri_level == i) for i in range(len(self.level_ids))]
@@ -219,6 +223,10 @@ class NavMesh:
             self._graph_cache = cache
         return cache[key]
 
+    def costs_from(self, start: int, use_links: bool = True) -> np.ndarray:
+        """Route cost (m, hazard weighted) from triangle `start` to every triangle (inf beyond the limit)."""
+        return dijkstra(self._graph(use_links, False), indices=start, limit=SEARCH_LIMIT_M)
+
     def astar(self, start: int, goal: int, use_links: bool = True) -> list[int] | None:
         """Cheapest triangle corridor from start to goal, or None when unreachable.
 
@@ -226,7 +234,8 @@ class NavMesh:
         """
         if start == goal:
             return [start]
-        dist, pred = dijkstra(self._graph(use_links, False), indices=start, return_predecessors=True)
+        dist, pred = dijkstra(self._graph(use_links, False), indices=start, return_predecessors=True,
+                              limit=SEARCH_LIMIT_M)
         if not np.isfinite(dist[goal]):
             return None
         path = [goal]
@@ -252,12 +261,13 @@ class NavMesh:
     def funnel(self, start: np.ndarray, goal: np.ndarray, corridor: list[int]) -> list[np.ndarray]:
         """String-pull a same-level triangle corridor into points (simple stupid funnel algorithm)."""
         portals = [(start, start)]
+        verts, cents = self.verts, self.centroids
         for a, b in zip(corridor[:-1], corridor[1:]):
             pa, pb = self.portals[(a, b)]
-            va, vb = self.verts[pa], self.verts[pb]
-            facing = (va + vb) / 2 - self.centroids[a]
-            right_is_a = _cross(facing, va - self.centroids[a]) < 0
-            portals.append((vb, va) if right_is_a else (va, vb))  # (left, right)
+            (ax, az), (bx, bz), (cx, cz) = verts[pa], verts[pb], cents[a]
+            fx, fz = (ax + bx) / 2 - cx, (az + bz) / 2 - cz
+            right_is_a = fx * (az - cz) - fz * (ax - cx) < 0
+            portals.append((verts[pb], verts[pa]) if right_is_a else (verts[pa], verts[pb]))  # (left, right)
         portals.append((goal, goal))
         return _string_pull(portals)
 
@@ -314,8 +324,9 @@ def _scene_links(scene: dict, nav: "NavMesh") -> list[Link]:
         dy = abs(nav.elev[la] - nav.elev[lb])
         d2 = float(np.linalg.norm(a - b))
         length = max(math.hypot(d2, dy), 2.0 * dy)  # stairs are about 30 degrees
-        st = next((s for s in stairs if min(np.linalg.norm(np.asarray(s["bottom"]) - a),
-                                             np.linalg.norm(np.asarray(s["top"]) - a)) < 0.75), None)
+        st = next((s for s in stairs if {s["from_level"], s["to_level"]} == {fa["level"], fb["level"]}
+                   and min(np.linalg.norm(np.asarray(s["bottom"]) - a), np.linalg.norm(np.asarray(s["top"]) - a)) < 0.75),
+                  None)
         sid, width = (st["id"], float(st["width_m"])) if st else (lid, DEFAULT_STAIR_WIDTH_M)
         out.append(Link(sid, kind, a, b, la, lb, length, mult, nav.elev[la] > nav.elev[lb], width))
         if both:
@@ -323,26 +334,46 @@ def _scene_links(scene: dict, nav: "NavMesh") -> list[Link]:
     return out
 
 
-def refine(verts: np.ndarray, tris: np.ndarray, tags: np.ndarray,
-           max_edge: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Split every edge longer than max_edge (m) at its midpoint until none remain.
+def _door_zone(scene: dict, level: str) -> object:
+    """Area within DOOR_ZONE_M of any door segment on a level (where refinement happens)."""
+    segs = [LineString(d["segment"]) for d in scene.get("doors", []) if d["level"] == level]
+    zone = unary_union(segs).buffer(DOOR_ZONE_M) if segs else Polygon()
+    shapely.prepare(zone)
+    return zone
+
+
+def refine(verts: np.ndarray, tris: np.ndarray, tags: np.ndarray, max_edge: float,
+           zones: list | None = None) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split edges longer than max_edge (m) that touch a door zone (per tag/level) until none remain.
 
     Splits are decided per edge, so both triangles sharing an edge agree and the
-    mesh stays conforming (no T-junctions).
+    mesh stays conforming (no T-junctions). With zones=None every long edge splits.
     """
     vs = [tuple(v) for v in verts]
     ts = [tuple(int(i) for i in t) for t in tris]
     tg = [int(x) for x in tags]
-    for _ in range(12):
-        mid: dict[tuple[int, int], int] = {}
-        for t in ts:
+    for _ in range(REFINE_PASSES):
+        cand: dict[tuple[int, int], int] = {}
+        for t, g in zip(ts, tg):
             for a, b in ((t[0], t[1]), (t[1], t[2]), (t[2], t[0])):
                 k = (min(a, b), max(a, b))
-                if k not in mid and math.dist(vs[a], vs[b]) > max_edge:
-                    mid[k] = len(vs)
-                    vs.append(((vs[a][0] + vs[b][0]) / 2, (vs[a][1] + vs[b][1]) / 2))
-        if not mid:
+                if k not in cand and math.dist(vs[a], vs[b]) > max_edge:
+                    cand[k] = g
+        keys = list(cand)
+        if zones is not None and keys:
+            lines = shapely.linestrings([[vs[a], vs[b]] for a, b in keys])
+            tag = np.array([cand[k] for k in keys])
+            keep = np.zeros(len(keys), dtype=bool)
+            for g in np.unique(tag):
+                rows = tag == g
+                keep[rows] = shapely.intersects(zones[g], lines[rows])
+            keys = [k for k, ok in zip(keys, keep) if ok]
+        if not keys:
             break
+        mid: dict[tuple[int, int], int] = {}
+        for a, b in keys:
+            mid[(a, b)] = len(vs)
+            vs.append(((vs[a][0] + vs[b][0]) / 2, (vs[a][1] + vs[b][1]) / 2))
         kids = [(nt, g) for t, g in zip(ts, tg) for nt in _split(t, mid)]
         ts, tg = [k[0] for k in kids], [k[1] for k in kids]
     return np.asarray(vs, dtype=float), np.asarray(ts, dtype=int), np.asarray(tg, dtype=int)
@@ -374,12 +405,13 @@ def _area2(a: np.ndarray, b: np.ndarray, c: np.ndarray) -> float:
     return float((c[0] - a[0]) * (b[1] - a[1]) - (b[0] - a[0]) * (c[1] - a[1]))
 
 
-def _same(a: np.ndarray, b: np.ndarray) -> bool:
-    return float(np.sum((a - b) ** 2)) < 1e-12
+def _same(a: tuple[float, float], b: tuple[float, float]) -> bool:
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 < 1e-12
 
 
 def _string_pull(portals: list[tuple[np.ndarray, np.ndarray]]) -> list[np.ndarray]:
     """Mononen's simple stupid funnel over (left, right) portals; returns waypoints."""
+    portals = [((float(l[0]), float(l[1])), (float(r[0]), float(r[1]))) for l, r in portals]  # plain floats: 5x faster
     apex, left, right = portals[0][0], portals[0][0], portals[0][1]
     apex_i = left_i = right_i = 0
     pts = [apex]

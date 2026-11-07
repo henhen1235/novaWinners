@@ -1,0 +1,16 @@
+{"schema_version": "0.1", "scene": "samples/cmu/tepper/scene.json", "seed": 42, "duration_s": 600,
+ "events": [
+  {"id": "ev_fire", "type": "fire", "t_start_s": 0, "at": {"room": "r_3500"}, "params": {"block_after_s": 60}},
+  {"id": "ev_smoke", "type": "smoke", "t_start_s": 45, "at": {"room": "r_2902"}, "params": {"block_after_s": 30}}
+ ],
+ "occupants": [
+  {"where": {"room": "r_5254"}, "count": 20, "personas": {"regular": 0.5, "visitor": 0.3, "staff": 0.1, "older_adult": 0.1}},
+  {"where": {"room": "r_OTB5-1"}, "count": 20, "personas": {"regular": 0.6, "visitor": 0.3, "skeptic": 0.1}},
+  {"where": {"room": "c_4_001"}, "count": 25, "personas": {"regular": 0.6, "visitor": 0.2, "staff": 0.1, "mobility_impaired": 0.1}},
+  {"where": {"room": "r_4242"}, "count": 15, "personas": {"regular": 0.7, "staff": 0.1, "parent": 0.2}},
+  {"where": {"room": "c_3_002"}, "count": 30, "personas": {"regular": 0.5, "visitor": 0.4, "staff": 0.1}},
+  {"where": {"room": "r_2602"}, "count": 30, "personas": {"regular": 0.4, "visitor": 0.5, "staff": 0.1}},
+  {"where": {"room": "r_1042"}, "count": 30, "personas": {"regular": 0.4, "visitor": 0.5, "staff": 0.1}}
+ ],
+ "assumptions": ["Fire in room 3500 on L3 at t=0, impassable after 60 s.",
+                 "Smoke enters stairwell r_2902 (L2) at t=45 s and blocks it 30 s later."]}

@@ -103,7 +103,8 @@ def _pick_exit(view: dict, blocked: set[str]) -> dict | None:
 def _pick_stair(view: dict) -> dict | None:
     """Best open stair: down before up, then shortest eta; smoky stairs cost an extra minute."""
     speed = max(view["agent"]["traits"]["speed_mps"], 0.1)
-    pool = [o for o in view["options"] if o["action"] == "TAKE_STAIRS" and not o.get("blocked")]
+    pool = [o for o in view["options"] if o["action"] == "TAKE_STAIRS" and not o.get("blocked")
+            and o.get("direction") != "up"]  # going up only moves people away from the exits
     return min(pool, key=lambda o: (o.get("direction") != "down", _eta(o, speed) + (60 if o.get("smoke") else 0)),
                default=None)
 

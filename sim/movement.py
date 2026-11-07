@@ -52,6 +52,26 @@ def crosses(p0: np.ndarray, p1: np.ndarray, door: DoorState) -> np.ndarray:
 HURRY_FRICTION_TOKENS = 0.05  # a hurrying person refused at a door jostles and slows the flow a bit
 
 
+def _door_candidates(world: World, pos: np.ndarray, new: np.ndarray, lv: np.ndarray) -> list:
+    """(door, agent rows) pairs where the move could cross the door, via a KD-tree on door midpoints."""
+    tree = getattr(world, "_door_tree", None)
+    if tree is None:
+        mids = np.array([[(d.a[0] + d.b[0]) / 2 + d.lv * LEVEL_OFFSET_M, (d.a[1] + d.b[1]) / 2] for d in world.doors])
+        half = max((float(np.linalg.norm(d.b - d.a)) / 2 for d in world.doors), default=0.0)
+        tree = world._door_tree = (cKDTree(mids) if len(mids) else None, half)
+    kd, half = tree
+    if kd is None:
+        return []
+    keyed = new + np.column_stack([lv * LEVEL_OFFSET_M, np.zeros(len(lv))])
+    step = float(np.max(np.linalg.norm(new - pos, axis=1))) if len(pos) else 0.0
+    hits = kd.query_ball_point(keyed, half + step + 0.01)
+    by_door: dict[int, list[int]] = {}
+    for row, ds in enumerate(hits):
+        for d in ds:
+            by_door.setdefault(d, []).append(row)
+    return [(world.doors[d], np.array(rows)) for d, rows in sorted(by_door.items())]
+
+
 def resolve_moves(world: World, pos: np.ndarray, lv: np.ndarray, step: np.ndarray, pushable: np.ndarray,
                   hurry: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray, list[tuple[int, str]]]:
     """Combine seek step and separation, keep walkable, gate door crossings by flow tokens.
@@ -68,8 +88,8 @@ def resolve_moves(world: World, pos: np.ndarray, lv: np.ndarray, step: np.ndarra
         new[bad2] = pos[bad2]
     denied = np.zeros(len(pos), dtype=bool)
     passed: list[tuple[int, str]] = []
-    for door in world.doors:
-        rows = np.flatnonzero(crosses(pos, new, door) & (lv == door.lv))
+    for door, rows in _door_candidates(world, pos, new, lv):
+        rows = rows[crosses(pos[rows], new[rows], door)]
         if len(rows) == 0:
             continue
         mid = (door.a + door.b) / 2

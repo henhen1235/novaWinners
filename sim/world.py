@@ -172,20 +172,25 @@ class World:
             self.lengths_flat[eid], _ = self._walk_length(cost_f, nxt_f)
 
     def _walk_length(self, cost: np.ndarray, nxt: np.ndarray) -> tuple[np.ndarray, list[str | None]]:
-        """Meters along the cost-optimal tree and the first stair id on it, per triangle."""
-        length = np.full(len(cost), INF)
-        stair: list[str | None] = [None] * len(cost)
-        for t in np.argsort(cost, kind="stable"):
-            if not np.isfinite(cost[t]):
-                break
-            n = int(nxt[t])
-            if n < 0:
-                length[t] = 0.0
-                continue
-            length[t] = length[n] + self.nav.walk_len(t, n)
-            link = self.nav.links.get((t, n))
-            stair[t] = link.id if link else stair[n]
-        return length, stair
+        """Meters along the cost-optimal tree and the first stair id on it, per triangle.
+
+        Pointer doubling over the next-triangle tree, so it is vectorized (log2(n) passes).
+        """
+        n = len(cost)
+        par = np.where(nxt >= 0, nxt, np.arange(n)).astype(int)
+        c = self.nav.centroids
+        length = np.linalg.norm(c - c[par], axis=1)
+        stair = np.full(n, -1)
+        ids = sorted({ln.id for ln in self.nav.links.values()})
+        for (i, j), ln in self.nav.links.items():
+            if par[i] == j:
+                length[i], stair[i] = ln.length_m, ids.index(ln.id)
+        for _ in range(max(1, int(np.ceil(np.log2(max(n, 2)))) + 1)):
+            stair = np.where(stair >= 0, stair, stair[par])
+            length = length + length[par] * (par != np.arange(n))
+            par = par[par]
+        length[~np.isfinite(cost)] = INF
+        return length, [ids[k] if k >= 0 else None for k in stair]
 
     def route_cost(self, exit_id: str, tri: int, stairs_ok: bool = True) -> float:
         """Hazard-weighted route cost (m-equivalent) from triangle `tri` to the exit (inf if cut off)."""
@@ -222,14 +227,6 @@ class World:
         ta, tb = int(self.nav.locate(pos[None], lv)[0]), int(self.nav.locate(goal[None], lv)[0])
         corr = self.nav.astar(ta, tb, use_links=stairs_ok)
         return None if corr is None else self.nav.waypoints(pos, goal, corr)
-
-    def route_to_point_m(self, pos: np.ndarray, lv: int, goal: np.ndarray) -> float:
-        """Rough same-level walking length (m) to a point: path length, or inf."""
-        path = self.path_to_point(pos, lv, goal)
-        if path is None:
-            return INF
-        pts = [pos] + [w.pt for w in path]
-        return float(sum(np.linalg.norm(b - a) for a, b in zip(pts[:-1], pts[1:])))
 
     def room_at(self, pt: np.ndarray, lv: int = 0) -> str | None:
         p = Point(pt)
