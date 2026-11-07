@@ -146,6 +146,13 @@ def facts_for(rec: dict, recs: list[dict], events: list[dict], intent: str, dt: 
     """(fact text, citation tag). The composer may only use these."""
     out = [(f"At t={rec['t_s']:g} s ({rec['trigger'].get('kind')}) I chose {describe_option(chosen(rec))}.", tag(rec)),
            (f"My stated reason at the time: \"{rec['decision']['padm']['why']}\"", tag(rec))]
+    pb = ((rec.get("inputs") or {}).get("agent", {}).get("traits") or {}).get("playbook")
+    if pb:
+        out.append((f"My plan before the alarm: first {pb['first_action'].replace('_', ' ')}, start leaving after about "
+                    f"{pb['premove_s']:g} s, convinced by {pb['convinced_by']} or {pb['crowd_n']} people leaving, "
+                    f"prefer the {pb['exit_preference']} exit.", tag(rec)))
+    if rec.get("source") == "playbook":
+        out.append(("This was a routine step: I followed my plan, nothing new had happened.", tag(rec)))
     for p in rec["percepts"]:
         bits = {k: v for k, v in p.items() if k not in ("id", "channel") and v is not None}
         out.append((f"I perceived ({p.get('channel')}): {json.dumps(bits)}", tag(rec, p["id"])))

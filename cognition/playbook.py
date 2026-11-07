@@ -187,7 +187,8 @@ def build(scenario_path: Path, out: Path, offline: bool = False) -> dict:
         by_pid, meta_of = {}, {}
         for got, meta, bi in (written or []):
             by_pid.update(got)
-            stats["calls"] += 0 if meta.get("cached") else 1
+            stats["calls"] += 0 if meta.get("cached") or meta.get("error") else 1
+            stats["errors"] = stats.get("errors", 0) + (1 if meta.get("error") else 0)
             stats["cost_usd"] += meta.get("cost_usd", 0.0)
             stats["latency_ms"].append(meta.get("latency_ms", 0))
             for p in people[bi * PER_CALL:(bi + 1) * PER_CALL]:
