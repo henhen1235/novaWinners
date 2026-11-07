@@ -31,7 +31,7 @@ SALIENCE = {"exit_sign": 0.38, "person": 0.8, "exit": 0.9, "object": 0.5}
 SPEECH = {"utterance", "said", "shout", "message"}
 PRIORITY_KINDS = set(HAZARD_KINDS) | SPEECH | {"alarm", "pa", "exit", "exit_sign", "exit_blocked", "blocked",
                                               "people_moving"}
-NEIGHBOUR_M, NEIGHBOUR_STALE_S = 6.0, 10.0
+NEIGHBOUR_M, NEIGHBOUR_STALE_S, MAX_NEIGHBOURS = 6.0, 10.0, 8
 FEEL_MAP = {"afraid": "fear", "scared": "fear", "terrified": "fear", "panicked": "fear", "frightened": "fear",
             "anxious": "anxiety", "worried": "anxiety", "nervous": "anxiety", "uneasy": "anxiety", "unsure": "anxiety",
             "confused": "anxiety", "frustrated": "frustration", "annoyed": "frustration", "irritated": "frustration",
@@ -145,6 +145,7 @@ def build_inputs(view: dict) -> dict:
                 d = ((m["pos"][0] - agent["pos"][0]) ** 2 + (m["pos"][1] - agent["pos"][1]) ** 2) ** 0.5
                 if d <= NEIGHBOUR_M:
                     add_nb(who, crowd["id"], d, "sight")
+    neighbours = sorted(neighbours, key=lambda n: n["dist_m"])[:MAX_NEIGHBOURS]
     prior = {b["key"]: dict(b) for b in mind.get("beliefs", [])}
     for b in view.get("beliefs") or []:  # sim-held beliefs fill gaps under fresh ids; ours win
         if b["key"] not in prior:
@@ -285,6 +286,12 @@ def fallback(inp: dict, st: dict) -> dict:
 
 # ---------- 5 deliberate ----------
 
+def model_for(agent: dict) -> str:
+    """The agent's OpenRouter model id, or the default when the sim gives a placeholder like 'rule-based'."""
+    m = agent.get("model") or ""
+    return m if "/" in m else CONFIG["model"]
+
+
 def deliberate(inp: dict, st: dict, tag: str = "", temperature: float | None = None,
                include_emotion: bool | None = None) -> dict:
     """One LLM call, one repair, then fallback. Returns decision, raw, validation, source, latency, cost."""
@@ -294,7 +301,7 @@ def deliberate(inp: dict, st: dict, tag: str = "", temperature: float | None = N
     if not inp["options"] or CONFIG["offline"]:
         return {**out, "decision": fallback(inp, st), "validation": {"status": "fallback", "errors":
                 ["offline" if CONFIG["offline"] else "no options"]}, "source": "fallback"}
-    model = inp["agent"].get("model") or CONFIG["model"]
+    model = model_for(inp["agent"])
     temp = CONFIG["temperature"] if temperature is None else temperature
     errors: list[str] = []
     for attempt in range(2):
@@ -325,7 +332,7 @@ def _record(inp: dict, st: dict, res: dict) -> dict:
     feel = FEEL_MAP.get(str(res["decision"].get("feel", "")).lower().strip())
     rec = {"record_id": f"d_{inp['tick']:05d}_{agent['id']}", "run_id": inp["run_id"], "tick": inp["tick"],
            "t_s": inp["t_s"], "agent_id": agent["id"], "persona": persona(agent.get("persona", ""))[0],
-           "model": agent.get("model") or CONFIG["model"], "trigger": inp["trigger"], "percepts": st["percepts"],
+           "model": model_for(agent), "trigger": inp["trigger"], "percepts": st["percepts"],
            "attention_dropped": inp["dropped"], "beliefs_before": inp["beliefs_before"],
            "beliefs_after": st["beliefs_after"], "appraisal": st["appraisal"], "emotion": st["emotion"],
            "emotion_sources": st["emotion_sources"], "options": inp["options"],

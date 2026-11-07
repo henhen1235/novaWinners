@@ -227,7 +227,8 @@ def contagion(q: float, delta_r: float, neighbours: list[dict], key: str) -> tup
     step = min(1.0, g * CONTAGION_WINDOW_S)
     new = q + step * (q_star - q)
     src = [{"emotion": key, "from": "contagion", "agent": nb.get("agent"),
-            "delta": round(step * x / g * (nb.get(key, 0.0) - q), 4)} for nb, x in gammas if x > 1e-6]
+            "delta": round(step * x / g * (nb.get(key, 0.0) - q), 4)} for nb, x in gammas
+           if abs(step * x / g * (nb.get(key, 0.0) - q)) >= 0.005]
     return new, src
 
 
