@@ -140,3 +140,51 @@ def test_seed_clamps_llm_counts_to_occupant_load(monkeypatch):
 def test_seed_without_llm_uses_half_the_load():
     occupants, notes = seed_mod.seed(SCENE, use_llm=False)
     assert sum(o["count"] for o in occupants) == 6
+
+
+def test_sim_extras_and_interventions_validate():
+    data = _with(
+        events=[{"id": "b", "type": "blocked_exit", "t_start_s": 0, "at": {"exit": "exit_01"},
+                 "params": {"cause": "locked"}},
+                {"id": "o", "type": "open_exit", "t_start_s": 30, "at": {"exit": "exit_01"}},
+                {"id": "pa", "type": "pa_announcement", "t_start_s": 20, "at": {"room": "L1_corridor"},
+                 "params": {"text": "West exit is open", "claim": {"exit_open": "exit_01"}}}],
+        occupants=[{"where": {"room": "L1_office_n1"}, "count": 2, "familiar_exit": "exit_02"},
+                   {"where": {"room": "L1_corridor"}, "count": 1, "personas": {"staff": 1.0}}],
+        interventions=[{"type": "signage", "exit": "exit_01", "p": 0.8},
+                       {"type": "signage", "exit": "exit_02", "p": 0.5, "room": "L1_office_n3"},
+                       {"type": "warden", "room": "L1_corridor", "count": 2},
+                       {"type": "widen_door", "door": "door_01", "width_m": 1.2}])
+    assert validate(data, SCENE) == []
+    assert normalize(data)["occupants"][0]["familiar_exit"] == "exit_02"
+
+
+def test_stair_targets_validate_on_school():
+    data = _with(scene="fixtures/two_floor_school.scene.json", occupants=[],
+                 events=[{"id": "s", "type": "blocked_exit", "t_start_s": 0, "at": {"stair": "stair_01"}},
+                         {"id": "w", "type": "blocked_exit", "t_start_s": 0, "at": {"room": "L2_stair_e"}},
+                         {"id": "f", "type": "smoke", "t_start_s": 0, "at": {"stair": "stair_02"}}])
+    assert validate(data, SCHOOL) == []
+    data["events"][0]["at"] = {"stair": "stair_09"}
+    assert any("unknown stair 'stair_09'" in e for e in validate(data, SCHOOL))
+
+
+@pytest.mark.parametrize("change, expected", [
+    ({"events": [{"id": "o", "type": "open_exit", "t_start_s": 0, "at": {"room": "L1_corridor"}}]},
+     "open_exit needs"),
+    ({"events": [{"id": "pa", "type": "pa_announcement", "t_start_s": 0, "at": {"room": "L1_corridor"},
+                  "params": {"claim": {"exit_open": "exit_09"}}}]}, "unknown exit 'exit_09'"),
+    ({"events": [{"id": "pa", "type": "pa_announcement", "t_start_s": 0, "at": {"room": "L1_corridor"}}]},
+     "needs the message text"),
+    ({"occupants": [{"where": {"room": "L1_office_n1"}, "count": 1, "familiar_exit": "exit_09"}]},
+     "familiar_exit: unknown exit"),
+    ({"interventions": [{"type": "signage", "exit": "exit_09"}]}, "interventions[0].exit: unknown exit"),
+    ({"interventions": [{"type": "signage", "exit": "exit_01", "p": 1.5}]}, "less than or equal to 1"),
+    ({"interventions": [{"type": "warden", "room": "L1_corridor", "count": 3}]}, "less than or equal to 2"),
+    ({"interventions": [{"type": "widen_door", "door": "door_01", "width_m": 0.5}]}, "narrower than door"),
+    ({"interventions": [{"type": "widen_door", "door": "door_01", "width_m": 3.0}]}, "less than or equal to 2.4"),
+    ({"interventions": [{"type": "teleport"}]}, "interventions.0"),
+])
+def test_sim_extras_errors(change, expected):
+    errors = validate(_with(**change), SCENE)
+    assert any(expected in e for e in errors), errors

@@ -12,7 +12,10 @@ import shapely
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from shapely.geometry import Point, Polygon
 
-EVENT_TYPES = ("fire", "smoke", "alarm_only", "active_intruder", "blocked_exit", "rumor")
+EVENT_TYPES = ("fire", "smoke", "alarm_only", "active_intruder", "blocked_exit", "rumor", "pa_announcement",
+               "open_exit")
+CLAIM_EXIT_KEYS = ("exit_blocked", "exit_open")
+MAX_WIDTH_M = 2.4  # widen_door cap, docs/SIM_INTERFACES.md Interventions
 # Archetypes from research/EVAC_PSYCHOLOGY.md, then the sim's short names
 # (sim/personas.py: staff, regular, visitor, committed, parent); sim and cognition alias both.
 PERSONAS = ("warden", "regular_employee", "first_time_visitor", "committed_task", "parent_with_child",
@@ -33,14 +36,15 @@ class At(_Model):
     room: Optional[str] = None
     exit: Optional[str] = None
     door: Optional[str] = None
+    stair: Optional[str] = None
     point: Optional[Point2] = None
     level: Optional[str] = None
 
     @model_validator(mode="after")
     def _exactly_one(self):
-        set_ = [k for k in ("room", "exit", "door", "point") if getattr(self, k) is not None]
+        set_ = [k for k in ("room", "exit", "door", "stair", "point") if getattr(self, k) is not None]
         if len(set_) != 1:
-            raise ValueError(f"exactly one of room, exit, door, point; got {set_ or 'none'}")
+            raise ValueError(f"exactly one of room, exit, door, stair, point; got {set_ or 'none'}")
         if (self.point is None) != (self.level is None):
             raise ValueError("point and level go together")
         return self
@@ -63,6 +67,29 @@ class Occupants(_Model):
     count: int = Field(ge=1, le=2000)
     personas: dict[str, float] = Field(default_factory=lambda: dict(DEFAULT_PERSONAS))
     models: dict[str, float] = Field(default_factory=lambda: {DEFAULT_MODEL: 1.0})
+    familiar_exit: Optional[str] = None
+
+
+class Signage(_Model):
+    type: Literal["signage"]
+    exit: str
+    p: float = Field(default=0.8, ge=0, le=1)
+    room: Optional[str] = None
+
+
+class Warden(_Model):
+    type: Literal["warden"]
+    room: str
+    count: int = Field(default=1, ge=1, le=2)
+
+
+class WidenDoor(_Model):
+    type: Literal["widen_door"]
+    door: str
+    width_m: float = Field(gt=0, le=MAX_WIDTH_M)
+
+
+Intervention = Annotated[Signage | Warden | WidenDoor, Field(discriminator="type")]
 
 
 class Scenario(_Model):
@@ -73,6 +100,7 @@ class Scenario(_Model):
     events: list[Event] = []
     occupants: list[Occupants] = []
     assumptions: list[str] = []
+    interventions: list[Intervention] = []
 
 
 def _known(items: dict, n: int = 12) -> str:
@@ -86,7 +114,7 @@ def _inside_walkable(scene: dict, level: str, pt: list[float]) -> bool:
 
 
 def _check_at(at: At, where: str, scene: dict, ids: dict) -> list[str]:
-    for kind in ("room", "exit", "door"):
+    for kind in ("room", "exit", "door", "stair"):
         ref = getattr(at, kind)
         if ref is not None and ref not in ids[kind]:
             return [f"{where}.{kind}: unknown {kind} '{ref}'; known: {_known(ids[kind])}"]
@@ -103,19 +131,36 @@ def _check_event(i: int, ev: Event, sc: Scenario, scene: dict, ids: dict, rooms:
     errs = _check_at(ev.at, f"{w}.at", scene, ids)
     if ev.t_start_s > sc.duration_s:
         errs.append(f"{w}.t_start_s: {ev.t_start_s} is after duration_s {sc.duration_s}")
-    if ev.type == "blocked_exit" and ev.at.exit is None:
-        errs.append(f"{w}.at: blocked_exit needs {{\"exit\": id}}; exits: {_known(ids['exit'])}")
+    stairwell = ev.at.room in rooms and rooms[ev.at.room]["type"] == "stairwell"
+    if ev.type == "blocked_exit" and ev.at.exit is None and ev.at.stair is None and not stairwell:
+        errs.append(f"{w}.at: blocked_exit needs {{\"exit\": id}}, {{\"stair\": id}} or a stairwell room; "
+                    f"exits: {_known(ids['exit'])}")
+    if ev.type == "open_exit" and ev.at.exit is None:
+        errs.append(f"{w}.at: open_exit needs {{\"exit\": id}}; exits: {_known(ids['exit'])}")
     if ev.type in ("fire", "smoke") and ev.at.room in rooms and rooms[ev.at.room]["type"] == "outside":
         errs.append(f"{w}.at.room: {ev.type} cannot start in an outside room")
-    if ev.type == "rumor":
+    if ev.type in ("rumor", "pa_announcement"):
         if not isinstance(ev.params.get("text"), str) or not ev.params["text"].strip():
-            errs.append(f"{w}.params.text: rumor needs the message text")
-        claim = ev.params.get("claim", {})
+            errs.append(f"{w}.params.text: {ev.type} needs the message text")
+        claim = ev.params.get("claim") or {}
         if not isinstance(claim, dict):
             errs.append(f"{w}.params.claim: must be an object such as {{\"exit_blocked\": \"<exit id>\"}}")
-        elif "exit_blocked" in claim and claim["exit_blocked"] not in ids["exit"]:
-            errs.append(f"{w}.params.claim.exit_blocked: unknown exit '{claim['exit_blocked']}'; "
-                        f"known: {_known(ids['exit'])}")
+            return errs
+        for key in CLAIM_EXIT_KEYS:
+            if key in claim and claim[key] not in ids["exit"]:
+                errs.append(f"{w}.params.claim.{key}: unknown exit '{claim[key]}'; known: {_known(ids['exit'])}")
+    return errs
+
+
+def _check_intervention(i: int, it, ids: dict, scene: dict) -> list[str]:
+    w = f"interventions[{i}]"
+    refs = {"exit": getattr(it, "exit", None), "room": getattr(it, "room", None), "door": getattr(it, "door", None)}
+    errs = [f"{w}.{k}: unknown {k} '{v}'; known: {_known(ids[k])}" for k, v in refs.items()
+            if v is not None and v not in ids[k]]
+    if isinstance(it, WidenDoor) and not errs:
+        current = next(d["width_m"] for d in scene["doors"] if d["id"] == it.door)
+        if it.width_m < current:  # the scene may already carry the widened door, so equal is fine
+            errs.append(f"{w}.width_m: {it.width_m} is narrower than door {it.door} ({current} m)")
     return errs
 
 
@@ -138,7 +183,8 @@ def validate(data: dict, scene: dict) -> list[str]:
     ids = {"room": {k: r["name"] for k, r in rooms.items()},
            "exit": {e["id"]: e["label"] for e in scene["exits"]},
            "door": {d["id"]: d["id"] for d in scene["doors"]},
-           "level": {lv["id"]: lv["name"] for lv in scene["levels"]}}
+           "level": {lv["id"]: lv["name"] for lv in scene["levels"]},
+           "stair": {st["id"]: st["id"] for st in scene.get("stairs", [])}}
     errs = []
     seen = set()
     for i, ev in enumerate(sc.events):
@@ -156,8 +202,12 @@ def validate(data: dict, scene: dict) -> list[str]:
         if rooms[rid]["type"] == "outside":
             errs.append(f"{w}.where.room: '{rid}' is outside the building")
         per_room[rid] = per_room.get(rid, 0) + occ.count
+        if occ.familiar_exit is not None and occ.familiar_exit not in ids["exit"]:
+            errs.append(f"{w}.familiar_exit: unknown exit '{occ.familiar_exit}'; known: {_known(ids['exit'])}")
         errs += _check_weights(f"{w}.personas", occ.personas, PERSONAS)
         errs += _check_weights(f"{w}.models", occ.models, None)
+    for i, it in enumerate(sc.interventions):
+        errs += _check_intervention(i, it, ids, scene)
     for rid, n in per_room.items():
         cap = int(MAX_PER_M2 * rooms[rid]["area_m2"])
         if n > cap:

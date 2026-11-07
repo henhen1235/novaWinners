@@ -37,8 +37,9 @@ def one_shot_answer(question: str, options: list[str]) -> str:
     return (f"No user is available (one-shot mode). Use {options[0]!r}, write 'assumed {options[0]} for: "
             f"{question}' into assumptions, and continue.")
 
-_AT = {"type": "object", "description": "Exactly one of room, exit, door, or point+level",
+_AT = {"type": "object", "description": "Exactly one of room, exit, door, stair, or point+level",
        "properties": {"room": {"type": "string"}, "exit": {"type": "string"}, "door": {"type": "string"},
+                      "stair": {"type": "string"},
                       "level": {"type": "string"},
                       "point": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}}}
 TOOLS = [
@@ -94,6 +95,8 @@ The building is fixed (below). Rules:
 - Event types: {", ".join(EVENT_TYPES)}. fire/smoke: the room and its doors become impassable after
   params.block_after_s (default 60). blocked_exit: at {{"exit": id}}. rumor: params.text (the message),
   params.claim (e.g. {{"exit_blocked": "<exit id>"}}), at = where it starts (a room).
+  pa_announcement: official message to everyone, params.text, optional params.claim {{"exit_open": id}}.
+  open_exit: at {{"exit": id}}, reopens a blocked exit.
 - Occupants: where {{"room": id}} or {{"all": true}} to spread a total over the building.
 - Personas: {", ".join(PERSONAS[:8])}. If the user gives no mix, omit personas (default: {mix}).
 - Unstated values: use defaults and write each guess into assumptions.
