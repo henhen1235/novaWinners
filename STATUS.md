@@ -47,3 +47,16 @@ Updated: 2026-11-07 ~12:30
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python -m pytest -q          # 66 passed in ~14 s
 ```
+
+## Andrew's agent
+
+- Andrew's agent: A1 demo setup done. `scripts/demo/setup.sh` (venv, requirements, npm ci,
+  scenes, analyses, rule-policy replays incl. tepper_fire_noplan/plan, copies recorded
+  `out/loop/demo_hall|demo_tepper` when present, builds a free offline tiny_office loop),
+  `start.sh` (interview API :8771 + vite :5173, writes `out/demo/urls.txt`), `stop.sh`,
+  `docs/DEMO.md`. Verified on Windows: start/stop, viewer proxy to the interview API, Tepper
+  model loads with no console errors. Not verified: the full asset build (pip install fails
+  on that machine, see docs/REQUESTS.md); run `scripts/demo/setup.sh` on a Python 3.11 laptop.
+- Andrew's agent: README rewrite done.
+- Andrew's agent: `docs/pitch/SUBMISSION.md` done. Pitch deck reassigned to another agent.
+- Andrew's agent: A3 (`insights/`) not started; A1 and A2 were prioritized for the deadline.
