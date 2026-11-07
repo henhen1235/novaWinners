@@ -71,7 +71,7 @@ const TRAITS: [string, string, number, number, number, number][] = [
 ];
 const OCEAN = [["O", "Openness"], ["C", "Conscientiousness"], ["E", "Extraversion"], ["A", "Agreeableness"], ["N", "Neuroticism"]];
 const MARKER_PX = 9;
-const DOT_PX = 6;
+const DOT_PX = 8;
 const DRAG_PX = 5;
 const MAX_DOTS_PER_GROUP = 300;
 const SCENE = new URLSearchParams(location.search).get("scene") ?? "";
@@ -226,9 +226,11 @@ export function startEdit(context: ViewerContext) {
 
   // ---- tools ----
   function arm(next: Tool | null) {
-    if (tool === "people" && next !== "people") context.setNavigation(true);
+    const was = tool;
     tool = next === tool ? null : next;
-    if (tool === "people") context.setNavigation(false);
+    // Left-drag draws the people box, so the camera only moves while the people tool is down.
+    if (was === "people" && tool !== "people") context.setNavigation(true);
+    if (tool === "people" && was !== "people") context.setNavigation(false);
     for (const button of section.querySelectorAll<HTMLButtonElement>("[data-tool]")) {
       button.setAttribute("aria-pressed", String(button.dataset.tool === tool));
     }
@@ -353,7 +355,7 @@ export function startEdit(context: ViewerContext) {
       group.add(mesh);
     };
     if (event.type === "fire") { add(discGeometry, materials.hazard); add(ringGeometry, materials.hazardBright, 0.001); }
-    else if (event.type === "smoke") add(discGeometry, materials.smoke);
+    else if (event.type === "smoke") { add(discGeometry, materials.smoke); add(ringGeometry, materials.ground, 0.001); }
     else if (event.type === "blocked_exit") {
       // Hatching, not color alone: a crossed ring reads as blocked in grayscale too.
       add(discGeometry, materials.ground); add(ringGeometry, materials.hazardBright, 0.001);
@@ -387,8 +389,11 @@ export function startEdit(context: ViewerContext) {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = 32;
     const g = canvas.getContext("2d")!;
+    // Vertex colors multiply the texture, so the dark rim becomes an outline that reads on any floor.
+    g.fillStyle = "#0b1622";
+    g.beginPath(); g.arc(16, 16, 15, 0, Math.PI * 2); g.fill();
     g.fillStyle = "#fff";
-    g.beginPath(); g.arc(16, 16, 14, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(16, 16, 11, 0, Math.PI * 2); g.fill();
     return new THREE.CanvasTexture(canvas);
   })();
   const dotMaterial = new THREE.PointsMaterial({
@@ -570,7 +575,7 @@ export function startEdit(context: ViewerContext) {
       else if ("error" in parsed) reply = `Offline: ${parsed.error}`;
       else {
         commit({ label: describeEvent(parsed.event), event: parsed.event, hit: hit ?? undefined });
-        reply = `Offline: understood ${(TYPE_LABEL[parsed.event.type] ?? parsed.event.type).toLowerCase()} ${describeAt(parsed.event.at)}, added it.`;
+        reply = `Offline, understood as "${describeEvent(parsed.event)}". Added it.`;
       }
       chat = [...chat, { role: "assistant", content: reply }];
       chatLine("assistant", reply);
