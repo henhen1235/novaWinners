@@ -120,6 +120,13 @@ class NavMesh:
             lens[k] = ln.length_m * ln.cost_mult
         self.edge_len = np.maximum(lens, 1e-4)
         self.edge_stair = np.array([""] * len(self.portals) + [self.links[k].id for k in pairs[len(self.portals):]])
+        link_pairs = pairs[len(self.portals):]
+        self.edge_up = np.zeros(len(pairs), dtype=bool)
+        self.edge_to_lv = self.tri_level[self.edge_dst]
+        for k, key in enumerate(link_pairs, start=len(self.portals)):
+            ln = self.links[key]
+            self.edge_up[k] = self.elev[ln.b_lv] > self.elev[ln.a_lv]
+        self.exit_levels: set[int] = set()  # set by World; up-stairs may only lead to these levels
         self.stair_mult: dict[str, float] = {}  # hazard multiplier per stair id (inf = blocked)
 
     def walk_len(self, i: int, j: int) -> float:
@@ -201,16 +208,25 @@ class NavMesh:
             return ln.length_m * ln.cost_mult * self.stair_mult.get(ln.id, 1.0) * self.mult[j]
         return float(np.linalg.norm(self.centroids[i] - self.centroids[j])) * self.mult[j]
 
-    def _weights(self, use_links: bool) -> np.ndarray:
-        """Directed edge costs: base length times the entered triangle's and the stair's multipliers."""
+    def _weights(self, use_links: bool | str) -> np.ndarray:
+        """Directed edge costs: base length times the entered triangle's and the stair's multipliers.
+
+        use_links: True/"all" every link (helpers may climb), False/"none" no links, "down" no
+        upward link, "evac" downward links plus upward ones into a level that has an exit.
+        """
         w = self.edge_len * self.mult[self.edge_dst]
-        if not use_links:
+        if use_links in (False, "none"):
             return np.where(self.edge_stair != "", INF, w)
+        if use_links == "down":
+            w = np.where(self.edge_up, INF, w)
+        elif use_links == "evac":
+            to_exit_level = np.isin(self.edge_to_lv, list(self.exit_levels))
+            w = np.where(self.edge_up & ~to_exit_level, INF, w)
         for sid, m in self.stair_mult.items():
             w = np.where(self.edge_stair == sid, w * m, w)
         return w
 
-    def _graph(self, use_links: bool, reverse: bool) -> csr_matrix:
+    def _graph(self, use_links: bool | str, reverse: bool) -> csr_matrix:
         key = (use_links, reverse, self.mult.tobytes(), tuple(sorted(self.stair_mult.items())))
         cache = getattr(self, "_graph_cache", {})
         if key not in cache:
@@ -243,7 +259,7 @@ class NavMesh:
             path.append(int(pred[path[-1]]))
         return path[::-1]
 
-    def distance_field(self, seed: int, use_links: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    def distance_field(self, seed: int, use_links: bool | str = True) -> tuple[np.ndarray, np.ndarray]:
         """Cost-to-go from every triangle to `seed` and the next triangle toward it (-1 at seed).
 
         use_links=False keeps routes on one level (people who cannot use stairs).

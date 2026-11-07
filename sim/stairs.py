@@ -56,6 +56,7 @@ def advance(sim: "Sim", a: "Agent", dt: float) -> None:
     sim.lv[a.row] = link.a_lv if frac < 0.5 else link.b_lv
     a.state = "helping" if a.carrying else "moving"
     if frac >= 1.0:
+        sim.stair_moves.append((sim.t, a.id, link.id, link.a_lv, link.b_lv, a.action))
         a.stair = None
         if a.waypoints and a.waypoints[0].link is not None:
             a.waypoints.pop(0)

@@ -71,6 +71,7 @@ class Sim:
         self.records: list[dict] = []
         self.pending: dict[int, list[tuple[Agent, dict, dict]]] = {}
         self.crossings: list[tuple[float, str, str]] = []  # (t, door or exit id, agent id)
+        self.stair_moves: list[tuple] = []  # (t, agent id, stair id, from level, to level, action)
         self.msg_seq = 0
         self.llm_calls = 0
         self.cost_usd = 0.0

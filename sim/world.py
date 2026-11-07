@@ -130,7 +130,23 @@ class World:
                                      e["door_id"], lv)
         if not out:
             raise ValueError("scene has no exits")
-        return out
+        usable = {k: v for k, v in out.items() if self._usable_exit(next(e for e in scene["exits"] if e["id"] == k))}
+        for k in sorted(set(out) - set(usable)):
+            log.warning("exit %s is not an evacuation exit (leads_to / roof); ignored", k)
+        if not usable:
+            log.warning("no exit passes the evacuation-exit rules; using all exits")
+            self.nav.exit_levels = {ex.lv for ex in out.values()}
+            return out
+        self.nav.exit_levels = {ex.lv for ex in usable.values()}
+        return usable
+
+    def _usable_exit(self, e: dict) -> bool:
+        """Leads outside or to an assembly point, and is not on the top floor of a multi-storey scene (roof)."""
+        if e.get("leads_to", "outside") not in ("outside", "assembly") or "roof" in (e.get("label") or "").lower():
+            return False
+        elev = self.nav.elev
+        lv = self.lv_index.get(e["level"], 0)
+        return len(elev) == 1 or elev[lv] < max(elev) or elev[lv] == min(elev)
 
     def _build_doors(self, scene: dict) -> list[DoorState]:
         exit_doors = {e["door_id"] for e in scene["exits"]}
@@ -164,12 +180,24 @@ class World:
         self.fields, self.lengths, self.first_stair = {}, {}, {}
         self.fields_flat, self.lengths_flat = {}, {}
         for eid, ex in self.exits.items():
-            cost, nxt = self.nav.distance_field(ex.seed_tri)
+            cost, nxt = self._evac_field(ex.seed_tri)
             self.fields[eid] = (cost, nxt)
             self.lengths[eid], self.first_stair[eid] = self._walk_length(cost, nxt)
             cost_f, nxt_f = self.nav.distance_field(ex.seed_tri, use_links=False)
             self.fields_flat[eid] = (cost_f, nxt_f)
             self.lengths_flat[eid], _ = self._walk_length(cost_f, nxt_f)
+
+    def _evac_field(self, seed: int) -> tuple[np.ndarray, np.ndarray]:
+        """Cost-to-go that never climbs while a descending (or level) route exists.
+
+        Where only climbing reaches the exit, upward stairs into a level that has an exit are
+        allowed; never toward a level without exits (no roofs). Following the merged pointers
+        stays in the descending field once it is reachable, so routes never climb then descend.
+        """
+        down, nxt_down = self.nav.distance_field(seed, use_links="down")
+        up, nxt_up = self.nav.distance_field(seed, use_links="evac")
+        ok = np.isfinite(down)
+        return np.where(ok, down, up), np.where(ok, nxt_down, nxt_up)
 
     def _walk_length(self, cost: np.ndarray, nxt: np.ndarray) -> tuple[np.ndarray, list[str | None]]:
         """Meters along the cost-optimal tree and the first stair id on it, per triangle.

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 from shapely.geometry import LineString
 
 from sim.engine import Sim
@@ -196,3 +197,37 @@ def test_room_signage_only_reaches_that_room() -> None:
     assert all("exit_01" in a.known_exits for a in n1)
     assert not any("exit_01" in a.known_exits and a.known_exits[0] != "exit_01" and len(a.known_exits) == 1 for a in s3)
     assert sim.signage == [("L1_office_n1", "exit_01", 1.0)]
+
+
+def _assert_no_climb_to_dead_floor(sim: Sim) -> None:
+    exit_lvs, elev = sim.world.nav.exit_levels, sim.world.nav.elev
+    for t, aid, sid, a_lv, b_lv, action in sim.stair_moves:
+        if action == "HELP":
+            continue  # a helper may climb to fetch someone
+        assert elev[b_lv] <= elev[a_lv] or b_lv in exit_lvs, (t, aid, sid, a_lv, b_lv)
+
+
+def test_no_climbing_toward_floors_without_exits_school() -> None:
+    occ = [{"where": {"room": r}, "count": 6, "personas": {"regular": 0.7, "visitor": 0.3}}
+           for r in ("L1_class_n1", "L1_corridor", "L2_class_n2", "L2_class_s3")]
+    ev = [{"id": "f", "type": "fire", "t_start_s": 0, "at": {"room": "L1_corridor"}, "params": {"block_after_s": 20}}]
+    sim = _school(ev, occ, duration=240, tweak={"regular": {"premove_s": 5.0}, "visitor": {"premove_s": 10.0}})
+    assert sim.stair_moves
+    _assert_no_climb_to_dead_floor(sim)
+
+
+TEPPER = Path(__file__).parents[1] / "samples/cmu/tepper/scene.json"
+
+
+@pytest.mark.skipif(not TEPPER.exists(), reason="Tepper scene not generated")
+def test_no_climbing_toward_floors_without_exits_tepper() -> None:
+    scene = json.loads(TEPPER.read_text())
+    occ = [{"where": {"room": r}, "count": 15, "personas": {"regular": 0.7, "visitor": 0.3}}
+           for r in ("r_1042", "c_3_002", "r_5254")]
+    sim = Sim(scene, {"duration_s": 150, "events": [], "occupants": occ}, 3)
+    for a in sim.agents:
+        a.traits["premove_s"] = 5.0
+    assert all(sim.world.nav.elev[ex.lv] < max(sim.world.nav.elev) for ex in sim.world.exits.values())
+    sim.run()
+    assert sim.stair_moves
+    _assert_no_climb_to_dead_floor(sim)
