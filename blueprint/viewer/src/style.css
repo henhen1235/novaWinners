@@ -293,6 +293,21 @@ body.one-level .camera-views { margin-left: auto; }
   border: 1.5px solid var(--color-ground); border-radius: 3px; box-shadow: 0 0 0 1px var(--stair);
 }
 
+/* The renderer owns transform on the anchor, so the badge itself is the child. */
+.crowd-mark { width: 0; height: 0; pointer-events: none; }
+.crowd-mark span {
+  position: absolute; left: 0; bottom: 2px; transform: translateX(-50%);
+  display: grid; place-items: center; width: 22px; height: 22px; pointer-events: none;
+  font: 800 15px/1 var(--font-sans); color: #fff; background: #d0122a;
+  border: 1.5px solid #fff; border-radius: 999px;
+  box-shadow: 0 0 0 1px #d0122a, 0 1px 4px rgba(0, 0, 0, 0.35);
+  animation: crowd-pulse 1.15s ease-in-out infinite;
+}
+@keyframes crowd-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px #d0122a, 0 1px 4px rgba(0, 0, 0, 0.35); }
+  50% { box-shadow: 0 0 0 4px rgba(208, 18, 42, 0.35), 0 1px 4px rgba(0, 0, 0, 0.35); }
+}
+
 /* Zoomed out, exits keep the pictogram and drop the words. */
 body.zoomed-out .exit-label { padding: 2px; }
 body.zoomed-out .exit-label .exit-text { display: none; }
@@ -309,7 +324,8 @@ body.zoomed-out .exit-label .exit-text { display: none; }
 }
 
 /* ---- Live run ---- */
-.live-status { margin: 0 0 var(--space-3); color: var(--color-text-muted); font-variant-numeric: tabular-nums; text-wrap: pretty; }
+.live-status { margin: 0 0 var(--space-2); color: var(--color-text-muted); font-variant-numeric: tabular-nums; text-wrap: pretty; }
+.live-mode { margin: 0 0 var(--space-3); color: var(--color-text); font-size: var(--size-sm); text-wrap: pretty; }
 .live-actions { display: flex; gap: var(--space-2); }
 .live-actions button {
   padding: 6px 12px; border-radius: var(--radius-sm); cursor: pointer;

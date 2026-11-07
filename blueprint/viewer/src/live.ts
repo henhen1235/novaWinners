@@ -265,6 +265,10 @@ export function startLive(context: ViewerContext, target: string | null) {
     if (draft.events.length) notes.push(`${draft.events.length} sidebar event${draft.events.length === 1 ? "" : "s"}`);
     if (draft.occupants.length) notes.push("the people you placed");
     clearPlacedPeople();
+    const rulesOnly = params.get("decide") === "policy";
+    $("#live-mode").textContent = rulesOnly
+      ? "Rules only. This run does not ask a model. Open the page without ?decide=policy for a model call per person."
+      : "Each person asks openai/gpt-oss-120b. A line that says Rules filled in means that call failed or was replaced.";
     status.textContent = notes.length ? `Starting ${people} people with ${notes.join(" and ")}` : `Starting ${people} people`;
     pendingStart = false;
   }

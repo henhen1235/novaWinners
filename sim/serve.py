@@ -65,6 +65,16 @@ def _public_logs(records: list[dict]) -> list[dict]:
         padm = dec.get("padm") if isinstance(dec.get("padm"), dict) else {}
         chosen = next((o for o in rec.get("options") or [] if isinstance(o, dict) and o.get("id") == rec.get("choice")), {})
         why = padm.get("why") or chosen.get("action") or ""
+        validation = rec.get("validation") if isinstance(rec.get("validation"), dict) else {}
+        errors = [str(e) for e in (validation.get("errors") or [])]
+        src = rec.get("source")
+        status = str(validation.get("status") or "")
+        if src == "llm" or (rec.get("raw_output") and not status.startswith("fallback")):
+            shown = "model"
+        elif src in ("fallback", "fallback_deadline") or status.startswith("fallback"):
+            shown = "fallback"
+        else:
+            shown = "rule"
         item = {
             "record_id": rec.get("record_id"),
             "agent_id": rec.get("agent_id"),
@@ -72,7 +82,8 @@ def _public_logs(records: list[dict]) -> list[dict]:
             "model": rec.get("model"),
             "persona": rec.get("persona"),
             "say": rec.get("say"),
-            "source": "model" if rec.get("raw_output") else "rule",
+            "source": shown,
+            "note": errors[0] if errors else "",
             "action": chosen.get("action") or "",
             "decision": {"padm": {"why": why}, "reasons": dec.get("reasons") or []},
         }

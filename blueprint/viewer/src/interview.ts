@@ -11,7 +11,8 @@ export type DecisionRecord = {
   tick?: number;
   model?: string;
   say?: string | null;
-  source?: "model" | "rule";
+  source?: "model" | "fallback" | "rule";
+  note?: string;
   action?: string;
   emotion?: Record<string, number>;
   decision?: { action?: string; exit?: string; reasons?: Reason[]; padm?: { why?: string } };
@@ -147,9 +148,10 @@ async function ask(question: string) {
 }
 
 function sourceLine(record: DecisionRecord) {
-  const model = record.model?.includes("/") ? record.model : "";
-  const fromModel = record.source === "model" || Boolean(model);
-  return fromModel ? `Model · ${model || "its own call"}` : "Rules · no model call for this decision";
+  const model = record.model?.includes("/") ? record.model : "the model";
+  if (record.source === "model") return `Model call · ${model} chose this`;
+  if (record.source === "fallback") return `Rules filled in · ${model} was asked and this answer was not used${record.note ? ` (${record.note})` : ""}`;
+  return "Rules only · no model was asked for this decision";
 }
 
 function thought(record: DecisionRecord | undefined) {
@@ -159,7 +161,7 @@ function thought(record: DecisionRecord | undefined) {
     return;
   }
   const why = record.decision?.padm?.why || record.action || "Chose without a written reason.";
-  const source = el("p", record.source === "model" || record.model?.includes("/") ? "iv-source model" : "iv-source", sourceLine(record));
+  const source = el("p", record.source === "model" ? "iv-source model" : "iv-source", sourceLine(record));
   box.replaceChildren(source, el("p", "", why));
   if (record.say) box.append(el("p", "iv-say", `“${record.say}”`));
   if (record.decision?.reasons?.length) box.append(reasonList(record.decision.reasons));
@@ -207,8 +209,7 @@ export function openInterview(player: Player, run: Run, agent: number, onClose: 
   $("#iv-title").textContent = info.id;
   const persona = info.persona.replace(/_/g, " ");
   const speed = typeof info.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
-  const model = info.model?.includes("/") ? `decided by ${info.model}` : "waiting for its own model call";
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}own decision${player.runs.length > 1 ? `, ${run.name}` : ""}`;
   $("#iv-answer").replaceChildren();
   const items = drawTimeline(player, run, info.id);
   current = { player, run, agent, onClose, items };
@@ -224,8 +225,7 @@ export function refreshInterview() {
   const info = run.doc.agents[agent];
   const persona = (info?.persona ?? "person").replace(/_/g, " ");
   const speed = typeof info?.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
-  const model = info?.model?.includes("/") ? `decided by ${info.model}` : "waiting for its own model call";
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}${model}${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}own decision${player.runs.length > 1 ? `, ${run.name}` : ""}`;
   current.items = drawTimeline(player, run, info.id);
   updateInterview(player.time());
 }
