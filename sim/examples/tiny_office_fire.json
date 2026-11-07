@@ -1,0 +1,16 @@
+{"schema_version": "0.1", "scene": "fixtures/tiny_office.scene.json", "seed": 42, "duration_s": 300,
+ "events": [
+  {"id": "ev_fire", "type": "fire", "t_start_s": 0, "at": {"room": "L1_office_n2"}, "params": {"block_after_s": 60}},
+  {"id": "ev_rumor", "type": "rumor", "t_start_s": 40, "at": {"room": "L1_corridor"},
+   "params": {"text": "Someone said the main entrance is blocked!", "claim": {"exit_blocked": "exit_02"}, "radius_m": 8}}
+ ],
+ "occupants": [
+  {"where": {"room": "L1_office_n1"}, "count": 5, "personas": {"regular": 0.6, "visitor": 0.2, "skeptic": 0.2}},
+  {"where": {"room": "L1_office_n2"}, "count": 4, "personas": {"regular": 0.75, "staff": 0.25}},
+  {"where": {"room": "L1_office_n3"}, "count": 5, "personas": {"regular": 0.6, "older_adult": 0.2, "visitor": 0.2}},
+  {"where": {"room": "L1_office_s1"}, "count": 5, "personas": {"regular": 0.5, "visitor": 0.3, "staff": 0.2}},
+  {"where": {"room": "L1_office_s2"}, "count": 6, "personas": {"regular": 0.5, "parent": 0.2, "mobility_impaired": 0.15, "skeptic": 0.15}},
+  {"where": {"room": "L1_office_s3"}, "count": 5, "personas": {"regular": 0.6, "visitor": 0.4}}
+ ],
+ "assumptions": ["Fire in Office N2 at t=0 sets off the alarm; the room and its door are impassable after 60 s.",
+                 "A false rumor at t=40 says the Main Entrance (exit_02) is blocked."]}
