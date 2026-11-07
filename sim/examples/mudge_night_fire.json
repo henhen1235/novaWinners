@@ -1,0 +1,461 @@
+{
+ "schema_version": "0.1",
+ "scene": "samples/cmu/mudge/scene.json",
+ "seed": 7,
+ "duration_s": 600,
+ "events": [
+  {
+   "id": "ev_alarm",
+   "type": "alarm_only",
+   "t_start_s": 0,
+   "at": {
+    "room": "r_A105"
+   },
+   "params": {}
+  },
+  {
+   "id": "ev_fire",
+   "type": "fire",
+   "t_start_s": 0,
+   "at": {
+    "room": "r_A105"
+   },
+   "params": {
+    "block_after_s": 60
+   }
+  }
+ ],
+ "occupants": [
+  {
+   "where": {
+    "room": "r_B1"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B3"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B5"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B8"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C11"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C13B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C16"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C3"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A101"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B103B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B107"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B110"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B113B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B117"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C102B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C106"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C109"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C112"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A201"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A211"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A215"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B202B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B206B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B210"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B214"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B218"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C204"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C208"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C212"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A301"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_A310B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B301"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B305"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B309"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B313B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B317B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C303B"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C309"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_C315"
+   },
+   "count": 2,
+   "personas": {
+    "regular": 0.9,
+    "visitor": 0.1
+   }
+  },
+  {
+   "where": {
+    "room": "r_B101"
+   },
+   "count": 1,
+   "personas": {
+    "staff": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A209A"
+   },
+   "count": 1,
+   "personas": {
+    "staff": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_C217B"
+   },
+   "count": 1,
+   "personas": {
+    "mobility_impaired": 1.0
+   }
+  },
+  {
+   "where": {
+    "room": "r_A310"
+   },
+   "count": 1,
+   "personas": {
+    "mobility_impaired": 1.0
+   }
+  }
+ ],
+ "assumptions": [
+  "Night: 82 residents in their rooms (two per sleep/study room, FICM 920), two RAs (staff), two mobility-impaired residents on L2 and L3.",
+  "Fire starts in A105, the large first-floor common room by the front entrance, and makes it impassable after 60 s.",
+  "Exits are the floor 1 exterior doors only; basement A residents climb to floor 1."
+ ]
+}
