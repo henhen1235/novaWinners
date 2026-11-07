@@ -47,6 +47,21 @@ text before any slide.
 - Model casting: give different occupants different LLMs, using documented
   model tendencies (risk-taking, compliance, cooperation) as a source of
   behavioral diversity, alongside explicit persona prompts.
+  - Inspiration to cite (research/SCENARIOS_AND_MODELS.md 3.2): Akata et al.,
+    Nature Human Behaviour 2025 (repeated games); Fontana et al., ICWSM 2025
+    (Llama2 cooperative vs Llama3 exploitative); Jia et al., arXiv 2406.05972
+    (Claude bets high vs GPT moderate on a gambling task); BenchForm, ICLR 2025
+    (conformity); Serapio-Garcia et al. 2023 (measurable, steerable personality).
+    Read the full text of the ones quoted on a slide first (checked from abstracts).
+  - Our own measurement (304 calls): same "veteran warden" persona facing an
+    intruder: Claude and Mistral hid, Llama and Grok ran, Qwen and DeepSeek
+    helped others, gpt-oss called 911. With an ambiguous alarm and no persona,
+    Gemini, gpt-oss and Claude evacuated at once; Llama, Qwen and Grok sought
+    information first. Persona still explains about 3x more than model.
+  - Pitch wording: "Models differ in documented ways, and we measured it
+    ourselves, so each occupant gets a persona AND a model; the mix adds
+    the variety a single model lacks." Do not claim fixed traits ("Claude is
+    cautious"): the literature shows they flip across versions and framings.
 
 ## From IBS27/rumi (HackMIT 2026; NO LICENSE: ideas only, do not copy code)
 - Phone-to-browser pairing: RoomScanner uploads the scan straight to the web
