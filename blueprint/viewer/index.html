@@ -2,23 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Scene viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rehearsal viewer</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
   <header>
-    <button id="orbit" type="button">Orbit</button>
-    <button id="top" type="button">Top</button>
-    <label>Level <select id="level"></select></label>
-    <label><input id="show-nav" type="checkbox" checked /> Navmesh</label>
-    <label><input id="show-rooms" type="checkbox" checked /> Rooms</label>
-    <label><input id="show-doors" type="checkbox" checked /> Doors</label>
-    <label><input id="show-exits" type="checkbox" checked /> Exits</label>
-    <label><input id="show-warnings" type="checkbox" /> Warnings</label>
-    <span id="readout">Load display.glb and scene.json</span>
+    <div class="brand">
+      <!-- Drawing reference bubble: the mark used to call out a section on a plan. -->
+      <svg class="mark" viewBox="0 0 40 32" aria-hidden="true">
+        <circle cx="15" cy="16" r="13" />
+        <line x1="2" y1="16" x2="28" y2="16" />
+        <path class="mark-arrow" d="M28 9 L38 16 L28 23 Z" />
+        <text x="15" y="13" text-anchor="middle">R</text>
+        <text x="15" y="26" text-anchor="middle" class="mark-sub">01</text>
+      </svg>
+      <span class="wordmark">Rehearsal</span>
+    </div>
+    <span id="building" class="building">Loading scene</span>
+    <div class="views" role="group" aria-label="Camera">
+      <button id="orbit" type="button">Orbit</button>
+      <button id="top" type="button">Top</button>
+    </div>
+    <label class="level">Level <select id="level"></select></label>
   </header>
-  <div id="stage"></div>
-  <aside id="warnings"></aside>
+  <div id="stage">
+    <dl id="title-block" class="title-block" hidden></dl>
+  </div>
+  <aside>
+    <section class="route">
+      <h2>Route to nearest exit</h2>
+      <p id="readout">Loading display.glb and scene.json</p>
+    </section>
+    <section>
+      <h2>Layers</h2>
+      <label class="layer"><input id="show-nav" type="checkbox" checked /><i class="swatch swatch-walk"></i>Walkable floor</label>
+      <label class="layer"><input id="show-rooms" type="checkbox" checked /><i class="swatch swatch-room"></i>Rooms</label>
+      <label class="layer"><input id="show-doors" type="checkbox" checked /><i class="swatch swatch-door"></i>Doors</label>
+      <label class="layer"><input id="show-exits" type="checkbox" checked /><i class="swatch swatch-exit"></i>Exits</label>
+      <label class="layer"><input id="show-warnings" type="checkbox" /><i class="swatch swatch-warn"></i>Warnings</label>
+      <p class="layer"><i class="swatch swatch-route"></i>Escape route</p>
+    </section>
+    <section>
+      <h2>Checks</h2>
+      <div id="warnings"></div>
+    </section>
+  </aside>
   <script type="module" src="./src/main.ts"></script>
 </body>
 </html>
