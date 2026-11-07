@@ -1,0 +1,1016 @@
+{
+ "version": 2,
+ "story": 0,
+ "walls": [
+  {
+   "category": {
+    "wall": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    3.5774367,
+    2.415,
+    0
+   ],
+   "identifier": "51FDC420-A3E2-42D6-A193-854B2D9DC07B",
+   "parentIdentifier": null,
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    0.85681576,
+    0,
+    0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568158,
+    0,
+    0.727431,
+    -0.08734304,
+    -1.8325253,
+    1
+   ]
+  },
+  {
+   "category": {
+    "wall": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    2.543499,
+    2.415,
+    0
+   ],
+   "identifier": "753D5F37-4FFE-4B74-863C-960250C2144F",
+   "parentIdentifier": null,
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    -0.51562274,
+    0,
+    0.85681576,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.85681576,
+    0,
+    -0.5156227,
+    0,
+    1.6042901,
+    -0.08734304,
+    0.17943344,
+    1
+   ]
+  },
+  {
+   "category": {
+    "wall": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    2.5434988,
+    2.415,
+    0
+   ],
+   "identifier": "3D13B2A1-A79B-4209-BEAE-E795822C7548",
+   "parentIdentifier": null,
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    0.5156227,
+    0,
+    -0.85681576,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.8568158,
+    0,
+    0.51562274,
+    0,
+    -1.460914,
+    -0.08734304,
+    -1.6651741,
+    1
+   ]
+  },
+  {
+   "category": {
+    "wall": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    3.5774367,
+    2.415,
+    0
+   ],
+   "identifier": "7E182D20-8311-437D-A111-61F63DB97599",
+   "parentIdentifier": null,
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    -0.8568157,
+    0,
+    -0.51562274,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.85681576,
+    0,
+    -0.58405477,
+    -0.08734304,
+    0.34678468,
+    1
+   ]
+  }
+ ],
+ "doors": [],
+ "windows": [],
+ "openings": [
+  {
+   "category": {
+    "opening": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    1.1952116,
+    2.06,
+    0
+   ],
+   "identifier": "853D15FC-9913-4F05-9331-7D8855A60237",
+   "parentIdentifier": "3D13B2A1-A79B-4209-BEAE-E795822C7548",
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    0.5156227,
+    0,
+    -0.85681576,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    0.8568158,
+    0,
+    0.51562274,
+    0,
+    -1.4624807,
+    -0.264843,
+    -1.6625708,
+    1
+   ]
+  },
+  {
+   "category": {
+    "opening": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    0.7456921,
+    2.04,
+    0
+   ],
+   "identifier": "AB2B4CDF-7903-45EE-91AD-A94C1A7D00D5",
+   "parentIdentifier": "7E182D20-8311-437D-A111-61F63DB97599",
+   "polygonCorners": [],
+   "story": 0,
+   "transform": [
+    -0.8568157,
+    0,
+    -0.51562274,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.8568157,
+    0,
+    -0.035713416,
+    -0.27484298,
+    0.67677075,
+    1
+   ]
+  }
+ ],
+ "objects": [
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.9770754,
+    1.1002038,
+    0.357324
+   ],
+   "identifier": "B0B16F26-6660-4150-B12E-7BEE91FE991C",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.8568158,
+    0,
+    0.5156226,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156226,
+    0,
+    0.8568158,
+    0,
+    1.7493238,
+    0.55822504,
+    -1.0090419,
+    1
+   ]
+  },
+  {
+   "attributes": {},
+   "category": {
+    "sink": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.6140136,
+    0.20635748,
+    0.47766104
+   ],
+   "identifier": "AFDCE897-8A9D-4520-AF6E-F17E177FF620",
+   "parentIdentifier": "11793D80-8BE3-45F9-AF2F-34068D45F7C2",
+   "story": 0,
+   "transform": [
+    0.85681576,
+    0,
+    0.5156227,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568157,
+    0,
+    0.7989145,
+    -0.48607123,
+    -1.4338396,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.77302706,
+    0.583086,
+    0.36222053
+   ],
+   "identifier": "08877D88-C939-4AB1-A86E-74553832DD54",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.8568157,
+    0,
+    -0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.5156227,
+    0,
+    -0.8568157,
+    0,
+    -1.1152605,
+    0.81678385,
+    -0.1842655,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    1.2761011,
+    0.91195047,
+    0.64226204
+   ],
+   "identifier": "11793D80-8BE3-45F9-AF2F-34068D45F7C2",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.8568158,
+    0,
+    0.5156226,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568158,
+    0,
+    0.9923785,
+    -0.83886784,
+    -1.2982864,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.673436,
+    1.0914147,
+    0.3452645
+   ],
+   "identifier": "36920CC0-8062-4B81-91C9-774619FFE84E",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.85681564,
+    0,
+    -0.5156228,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.5156228,
+    0,
+    -0.85681564,
+    0,
+    -1.7391381,
+    0.56261957,
+    -0.5498144,
+    1
+   ]
+  },
+  {
+   "attributes": {},
+   "category": {
+    "dishwasher": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    0.5844723,
+    0.91195047,
+    0.65107185
+   ],
+   "identifier": "F8CDA831-6DB6-48C1-9482-A5DA79652AEC",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.85681576,
+    0,
+    0.51562274,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.51562274,
+    0,
+    0.85681576,
+    0,
+    0.19305877,
+    -0.83886784,
+    -1.774168,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.64105237,
+    0.9284543,
+    0.6970054
+   ],
+   "identifier": "04DE5F1B-7651-48AC-9D16-5386898D595F",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.8568158,
+    0,
+    -0.5156227,
+    0,
+    0,
+    1.0000001,
+    0,
+    0,
+    0.5156228,
+    0,
+    -0.85681593,
+    0,
+    -1.6623286,
+    -0.8306159,
+    -0.70885104,
+    1
+   ]
+  },
+  {
+   "attributes": {},
+   "category": {
+    "oven": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    0.76318365,
+    0.9263705,
+    0.69680077
+   ],
+   "identifier": "807FD3A5-AF23-4620-A58F-D4FDD13850A3",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.85681576,
+    0,
+    -0.51562274,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.85681576,
+    0,
+    -1.0607959,
+    -0.83165777,
+    -0.34673548,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.969273,
+    0.53214455,
+    0.63121694
+   ],
+   "identifier": "08EAF31C-6C77-4933-B9CD-46E50B415822",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.51562256,
+    0,
+    0.8568159,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.8568159,
+    0,
+    -0.5156225,
+    0,
+    0.9280185,
+    0.8422546,
+    0.69110936,
+    1
+   ]
+  },
+  {
+   "attributes": {},
+   "category": {
+    "stove": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.76318365,
+    0.100000024,
+    0.69680077
+   ],
+   "identifier": "B4BBE95A-A056-4FA1-8131-E5C97DD81989",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.85681576,
+    0,
+    -0.51562274,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.85681576,
+    0,
+    -1.0607959,
+    -0.31847245,
+    -0.34673548,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    1.2028757,
+    1.1002038,
+    0.34675464
+   ],
+   "identifier": "9B8189DD-1201-4559-8FC1-B55320A54356",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.5156225,
+    0,
+    0.8568159,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.8568159,
+    0,
+    -0.5156225,
+    0,
+    1.6178795,
+    0.55822504,
+    -0.1793966,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.57501966,
+    1.0914147,
+    0.3779815
+   ],
+   "identifier": "696C30FC-CF27-451F-8E4F-B29B10018CC7",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.85681576,
+    0,
+    -0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.85681576,
+    0,
+    -0.53384113,
+    0.56261957,
+    0.15642917,
+    1
+   ]
+  },
+  {
+   "attributes": {},
+   "category": {
+    "refrigerator": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    0.9465364,
+    1.7964134,
+    0.7659143
+   ],
+   "identifier": "F068E3AE-575B-49A0-BD35-8E233153BE91",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.5156225,
+    0,
+    0.85681593,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    -0.8568159,
+    0,
+    -0.51562244,
+    0,
+    0.86445147,
+    -0.3966362,
+    0.6661232,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.6289806,
+    0.9284543,
+    0.69659454
+   ],
+   "identifier": "DC2620BE-6B5C-46D0-9568-101D96260E49",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.85681576,
+    0,
+    -0.5156227,
+    0,
+    0,
+    1.0000001,
+    0,
+    0,
+    0.51562274,
+    0,
+    -0.8568158,
+    0,
+    -0.46443498,
+    -0.8306159,
+    0.012268521,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.58869684,
+    2.40317,
+    0.6295123
+   ],
+   "identifier": "4A95AE8C-A249-4947-9649-0DACF8A431A9",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.85681576,
+    0,
+    0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568158,
+    0,
+    -0.7152638,
+    -0.09325799,
+    -2.333368,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    0.432268,
+    0.91195047,
+    0.63220197
+   ],
+   "identifier": "CC64C90B-5AD3-4C42-8E56-3D8B4FE9C9B9",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.85681564,
+    0,
+    0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568157,
+    0,
+    -0.249848,
+    -0.83886784,
+    -2.024075,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    1.0559446,
+    1.0782311,
+    0.37911084
+   ],
+   "identifier": "534E4FBC-2148-45A6-98D2-0085F550BE89",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.8568158,
+    0,
+    0.5156226,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    -0.5156226,
+    0,
+    0.85681576,
+    0,
+    0.09864853,
+    0.56921136,
+    -1.9896874,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "medium": {}
+   },
+   "dimensions": [
+    1.5549129,
+    0.91195047,
+    0.645059
+   ],
+   "identifier": "F9337652-45E5-419A-B727-FE171FB57F90",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    -0.5156227,
+    0,
+    0.85681576,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.8568158,
+    0,
+    -0.51562274,
+    0,
+    1.5828105,
+    -0.83886784,
+    -0.41038787,
+    1
+   ]
+  },
+  {
+   "attributes": {
+    "StorageType": "cabinet"
+   },
+   "category": {
+    "storage": {}
+   },
+   "confidence": {
+    "low": {}
+   },
+   "dimensions": [
+    0.9035809,
+    0.47770953,
+    0.36803874
+   ],
+   "identifier": "6878BEC6-9F54-4434-9093-3275ADE884A9",
+   "parentIdentifier": null,
+   "story": 0,
+   "transform": [
+    0.8568158,
+    0,
+    0.5156227,
+    0,
+    0,
+    1,
+    0,
+    0,
+    -0.5156227,
+    0,
+    0.8568158,
+    0,
+    0.9409256,
+    0.8694721,
+    -1.4892751,
+    1
+   ]
+  }
+ ],
+ "floors": [
+  {
+   "category": {
+    "floor": {}
+   },
+   "completedEdges": [],
+   "confidence": {
+    "high": {}
+   },
+   "curve": null,
+   "dimensions": [
+    3.6835134,
+    2.6054358,
+    0
+   ],
+   "identifier": "41685B70-97C8-43CE-AE1A-9BDF35DE3468",
+   "parentIdentifier": null,
+   "polygonCorners": [
+    [
+     1.8120433,
+     -1.263068,
+     1.1920929e-07
+    ],
+    [
+     -1.7653937,
+     -1.2630684,
+     1.1920929e-07
+    ],
+    [
+     -1.765394,
+     1.2804304,
+     1.1920929e-07
+    ],
+    [
+     1.8120432,
+     1.2804312,
+     1.1920929e-07
+    ]
+   ],
+   "story": 0,
+   "transform": [
+    0.85681564,
+    0,
+    0.51562285,
+    0,
+    0.5156228,
+    0,
+    -0.8568157,
+    0,
+    0,
+    0.99999994,
+    0,
+    0,
+    0.047226865,
+    -1.294843,
+    -0.7474588,
+    1
+   ]
+  }
+ ],
+ "sections": [
+  {
+   "center": [
+    0.089269504,
+    -0.07359648,
+    -0.70886344
+   ],
+   "label": "kitchen",
+   "story": 0
+  }
+ ],
+ "referenceOriginTransform": [
+  0.7564496,
+  0,
+  0.654052,
+  0,
+  0,
+  1,
+  0,
+  0,
+  -0.654052,
+  0,
+  0.7564496,
+  0,
+  0.03536428,
+  0.013238312,
+  -0.11452975,
+  1
+ ]
+}

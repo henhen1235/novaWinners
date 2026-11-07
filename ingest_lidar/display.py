@@ -68,4 +68,6 @@ def write_navmesh_debug(path: Path, navmesh: dict, doors: list[dict]) -> None:
         post.apply_translation([c[0], 1.0, c[1]])
         post.visual.face_colors = [220, 40, 40, 255] if d["is_exit"] else [60, 90, 220, 255]
         scene.add_geometry(post, node_name=d["id"])
+    if not scene.geometry:  # degrade gracefully: an empty navmesh still gets a file
+        scene.add_geometry(trimesh.creation.box((0.01, 0.01, 0.01)), node_name="empty")
     scene.export(path)

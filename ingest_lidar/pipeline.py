@@ -148,7 +148,7 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     """Run Path B on one scan; writes outputs to out_dir and returns the scene dict."""
     input_path, out_dir = Path(input_path), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    if input_path.suffix.lower() == ".json":
+    if input_path.suffix.lower() == ".json" or input_path.is_dir():
         from .roomplan_to_scene import convert  # Path A
 
         return convert(input_path, out_dir, no_llm=no_llm)
@@ -193,7 +193,9 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         "warnings": warnings,
         "extensions": {"lidar": {"input_to_scene": np.round(o.matrix, 6).tolist(), "load": scan.info,
                                  "orient": {k: v for k, v in o.report.items() if k != "cues"},
-                                 "orient_cues": o.report["cues"]}},
+                                 "orient_cues": o.report["cues"],
+                                 "grid": {"x0": g.x0, "z0": g.z0, "res": g.res,
+                                          "png": "debug/overview.png"}}},
     }
     if not no_llm:
         from .semantics import label_rooms

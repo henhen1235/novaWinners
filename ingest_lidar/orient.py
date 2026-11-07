@@ -112,6 +112,55 @@ def _score(a: np.ndarray, c: dict, max_ext: float) -> float:
             + 0.5 * float(2.0 <= c["ext"] <= 4.8) + 0.3 * (1 - c["ext"] / max_ext) + 0.2 * abs(a[1]))
 
 
+def _refine_up_by_floor(up: np.ndarray, centers: np.ndarray, normals: np.ndarray, w: np.ndarray) -> np.ndarray:
+    """Least-squares plane through floor faces (|h| < 8 cm, normal within ~18 deg).
+
+    Face normals carry vertex noise (degrees at 3 cm noise); the floor plane fit
+    averages thousands of faces, so it pins the up axis to well under a degree.
+    centers must already be shifted so the floor is at offset 0 along up.
+    """
+    for _ in range(2):
+        h = centers @ up
+        sel = (np.abs(h) < 0.08) & (np.abs(normals @ up) > ALIGNED)
+        if sel.sum() < 100:
+            return up
+        u = np.cross(up, np.eye(3)[np.argmin(np.abs(up))])  # any in-plane direction
+        u /= np.linalg.norm(u)
+        v = np.cross(up, u)
+        q = centers[sel]
+        A = np.c_[q @ u, q @ v, np.ones(len(q))] * np.sqrt(w[sel])[:, None]
+        coef = np.linalg.lstsq(A, (q @ up) * np.sqrt(w[sel]), rcond=None)[0]
+        up = up - coef[0] * u - coef[1] * v
+        up /= np.linalg.norm(up)
+    return up
+
+
+def _peak(h: np.ndarray, w: np.ndarray) -> float:
+    """Offset of the heaviest 5 cm bin (smoothed over 3 bins)."""
+    edges = np.arange(h.min(), h.max() + 2 * BIN, BIN)
+    hist = np.convolve(np.histogram(h, edges, weights=w)[0], np.ones(3), "same")
+    return float(edges[np.argmax(hist)] + BIN / 2)
+
+
+def _floor_ceiling(up: np.ndarray, centers: np.ndarray, normals: np.ndarray, w: np.ndarray, signed: bool,
+                   floor0: float, ext0: float) -> tuple[float, float]:
+    """Floor = dominant up-facing plane, ceiling = dominant down-facing plane above it.
+
+    Extremes are fragile (phantom patches, noise); dominant planes are not. Point
+    clouds have unsigned normals, so they keep the extreme-based estimate.
+    """
+    if not signed:
+        return floor0, ext0
+    h, nd = centers @ up, normals @ up
+    fl, cl = nd > ALIGNED, nd < -ALIGNED
+    if fl.sum() < 50:
+        return floor0, ext0
+    floor = _peak(h[fl], w[fl])
+    above = cl & (h > floor + 1.8)
+    ceiling = _peak(h[above], w[above]) - floor if above.sum() >= 50 else ext0
+    return floor, ceiling
+
+
 def orient(scan: Scan, up_override: str | None = None, seed: int = 0) -> Orientation:
     """Estimate the input->scene transform. up_override like "+y" or "-z" skips up detection."""
     rng = np.random.default_rng(seed)
@@ -137,6 +186,10 @@ def orient(scan: Scan, up_override: str | None = None, seed: int = 0) -> Orienta
     horiz = [i for i in range(3) if i != k]
     ex = frame[max(horiz, key=lambda i: cues[i]["ext"])]
     ex = ex * np.sign(ex[np.argmax(np.abs(ex))])
+    up = _refine_up_by_floor(up, centers - up * floor_off, normals, w)
+    floor_off, ceiling = _floor_ceiling(up, centers, normals, w, signed, floor_off, c["ext"])
+    ex = ex - (ex @ up) * up
+    ex /= np.linalg.norm(ex)
     rot = np.stack([ex, up, np.cross(ex, up)])
     p = centers @ rot.T
     m = np.eye(4)
@@ -144,7 +197,7 @@ def orient(scan: Scan, up_override: str | None = None, seed: int = 0) -> Orienta
     m[:3, 3] = [-np.percentile(p[:, 0], 0.5), -floor_off, -np.percentile(p[:, 2], 0.5)]
     report = {"up_axis_index": k, "up_input_frame": up.round(4).tolist(), "axes": frame.round(4).tolist(),
               "cues": cues, "override": up_override, "det": float(np.linalg.det(rot))}
-    return Orientation(m, float(c["ext"]), report)
+    return Orientation(m, float(ceiling), report)
 
 
 def apply(m: np.ndarray, pts: np.ndarray) -> np.ndarray:

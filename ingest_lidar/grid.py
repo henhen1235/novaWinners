@@ -36,6 +36,7 @@ class Grid:
     body: np.ndarray
     upper: np.ndarray
     maxh: np.ndarray  # float32, max height above local floor below 2.6 m (0 if none)
+    noise_sigma: float = 0.0  # robust std of floor heights (m): scan noise estimate
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -101,8 +102,10 @@ def build_grid(pts: np.ndarray, res: float = RES) -> Grid:
     maxh = np.zeros(nz * nx, np.float32)
     m = (h > 0.05) & (h < 2.6)
     np.maximum.at(maxh, flat[m], h[m].astype(np.float32))
+    fh = h[np.abs(h) < 0.1]
+    sigma = float(1.4826 * np.median(np.abs(fh - np.median(fh)))) if len(fh) > 100 else 0.0
     return Grid(float(lo[0]), float(lo[1]), res, band(FLOOR_BAND), band(BODY_BAND), band(UPPER_BAND),
-                maxh.reshape(nz, nx))
+                maxh.reshape(nz, nx), sigma)
 
 
 def components(mask: np.ndarray, conn: int = 4) -> tuple[int, np.ndarray, np.ndarray]:
@@ -156,8 +159,9 @@ def build_masks(g: Grid, radius_m: float = AGENT_RADIUS_M, max_fill_m2: float = 
     free = keep[lab]
     dist = cv2.distanceTransform(free.astype(np.uint8), cv2.DIST_L2, 5) * g.res
     # cell-center distance: a surface lies on average half a cell inside its
-    # occupied cell, so center-to-center distance is the unbiased estimate
-    walkable = dist > radius_m
+    # occupied cell, so center-to-center distance is the unbiased estimate.
+    # Noise spills points about one sigma past each surface; give that back.
+    walkable = dist > radius_m - min(g.noise_sigma, 0.03)
     return Masks(floor, occupied, unknown, outside, free, walkable)
 
 
