@@ -2,7 +2,7 @@
 // viewer's Scenario select. Usage: node scripts/replay_index.ts   (run from blueprint/viewer)
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { scenarioName } from "../src/names.ts";
+import { buildingName, scenarioName } from "../src/names.ts";
 
 const root = "public/replays";
 const runs = readdirSync(root, { withFileTypes: true })
@@ -22,5 +22,17 @@ const runs = readdirSync(root, { withFileTypes: true })
     }
     return { dir: entry.name, title: scenarioName(entry.name, title), scene, url: `/replays/${entry.name}/replay.json` };
   });
-writeFileSync(join(root, "index.json"), JSON.stringify({ runs }, null, 1));
+// Buildings for the header's Building select: every public/<dir>/scene.json that has recorded runs,
+// opened on its run with suggestions if there is one, else its first run.
+const buildings = readdirSync("public", { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(join("public", entry.name, "scene.json")))
+  .map((entry) => {
+    const own = runs.filter((run) => run.scene.split("/").includes(entry.name));
+    const best = own.find((run) => existsSync(join(root, run.dir, "recommendations.json"))) ?? own[0];
+    const meta = JSON.parse(readFileSync(join("public", entry.name, "scene.json"), "utf8")).meta ?? {};
+    const glb = existsSync(join("public", entry.name, "display.glb")) ? `/${entry.name}/display.glb` : "";
+    return { key: entry.name, title: buildingName(meta.name), scene: `/${entry.name}/scene.json`, glb, replay: best?.url ?? "" };
+  })
+  .filter((building) => building.replay);
+writeFileSync(join(root, "index.json"), JSON.stringify({ runs, buildings }, null, 1));
 console.log(`${runs.length} replays -> ${join(root, "index.json")}`);

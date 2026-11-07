@@ -215,6 +215,39 @@ function drawTitleBlock(data: SceneDoc) {
   if (data.levels.length > 1) titleBlock.classList.add("folded"); // side by side needs the corner
   buildingTitle.textContent = headerTitle(data);
   void scenarioPicker(data);
+  void buildingPicker();
+}
+
+// Building select: every building with recorded runs (public/replays/index.json "buildings").
+// Switching opens that building on its default run and keeps the current floor view.
+async function buildingPicker() {
+  let buildings: { key: string; title: string; scene: string; glb: string; replay: string }[] = [];
+  try {
+    const response = await fetch("/replays/index.json");
+    if (!response.ok) return;
+    buildings = (await response.json()).buildings ?? [];
+  } catch {
+    return; // no index: no building switcher
+  }
+  if (buildings.length < 2) return;
+  const key = sceneUrl.split("/").filter(Boolean)[0] ?? "";
+  const select = document.querySelector<HTMLSelectElement>("#building-select")!;
+  select.replaceChildren(...buildings.map((b) => Object.assign(document.createElement("option"), { value: b.key, textContent: b.title })));
+  if (!buildings.some((b) => b.key === key)) select.prepend(Object.assign(document.createElement("option"), { value: key, textContent: buildingTitle.textContent ?? key }));
+  select.value = key;
+  select.addEventListener("change", () => {
+    const b = buildings.find((item) => item.key === select.value);
+    if (!b) return;
+    const url = new URL(location.origin + location.pathname);
+    url.searchParams.set("scene", b.scene);
+    if (b.glb) url.searchParams.set("glb", b.glb);
+    url.searchParams.set("replay", b.replay);
+    const view = params.get("view");
+    if (view) url.searchParams.set("view", view);
+    location.href = url.toString();
+  });
+  document.querySelector<HTMLElement>("#building-pick")!.hidden = false;
+  buildingTitle.hidden = true;
 }
 
 // Scenario select: other recorded runs of this building (public/replays/index.json from
