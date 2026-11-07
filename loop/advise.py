@@ -101,20 +101,22 @@ def _room_at(idx: dict, level: str, x: float, z: float) -> str | None:
 
 
 def exit_candidates(scene: dict) -> list[dict]:
-    """Non-exit doors on a level's outer outline, on levels that already discharge outside.
+    """Non-exit doors on a level's outer outline. at_grade: the level already discharges outside;
+    elsewhere a new exit needs an outside stair or a safe landing (the sim treats it as an exit).
 
     ponytail: geometric screen (door midpoint within 0.35 m of the outline); whether the far side
     is a safe place outside is for the architect to confirm."""
     ex_doors = {e["door_id"] for e in scene["exits"]}
     ex_levels = {e["level"] for e in scene["exits"]}
     out = []
-    for lv in ex_levels:
+    for lv in [lv["id"] for lv in scene["levels"]]:
         u = unary_union([Polygon(r["polygon"]).buffer(0.15) for r in scene["rooms"] if r["level"] == lv])
         rings = [g.exterior for g in getattr(u, "geoms", [u])]
         for d in scene["doors"]:
             if d["level"] == lv and d["id"] not in ex_doors and \
                     min(r.distance(LineString(d["segment"]).centroid) for r in rings) < 0.35:
-                out.append({"door": d["id"], "level": lv, "width_m": d["width_m"], "connects": d["connects"]})
+                out.append({"door": d["id"], "level": lv, "width_m": d["width_m"], "connects": d["connects"],
+                            "at_grade": lv in ex_levels})
     return out
 
 
@@ -310,8 +312,10 @@ TOOLS = [
 def _system() -> str:
     return ("You advise a building's safety team after an evacuation simulation. You get an evidence pack (ids E1..En, "
             "all computed by code) and a scene summary. First call submit_findings: what went wrong, each finding citing "
-            "evidence ids and scene ids. Then call submit_recommendations: up to 6 changes, operations (staffing, PA, plans, "
-            "signage) or design (add_exit, widen_door, refuge, layout). Use only ids that appear in the inputs. add_exit must "
+            "evidence ids and scene ids. Then call submit_recommendations: up to 8 changes, operations (staffing, PA, plans, "
+            "signage) and at least 3 design changes for the architect, preferably ones the simulator can test: add_exit "
+            "(one specific door from exterior_doors_not_exits; at_grade false means it needs an outside stair) or widen_door "
+            "(one specific door or exit id, widened up to 1.5x, max 2.4 m). Use only ids that appear in the inputs. add_exit must "
             "reference one door from exterior_doors_not_exits; widen_door a door or exit id; signage an exit id (and a room); "
             "staffing a room id. basis must be one principle id from: " +
             "; ".join(f"{k}: {v}" for k, v in PRINCIPLES.items()) +
@@ -461,10 +465,13 @@ def _stat(sums: list[dict]) -> dict:
             "stragglers": med("stragglers"), "max_queue": med("max_queue")}
 
 
-def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], seeds: list[int], work: Path) -> list[dict]:
+def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], seeds: list[int], work: Path) -> tuple[list[dict], dict]:
     """Attach verified {simulated, seeds, before, after} (or simulated false) and rank by measured effect, then effort."""
     n0 = sum(g["count"] for g in scenario["occupants"])
-    before = _stat(_runs(scene, scenario, seeds, work / "baseline", n0))
+    base = work / "baseline"
+    done = [base / f"s{x}" / "summary.json" for x in seeds]
+    before = _stat([json.loads(f.read_text()) for f in done] if all(f.exists() for f in done)  # same scenario and seeds
+                   else _runs(scene, scenario, seeds, base, n0))
     out = []
     for i, rec in enumerate(recs):
         p = to_patch(rec, scene, scenario, cands)
@@ -473,6 +480,13 @@ def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], see
             continue
         after = _stat(_runs(p[0], p[1], seeds, work / f"rec{i + 1}", n0))
         out.append({**rec, "verified": {"simulated": True, "seeds": len(seeds), "before": before, "after": after}})
+    combo, titles = (scene, scenario), []
+    for rec in recs:  # every executable change applied together, in order; a patch that no longer applies is skipped
+        p = to_patch(rec, combo[0], combo[1], cands)
+        if p is not None:
+            combo, titles = p, titles + [rec["title"]]
+    combined = {"recommendations": titles, "verified": {"simulated": bool(titles), "seeds": len(seeds), "before": before,
+                "after": _stat(_runs(combo[0], combo[1], seeds, work / "combined", n0)) if titles else None}}
 
     def gain(r: dict) -> tuple:
         v = r["verified"]
@@ -481,7 +495,7 @@ def verify(recs: list[dict], scene: dict, scenario: dict, cands: list[dict], see
         b, a = v["before"], v["after"]
         return (0, (a["stragglers"] or 0) - (b["stragglers"] or 0), (a["t90_s"] or 1e9) - (b["t90_s"] or 1e9),
                 EFFORT.get(r.get("effort"), 1))
-    return sorted(out, key=gain)
+    return sorted(out, key=gain), combined
 
 
 # ---------------------------------------------------------------- report
@@ -501,6 +515,9 @@ def report_md(res: dict) -> str:
         lines += [f"{i}. **{r['title']}** ({r['kind']}, effort {r['effort']}; basis {r['basis']}; evidence {', '.join(r['evidence'])}). "
                   f"{r['why']} Expected: {r['expected_effect']} Measured: {eff(r)}."
                   for i, r in enumerate([r for r in res["recommendations"] if r["audience"] == aud], 1)] or ["None."]
+    c = res.get("combined") or {}
+    if c.get("recommendations"):
+        lines += ["", "## All testable changes together", "", f"{'; '.join(c['recommendations'])}. Measured: {eff(c)}."]
     lines += ["", "## Evidence", ""] + [f"- {e['id']}: {e['text']}" for e in res["evidence"]]
     lines += ["", "Principles: " + " ".join(f"{k}: {v}" for k, v in PRINCIPLES.items()), "",
               f"Model {res['model']}; LLM cost ${res['cost_usd']:.4f}. Screening checks are not a code review; "
@@ -526,9 +543,9 @@ def advise(run_dir: Path, scene_path: str, scenario_path: str, out: Path, model:
     res = heuristic(evidence, data, scene, scenario, cands) if no_llm else \
         diagnose_and_propose(evidence, summary, ids, model, llm)
     seeds = [42 + i for i in range(n_seeds)]
-    recs = verify(res["recommendations"], scene, scenario, cands, seeds, out.parent / "advise_runs")
+    recs, combined = verify(res["recommendations"], scene, scenario, cands, seeds, out.parent / "advise_runs")
     body = {"model": "heuristic" if no_llm else model, "summary": res["summary"], "evidence": evidence,
-            "findings": res["findings"], "recommendations": recs, "cost_usd": round(res["cost_usd"], 4)}
+            "findings": res["findings"], "recommendations": recs, "combined": combined, "cost_usd": round(res["cost_usd"], 4)}
     out.write_text(json.dumps(body, indent=1))
     out.with_name("report.md").write_text(report_md(body))
     return body
