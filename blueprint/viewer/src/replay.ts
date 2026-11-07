@@ -6,6 +6,7 @@ import type { ViewerContext } from "./context";
 import { openInterview, refreshInterview, updateInterview, type DecisionRecord } from "./interview";
 import { People, type AgentSample } from "./people";
 import { parseFrames, type ParsedFrames } from "./frames";
+import { startSuggestions, type Suggestions } from "./recommendations";
 import { agentNames, clockText, personaName, scenarioName } from "./names";
 
 export type ReplayEvent = { t: number; kind: string; agent?: string; ref?: string; text?: string };
@@ -207,8 +208,11 @@ export async function startReplay(context: ViewerContext, replayUrl: string | nu
   // ?names=Classic agents,LLM agents overrides the run captions for the demo.
   const names = new URLSearchParams(location.search).get("names")?.split(",");
   runs.forEach((run, i) => (run.name = names?.[i]?.trim() || run.name));
+  // Suggested changes (recommendations.json next to the replay) are for a single run, not a comparison.
+  suggestions = runs.length === 1 ? startSuggestions(context, runs[0].url) : null;
   play(context, runs);
 }
+let suggestions: Suggestions | null = null;
 
 /** Plays loaded (or, with `live`, still growing) runs: agents, clock, feed, counters, interviews. */
 export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): PlayerHandle {
@@ -564,6 +568,7 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
   const pins = new Map<Run, CSS2DObject[]>();
   function drawInside(t: number) {
     const atEnd = !live && t >= duration - 0.01;
+    if (atEnd) suggestions?.reveal();
     const all = runs.map((run) => stillInside(run, t));
     const key = `${atEnd}|${all.map((groups) => groups.map((g) => `${g.key}:${g.members.length}`).join(",")).join(";")}`;
     if (key === insideKey) return;
