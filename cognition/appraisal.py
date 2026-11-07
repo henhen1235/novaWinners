@@ -14,6 +14,7 @@ from .personas import baseline, contagion_traits, credibility, persona
 HAZARD_KINDS = {"fire": 1.0, "smoke": 0.9, "intruder": 0.95, "gunshot": 0.85}
 CLAIM_WEIGHT = {"hazard": 0.7, "told_to_leave": 0.6, "exit_blocked": 0.3}
 ALARM_WEIGHT, PA_WEIGHT, SOCIAL_WEIGHT = 0.6, 0.8, 0.6
+ALARM_REPEAT_WEIGHT, ALARM_REPEAT_S = 0.5, 120.0  # ours, calibration knobs
 COPING_T_S = 90.0  # time scale for "an exit this far away still works"; ours, calibrate
 CONTAGION_WINDOW_S = 2.0  # ponytail: neighbours sampled only at decision time; integrate over 2 s, not the gap
 EVAC_ACTIONS = {"EVACUATE", "FOLLOW", "TURN_BACK", "TAKE_STAIRS", "USE_ELEVATOR"}
@@ -207,7 +208,11 @@ def appraise(percepts: list[dict], beliefs: list[dict], options: list[dict], per
             cues.append(ALARM_WEIGHT * b["conf"])
         elif b["key"] == "told_to_leave":
             cues.append((PA_WEIGHT if b["source"]["kind"] == "pa" else CLAIM_WEIGHT["told_to_leave"]) * b["conf"])
-    cues.append(SOCIAL_WEIGHT * sp * credibility(persona_name, "stranger"))
+    # people leaving: a PADM social cue; skeptics discount it (their persona needs two people or the threat)
+    cues.append(SOCIAL_WEIGHT * sp * (0.4 if persona(persona_name)[0] == "skeptic" else 1.0))
+    # an alarm that keeps ringing is repeated warning, which raises belief (Mileti and Peek: repetition)
+    ring = max((float(p.get("t_since_s") or 0) for p in percepts if p.get("kind") == "alarm"), default=0.0)
+    cues.append(ALARM_REPEAT_WEIGHT * min(1.0, ring / ALARM_REPEAT_S) * min(1.0, credibility(persona_name, "alarm") / 0.5))
     s = noisy_or(cues)
 
     hazards = [p for p in percepts if p.get("kind") in HAZARD_KINDS]

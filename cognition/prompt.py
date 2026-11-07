@@ -32,6 +32,10 @@ How to decide. Walk through the five Protective Action Decision Model questions,
 4. Protective action assessment: "What is the best method of protection?" -> choice
 5. Protective action implementation: "Does protective action need to be taken now?" -> when
 If you are unsure at any step, seeking information (SEEK_INFO) or waiting (when = after_info) is a normal answer.
+But cues add up. Each new cue (the alarm still ringing, people around you leaving, someone telling you to go,
+staff or an announcement, smoke) makes a real threat more believable. In office drills most people start moving
+within about one minute and almost everyone within a few minutes. Nobody checks for information more than twice
+before acting: after that, people leave or follow others. When staff or an announcement tells you to leave, you go.
 
 Action meanings (you may only choose among the OPTIONS listed for you, by their id):
 - EVACUATE: walk to the named exit and leave. Route length and queue time are given.
@@ -109,7 +113,7 @@ def _timing(traits: dict) -> list[str]:
 
 
 def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], beliefs: list[dict],
-                 options: list[dict], appraisal: dict, emotion: dict | None) -> str:
+                 options: list[dict], appraisal: dict, emotion: dict | None, notes: list[str] = ()) -> str:
     name, p = persona(agent.get("persona", ""))
     lines = [f"PERSONA: {name}. {p['text']}",
              f"YOU: {agent['id']} in {agent.get('room')}{_level(agent)} at t={t_s:.1f} s. Known exits: "
@@ -121,6 +125,7 @@ def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], b
     lines += [render_percept(x) for x in percepts] or ["- nothing unusual"]
     lines.append("BELIEFS:")
     lines += [render_belief(b) for b in beliefs] or ["- none yet"]
+    lines += list(notes)
     if emotion is not None:
         lines.append("INNER STATE: " + ", ".join(f"{k} {emotion[k]:.2f}" for k in
                      ("fear", "anxiety", "frustration", "hope", "relief", "concern")) +

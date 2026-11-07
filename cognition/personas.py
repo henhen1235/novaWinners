@@ -21,20 +21,22 @@ PERSONAS: dict[str, dict] = {
     },
     "regular_employee": {
         "text": "You work here every day and know your usual way in plus one other exit. You tend to wait for "
-                "confirmation before leaving and may finish what you are doing first. What makes you go: a warden "
-                "telling you, seeing or smelling smoke, or most coworkers leaving.",
+                "confirmation before leaving and may finish what you are doing first, but only until a second, different "
+                "cue (coworkers leaving, someone telling you, smoke) or about 2 minutes after the alarm. What makes "
+                "you go at once: a warden telling you, seeing or smelling smoke, or most coworkers leaving.",
         "ocean": (0.0, 0.3, 0.1, 0.3, 0.0), "act_at": 0.5, "dependants": 0.0,
         "cred": {"warden": 0.85, "known": 0.65, "alarm": 0.5, "pa": 0.6},
     },
     "visitor": {
         "text": "First time in this building; you only know the way you came in. You look to staff and to what "
-                "other people are doing. What makes you go: a staff instruction, or a crowd moving.",
+                "other people are doing. What makes you go: a staff instruction, or people near you leaving; you do not "
+                "stay behind on your own for more than about a minute and a half.",
         "ocean": (0.1, 0.0, 0.0, 0.3, 0.3), "act_at": 0.45, "dependants": 0.0,
         "cred": {"warden": 0.85, "stranger": 0.5, "pa": 0.7, "alarm": 0.5},
     },
     "committed_task": {
         "text": "You are in the middle of a task you care about (hosting a meeting, serving a queue). You keep at "
-                "it until a person asks you to leave or you see the threat yourself.",
+                "it until a person asks you to leave, you see the threat yourself, or about 3 minutes have passed.",
         "ocean": (0.0, 0.6, 0.2, 0.2, -0.1), "act_at": 0.65, "dependants": 0.2,
         "cred": {"warden": 0.9, "alarm": 0.35, "pa": 0.5},
     },
@@ -57,7 +59,7 @@ PERSONAS: dict[str, dict] = {
     },
     "skeptic": {
         "text": "You assume alarms are drills or false. You ignore the alarm until you see or smell smoke yourself, "
-                "or two different people tell you to go.",
+                "or two different people tell you to go, or nearly everyone around you has left.",
         "ocean": (-0.3, 0.2, 0.0, -0.3, -0.2), "act_at": 0.8, "dependants": 0.0,
         "cred": {"alarm": 0.15, "pa": 0.35, "warden": 0.5, "known": 0.3, "stranger": 0.15},
     },

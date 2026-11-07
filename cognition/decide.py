@@ -18,6 +18,7 @@ from . import llm
 from .appraisal import EVAC_ACTIONS, PROTECTIVE, HAZARD_KINDS, appraise, dominant, emotions, exit_open_prob
 from .appraisal import CANNOT_STAIRS, STAIR_KINDS, _next_id, parse_claims, stair_crowd_s, stair_ok_prob
 from .appraisal import update_beliefs
+from .pacing import WAIT_ACTIONS, cue_summary, limits
 from .personas import contagion_traits, persona
 from .prompt import messages, user_message
 from .schemas import Decision, DecisionRecord
@@ -158,7 +159,7 @@ def build_inputs(view: dict) -> dict:
     return {"run_id": run_id, "tick": tick, "t_s": float(view["t_s"]), "agent": agent,
             "trigger": view.get("trigger") or {"kind": "periodic"}, "percepts": percepts, "dropped": dropped,
             "beliefs_before": list(prior.values()), "options": list(view.get("options") or []),
-            "mind_before": {k: mind[k] for k in ("emotion", "t_s", "harm", "certainty") if k in mind},
+            "mind_before": {k: mind[k] for k in ("emotion", "t_s", "harm", "certainty", "waits") if k in mind},
             "neighbours": neighbours}
 
 
@@ -180,15 +181,36 @@ def compute_state(inp: dict, remove: frozenset = frozenset(), keep_only: set | N
     traits = {**(agent.get("traits") or {}), "target_exit": agent.get("target_exit")}
     a = appraise(percepts, after, inp["options"], name, inp["trigger"], traits)
     emo, src = emotions(a, inp["mind_before"], inp["t_s"], name, neighbours)
-    ids = pids | {b["id"] for b in after} | {o["id"] for o in inp["options"]}
+    cues = cue_summary(percepts, after)
+    lim = limits(agent, inp["mind_before"], cues, inp["options"])
+    offered = [o for o in inp["options"] if o["id"] in lim["offered"]]
+    ids = pids | {b["id"] for b in after} | {o["id"] for o in offered}
     return {"percepts": percepts, "beliefs_after": after, "appraisal": a, "emotion": emo, "emotion_sources": src,
-            "ids": ids}
+            "ids": ids, "cues": cues, "limits": lim, "offered": offered}
 
 
 def prompt_for(inp: dict, st: dict, include_emotion: bool | None = None) -> list[dict]:
     inc = CONFIG["include_emotion"] if include_emotion is None else include_emotion
     return messages(user_message(inp["agent"], inp["t_s"], inp["trigger"], st["percepts"], st["beliefs_after"],
-                                 inp["options"], st["appraisal"], st["emotion"] if inc else None))
+                                 st["offered"], st["appraisal"], st["emotion"] if inc else None,
+                                 pacing_notes(st["cues"], st["limits"])))
+
+
+def pacing_notes(cues: dict, lim: dict) -> list[str]:
+    parts = []
+    if cues["alarm_s"] is not None:
+        parts.append(f"alarm sounding for {cues['alarm_s']:g} s")
+    if cues["people_leaving"]:
+        parts.append(f"{cues['people_leaving']} people near you leaving")
+    if cues["told_to_leave"]:
+        parts.append(f"told to leave {cues['told_to_leave']} time(s)" + (" by staff or PA" if cues["staff_or_pa"] else ""))
+    if cues["hazard"]:
+        parts.append("a hazard seen or reported")
+    notes = [f"CUES SO FAR: {', '.join(parts) or 'none'}; you noticed the first cue {lim['since_cue_s']:g} s ago; "
+             f"you have checked for information {lim['waits'].get('SEEK_INFO', 0)} time(s)."]
+    if lim["overdue"]:
+        notes.append("You have waited as long as a person like you would; you act now with one of the options.")
+    return notes
 
 
 # ---------- 6 validate ----------
@@ -261,7 +283,7 @@ def fallback(inp: dict, st: dict) -> dict:
     """Deterministic persona policy. Same state in, same decision out."""
     name, p = persona(inp["agent"].get("persona", ""))
     traits = {"entry_exit": inp["agent"].get("entry_exit"), **(inp["agent"].get("traits") or {})}
-    a, opts, beliefs = st["appraisal"], inp["options"], st["beliefs_after"]
+    a, opts, beliefs = st["appraisal"], st["offered"], st["beliefs_after"]
     by = lambda act: [o for o in opts if o.get("action") == act]  # noqa: E731
     cues = [b["id"] for b in beliefs if b["value"] and not b["key"].startswith("exit_open")]
     seen = [x["id"] for x in st["percepts"] if x["kind"] in HAZARD_KINDS]
@@ -270,7 +292,8 @@ def fallback(inp: dict, st: dict) -> dict:
     waited = (inp["trigger"].get("kind") == "premove_done" or
               float(traits.get("t_since_cue_s") or 0) >= float(traits.get("premove_s") or 1e9))
     act = (a["certainty"] >= p["act_at"] or (name == "skeptic" and (seen or len(speakers) >= 2))
-           or (waited and name != "skeptic") or (waited and a["certainty"] >= 0.5))
+           or (waited and name != "skeptic") or (waited and a["certainty"] >= 0.5)
+           or not any(o.get("action") in ("CONTINUE_TASK", "SEEK_INFO") for o in opts))
     if not act:
         pick = (by("CONTINUE_TASK") or by("SEEK_INFO") or opts)[0]
         need, when = ("later" if a["certainty"] > 0.1 else "no"), "after_info"
@@ -325,7 +348,7 @@ def deliberate(inp: dict, st: dict, tag: str = "", temperature: float | None = N
     msgs = prompt_for(inp, st, include_emotion)
     sha = hashlib.sha256(json.dumps(msgs).encode()).hexdigest()
     out = {"prompt_sha256": sha, "raw_output": "", "latency_ms": 0, "cost_usd": 0.0}
-    if not inp["options"] or CONFIG["offline"]:
+    if not st["offered"] or CONFIG["offline"]:
         return {**out, "decision": fallback(inp, st), "validation": {"status": "fallback", "errors":
                 ["offline" if CONFIG["offline"] else "no options"]}, "source": "fallback"}
     model = model_for(inp["agent"])
@@ -340,7 +363,7 @@ def deliberate(inp: dict, st: dict, tag: str = "", temperature: float | None = N
         out["latency_ms"] += meta["latency_ms"]
         out["cost_usd"] += meta["cost_usd"]
         out["raw_output"] = raw
-        dec, errs = validate(raw, st["ids"], inp["options"], *validate_ctx(inp, st))
+        dec, errs = validate(raw, st["ids"], st["offered"], *validate_ctx(inp, st))
         if dec:
             return {**out, "decision": dec, "source": "llm",
                     "validation": {"status": "repaired" if attempt else "ok", "errors": errors}}
@@ -377,7 +400,11 @@ def inputs_from_record(rec: dict) -> dict:
 
 
 def _remember(rec: dict) -> None:
-    MINDS[rec["agent_id"]] = {"persona": rec["persona"], "emotion": rec["emotion"], "t_s": rec["t_s"],
+    act = next((o.get("action") for o in rec["options"] if o["id"] == rec["decision"]["padm"]["choice"]), None)
+    waits = dict(MINDS.get(rec["agent_id"], {}).get("waits") or {})
+    if act in WAIT_ACTIONS:
+        waits[act] = waits.get(act, 0) + 1
+    MINDS[rec["agent_id"]] = {"waits": waits,"persona": rec["persona"], "emotion": rec["emotion"], "t_s": rec["t_s"],
                               "pos": (rec.get("inputs") or {}).get("agent", {}).get("pos"),
                               "harm": rec["appraisal"]["harm"], "certainty": rec["appraisal"]["certainty"],
                               "beliefs": rec["beliefs_after"]}

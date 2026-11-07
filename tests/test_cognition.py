@@ -43,7 +43,7 @@ def fake_chat(messages, **kw):
     ev = [smoke.group(1)] if smoke else ["p1"]
     out = {"padm": {"threat_real": "yes" if smoke else "unsure", "threat_evidence": ev,
                     "need_action": "yes" if smoke else "later", "need_evidence": ev,
-                    "options_considered": ["o2", "o4"], "choice": choice, "why": "test",
+                    "options_considered": [choice], "choice": choice, "why": "test",
                     "choice_evidence": ev, "when": "now" if smoke else "after_task"},
            "say": "Go now" if smoke else None, "feel": "afraid", "confidence": 0.6}
     return json.dumps(out), {"cached": False, "latency_ms": 5, "cost_usd": 0.0001}
@@ -305,3 +305,51 @@ def test_redundant_label_only_when_no_single_reason_is_necessary(tmp_path):
         **rec["decision"]["padm"], "choice_evidence": ["p2", "p1"]}}}, Budget(40))
     labels = {r["id"]: r["label"] for r in reasons}
     assert labels == {"p2": "necessary", "p1": "stated, not decisive"}
+
+
+def pacing_view(persona="regular_employee", since=30.0, extra=(), premove=60.0, aid="a_70"):
+    v = view(aid=aid, persona=persona, smoke=False)
+    v["percepts"][0]["t_since_s"] = since
+    v["percepts"] += list(extra)
+    v["agent"]["traits"].update({"t_since_cue_s": since, "premove_s": premove})
+    return v
+
+
+def offered_actions(v):
+    st = D.compute_state(D.build_inputs(v))
+    return {o["action"] for o in st["offered"]}
+
+
+def test_regular_employee_keeps_working_only_until_second_cue_or_two_minutes():
+    assert "CONTINUE_TASK" in offered_actions(pacing_view(since=30))
+    assert "CONTINUE_TASK" not in offered_actions(pacing_view(since=130, premove=200))
+    crowd = [{"id": "p9", "kind": "people_moving", "count": 3, "channel": "sight"}]
+    assert "CONTINUE_TASK" not in offered_actions(pacing_view(since=30, extra=crowd))
+
+
+def test_seek_info_at_most_twice_and_nothing_to_wait_for_after_deadline():
+    D.MINDS["a_71"] = {"persona": "visitor", "waits": {"SEEK_INFO": 2}, "t_s": 0.0}
+    assert "SEEK_INFO" not in offered_actions(pacing_view(persona="visitor", aid="a_71"))
+    late = offered_actions(pacing_view(since=100, premove=60))  # deadline 1.5 x 60 s = 90 s
+    assert not late & {"SEEK_INFO", "CONTINUE_TASK"} and "EVACUATE" in late
+
+
+def test_waits_are_counted_across_decisions():
+    D.configure(offline=True)
+    v = pacing_view(persona="skeptic", aid="a_72", premove=600)
+    for t in range(3):
+        D.decide({**v, "tick": 100 + 10 * t})
+    assert sum(D.MINDS["a_72"]["waits"].values()) == 3
+
+
+def test_ringing_alarm_and_people_leaving_raise_threat_certainty():
+    s = lambda v: D.compute_state(D.build_inputs(v))["appraisal"]["certainty"]  # noqa: E731
+    crowd = [{"id": "p9", "kind": "people_moving", "count": 4, "channel": "sight"}]
+    assert s(pacing_view(since=5)) < s(pacing_view(since=90)) < s(pacing_view(since=90, extra=crowd))
+
+
+def test_prompt_lists_accumulated_cues():
+    inp = D.build_inputs(pacing_view(since=100, premove=60))
+    user = D.prompt_for(inp, D.compute_state(inp))[1]["content"]
+    assert "CUES SO FAR: alarm sounding for 100 s" in user and "you act now" in user
+    assert "CONTINUE_TASK" not in user.split("OPTIONS:")[1]
