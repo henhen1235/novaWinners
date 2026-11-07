@@ -36,6 +36,8 @@ interface Socket {
   readyState: number;
 }
 
+declare const __REPO_ROOT__: string; // vite.config.ts define
+
 const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
 
 /** Binary frame: float32 t, uint32 n, float32[2n] x,z, uint8[n] state code, uint8[n] level index (little-endian). */
@@ -326,11 +328,9 @@ export function startLive(context: ViewerContext, target: string | null) {
     result.replaceChildren();
     const marker = "blueprint/viewer/public";
     const at = runDir.indexOf(marker);
-    if (at < 0) {
-      result.textContent = `Replay written to ${runDir}. Start sim.serve with NOVA_LIVE_RUNS=blueprint/viewer/public/live to open it here.`;
-      return;
-    }
-    const base = runDir.slice(at + marker.length).replace(/\/$/, "");
+    // Under public/ it is served as is; anywhere else in the repo (out/live) it goes through vite's /@fs/.
+    const absolute = runDir.startsWith("/") ? runDir : `${__REPO_ROOT__}/${runDir}`;
+    const base = (at >= 0 ? runDir.slice(at + marker.length) : `/@fs${absolute}`).replace(/\/$/, "");
     const link = document.createElement("a");
     const query = new URLSearchParams({ scene: sceneUrl, glb: params.get("glb") ?? "", replay: `${base}/replay.json` });
     link.href = `?${query}`;
