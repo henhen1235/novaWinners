@@ -1,4 +1,4 @@
-{"schema_version": "0.1", "scene": "blueprint/out/office/scene.json", "seed": 42, "duration_s": 300,
+{"schema_version": "0.1", "scene": "blueprint/out/office/scene.json", "seed": 42, "duration_s": 420,
  "events": [
   {"id": "ev_fire", "type": "fire", "t_start_s": 0, "at": {"room": "r_L1_003"}, "params": {"block_after_s": 45}},
   {"id": "ev_block", "type": "blocked_exit", "t_start_s": 30, "at": {"exit": "e_L1_001"}, "params": {}}

@@ -71,7 +71,11 @@ from scene.links (type stairs, cost_multiplier, bidirectional) or scene.stairs. 
 persona trait (0.6 m/s down, 0.4 up; older adults 0.3 down), stair flow 1.1 persons/s per meter of
 stair width. Elevators are never used. People who cannot use stairs (mobility_impaired) are offered
 GO_TO_REFUGE and wait at the landing (state waiting_at_refuge) until a staff agent chooses HELP;
-the helper carries them (0.6 m/s level, 0.3 m/s stairs, state helping / carried).
+the helper carries them (0.6 m/s level, 0.3 m/s stairs, state helping / carried). HELP is
+offered only to the nearest free staff member for each person (planar meters plus 30 m per floor
+apart, path reachable), at most one person per staff member; events help_assigned, helping
+(pick-up) and help_released (helper gave up or left). The person entered by is drawn with a
+preference for entrances near where they start (weight exp(-route_m / 60)).
 
 The decider owns the choices; the sim only executes walking, queuing and stopping. Decision
 triggers (`trigger.kind`): cue_noticed, premove_done, periodic (20 s waiting, 10 s seeking info),
@@ -84,7 +88,10 @@ help_request (staff, radio), picked_up (helper, after picking someone up).
 
 view.agent: id, persona, model, pos [x, z], level, room, known_exits, entry_exit, target_exit,
 target_stair, carrying (id or null), traits (speed_mps, premove_s, notice_s, sign_follow_p,
-social_threshold, stair_down_mps, stair_up_mps, uses_stairs, t_since_cue_s, activity, state, pace).
+social_threshold, stair_down_mps, stair_up_mps, uses_stairs, pressure_timeout_s, t_since_cue_s,
+activity, state, pace). pressure_timeout_s (persona p95 pre-movement clipped to 120..300 s) is used
+only by the rule policy: everyone moves by then, and skeptics also move on any second cue (urgent or
+official speech, smoke, two or more people seen leaving).
 
 view.percepts kinds: alarm, fire / smoke (where, level, dist_m), people_moving (count, toward),
 person (ref, persona, doing, state, toward, dist_m; up to 8 nearest in sight), message (from, text,
@@ -104,10 +111,16 @@ Scenario extras the sim reads: events open_exit {exit} and pa_announcement {para
 params.claim} (official, urgent, reaches everyone); blocked_exit / fire / smoke can target a
 stair ({"stair": id} or a stairwell room); occupants[].familiar_exit sets the exit they came in by;
 `interventions: [{"type": "signage", "exit": id, "p": 0.8}]` makes each occupant know that exit
-with probability p. Wardens are occupants with persona staff. For programmatic drivers (loop/),
+with probability p; with `"room": id` it only reaches people who start in that room or later
+decide while standing in it (once each). A claim `{"exit_open": id}` (string or list) from an
+official source (pa_announcement or staff speech) overrides a hearsay blocked belief; own sight
+still wins over both. A rumor is a social cue, not an alarm: it never starts anyone's cue, and
+speech is urgent only from staff or from someone who saw the hazard. If a scenario has no
+alarm_only, fire, smoke or pa_announcement event, the alarm cue starts at t = 0. Wardens are occupants with persona staff. For programmatic drivers (loop/),
 `Sim(scene, scenario, seed, decider, hooks=[fn])` calls fn(sim) at the start of every tick.
 
-metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
+Event kinds added by the sim: alarm, opened, waiting_at_refuge, help_assigned, helping,
+help_released. metrics.json adds exit_time_s, stragglers, misled_by_rumor, decisions, alarm_t_s, t_end_s.
 
 ## Viewer
 

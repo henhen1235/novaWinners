@@ -60,6 +60,7 @@ class Sim:
                              key=lambda e: (e.t_start, e.id))
         self.alarm_t = self._alarm_time()
         self.hooks = list(hooks or [])  # called at the start of every tick (interventions, loop/ drivers)
+        self.signage: list[tuple[str, str, float]] = []  # (room, exit, p) signs seen on the way
         self._apply_interventions(scenario.get("interventions", []))
         self.tick = 0
         self.t = 0.0
@@ -77,8 +78,11 @@ class Sim:
         for it in items:
             if it.get("type") == "signage" and it.get("exit") in self.world.exits:
                 p = float(it.get("p", 0.8))
+                if it.get("room"):  # a sign in one room: its occupants now, passers-by in build_view
+                    self.signage.append((it["room"], it["exit"], p))
                 for a in self.agents:
-                    if it["exit"] not in a.known_exits and a.rng.random() < p:
+                    here = not it.get("room") or a.spawn_room == it["room"]
+                    if here and it["exit"] not in a.known_exits and a.rng.random() < p:
                         a.known_exits.append(it["exit"])
             else:
                 log.warning("intervention %s not supported here; use events/occupants", it.get("type"))
@@ -227,12 +231,14 @@ class Sim:
         a.messages.append({"id": mid, "from": speaker.id if speaker else source.get("ref"), "text": text,
                            "urgent": urgent, "official": official, "t": self.t, "claim": claim})
         self.event("heard", agent=a.id, ref=mid, text=text)
-        blocked = claim.get("exit_blocked")
-        for eid in [blocked] if isinstance(blocked, str) else (blocked or []):
-            src = dict(source, ref=source.get("ref") or mid)
-            if speaker is not None:
-                src = {"kind": "utterance", "ref": mid, "from": speaker.id}
+        src = dict(source, ref=source.get("ref") or mid)
+        if speaker is not None:
+            src = {"kind": "utterance", "ref": mid, "from": speaker.id}
+        for eid in _ids(claim.get("exit_blocked")):
             self.believe(a, f"exit_open:{eid}", False, conf, src)
+        if official:  # PA or staff can clear a rumor: "exit X is open"
+            for eid in _ids(claim.get("exit_open")):
+                self.believe(a, f"exit_open:{eid}", True, max(conf, 0.9), src)
         if a.cue_t is None and urgent:
             a.cue_t = self.t
 
@@ -339,7 +345,9 @@ class Sim:
         if say and not (a.last_say and a.last_say[0] == say and self.t - a.last_say[1] < 30):
             a.last_say = (say, self.t)
             self.event("said", agent=a.id, ref=rec["record_id"], text=say)
-            perception.broadcast(self, a, say, urgent=act in MOVING_ACTIONS)
+            # Chatter from someone who only heard a rumor is a social cue, not an alarm.
+            urgent = act in MOVING_ACTIONS and (a.persona == "staff" or bool(a.hazards_seen))
+            perception.broadcast(self, a, say, urgent=urgent)
 
     def tri_of(self, a: Agent) -> int:
         return int(self.world.nav.locate(self.pos[a.row][None], int(self.lv[a.row]))[0])
@@ -393,6 +401,8 @@ class Sim:
         if p is None or p.state == "exited" or (p.helper and p.helper != a.id):
             self._start(a, None, target_id)
             return
+        if a.helping != p.id:
+            self.event("help_assigned", agent=a.id, ref=p.id, text=f"{a.id} goes to help {p.id}")
         p.helper, a.helping = a.id, p.id
         ta, tb = self.tri_of(a), self.tri_of(p)
         corr = self.world.nav.astar(ta, tb)
@@ -533,6 +543,10 @@ class Sim:
             state = "deciding" if a.in_flight and a.state == "waiting" else a.state
             rows.append([a.id, round(float(x), 2), round(float(z), 2), state, self.world.nav.level_ids[self.lv[a.row]]])
         self.frames.append({"t": self.t, "a": rows})
+
+
+def _ids(x: object) -> list[str]:
+    return [x] if isinstance(x, str) else list(x or [])
 
 
 def _label(opt: dict) -> str:

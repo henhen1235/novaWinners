@@ -27,6 +27,8 @@ HEARING_M = 5.0
 QUEUE_ZONE_M = 5.0
 MESSAGE_MEMORY_S = 60.0
 SPEECH_TRIGGER_COOLDOWN_S = 8.0
+HELP_FLOOR_PENALTY_M = 30.0
+HELP_CAP = 1  # people one staff member carries out
 
 
 def sense(sim: "Sim") -> None:
@@ -144,7 +146,7 @@ def _percepts(sim: "Sim", a: "Agent", seen: list["Agent"]) -> list[dict]:
     out += _exit_signs(sim, a) + _stair_percepts(sim, a)
     if a.persona == "staff":
         out += [{"kind": "needs_help", "ref": b.id, "level": sim.world.nav.level_ids[sim.lv[b.row]],
-                 "channel": "radio"} for b in _waiting_for_help(sim)]
+                 "state": b.state, "channel": "radio"} for b in help_targets(sim, a)]
     return [{"id": f"p{i + 1}", **d} for i, d in enumerate(out)]
 
 
@@ -203,7 +205,30 @@ def _stair_percepts(sim: "Sim", a: "Agent") -> list[dict]:
 
 
 def _waiting_for_help(sim: "Sim") -> list["Agent"]:
-    return [b for b in sim.active() if b.state == "waiting_at_refuge" and not b.helper]
+    """People who cannot use stairs, are off the exit floors (or at a refuge) and have no helper yet."""
+    exit_lvs = {ex.lv for ex in sim.world.exits.values()}
+    return [b for b in sim.active() if not b.traits["uses_stairs"] and not b.helper
+            and (b.state == "waiting_at_refuge" or int(sim.lv[b.row]) not in exit_lvs)]
+
+
+def _help_cost(sim: "Sim", s: "Agent", b: "Agent") -> tuple[float, int]:
+    """Who is nearest: planar meters plus a penalty per floor apart (same or adjacent floor first)."""
+    d = float(np.linalg.norm(sim.pos[s.row] - sim.pos[b.row])) + HELP_FLOOR_PENALTY_M * abs(int(sim.lv[s.row]) - int(sim.lv[b.row]))
+    return d, s.row
+
+
+def help_targets(sim: "Sim", a: "Agent") -> list["Agent"]:
+    """Targets this staff member should help: the one it is on, or those it is the nearest free staff for."""
+    if a.persona != "staff":
+        return []
+    if a.helping:
+        b = next((x for x in sim.agents if x.id == a.helping), None)
+        return [b] if b is not None and not a.carrying and b.state != "exited" else []
+    staff = [s for s in sim.active() if s.persona == "staff" and not s.helping and s.helped_count < HELP_CAP
+             and s.stair is None]
+    if a not in staff:
+        return []
+    return [b for b in _waiting_for_help(sim) if min(staff, key=lambda s: _help_cost(sim, s, b)) is a]
 
 
 def _eta(sim: "Sim", a: "Agent", route_m: float, queue_s: float, flights: int) -> float:
@@ -261,10 +286,8 @@ def _stair_options(sim: "Sim", a: "Agent") -> list[dict]:
 
 
 def _help_options(sim: "Sim", a: "Agent", tri: int) -> list[dict]:
-    if a.persona != "staff" or a.helping:
-        return []
     out = []
-    for b in _waiting_for_help(sim):
+    for b in help_targets(sim, a):
         corr = sim.world.nav.astar(tri, sim.tri_of(b))
         if corr is not None:
             route = sum(sim.world.nav.walk_len(i, j) for i, j in zip(corr[:-1], corr[1:]))
@@ -293,11 +316,22 @@ def _options(sim: "Sim", a: "Agent", tri: int, seen: list["Agent"]) -> list[dict
     return [{"id": f"o{i + 1}", **o} for i, o in enumerate(out)]
 
 
+def _read_signs(sim: "Sim", a: "Agent", room: str | None) -> None:
+    """Room signage interventions: someone in that room learns the signed exit with probability p (once)."""
+    for sroom, eid, p in sim.signage:
+        key = f"sign:{sroom}:{eid}"
+        if sroom == room and eid not in a.known_exits and key not in a.signs_checked:
+            a.signs_checked.append(key)
+            if a.rng.random() < p:
+                a.known_exits.append(eid)
+
+
 def build_view(sim: "Sim", a: "Agent") -> dict:
     """The decide() input for one agent (docs/SIM_INTERFACES.md)."""
     p, lv = sim.pos[a.row], int(sim.lv[a.row])
     tri = sim.tri_of(a)
     seen = neighbors(sim, a, PEOPLE_M)
+    _read_signs(sim, a, sim.world.room_at(p, lv))
     percepts = _percepts(sim, a, seen)
     traits = {**a.traits, "t_since_cue_s": round(sim.t - a.cue_t, 1) if a.cue_t is not None else None,
               "activity": a.action, "state": a.state, "pace": a.pace}
@@ -334,6 +368,7 @@ def broadcast(sim: "Sim", a: "Agent", text: str, urgent: bool) -> None:
         news = _is_news(sim, b, a, claims)
         sim.hear(b, a, text, {"exit_blocked": claims} if claims else {}, urgent,
                  {"kind": "utterance", "from": a.id}, conf, official=a.persona == "staff")
+        # ponytail: staff speech carries no exit_open claims yet; PA events do via params.claim
         if news and sim.t - b.last_speech_trigger_t >= SPEECH_TRIGGER_COOLDOWN_S:
             b.last_speech_trigger_t = sim.t
             sim.trigger(b, "heard", a.id)

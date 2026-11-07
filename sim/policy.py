@@ -13,6 +13,7 @@ blocked and prefers the exit they came in by.
 from __future__ import annotations
 
 FAMILIAR_BONUS_S = 15.0
+SKEPTIC_PEOPLE_LEAVING = 2
 MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP")  # how much longer a route to the entry exit may be and still win
 
 
@@ -43,13 +44,19 @@ def _go_reason(view: dict) -> tuple[str | None, list[str]]:
     needs = [p["id"] for p in per if p["kind"] == "needs_help"]
     if needs and a["persona"] == "staff":
         return "help_needed", needs
-    if a["persona"] == "skeptic":
-        if len(urged) >= 2:
-            return "urged", urged
-        return ("delay_over", alarm) if tr["t_since_cue_s"] >= tr["premove_s"] else (None, alarm)
+    waited = tr["t_since_cue_s"] or 0.0
+    # Escalating pressure: the alarm keeps sounding and the building empties, so even the
+    # long tail of the pre-movement distribution moves by the persona's p95 (capped at 5 min).
+    delay = min(tr["premove_s"], tr.get("pressure_timeout_s") or tr["premove_s"])
+    if a["persona"] == "skeptic":  # the alarm alone is not enough; any second cue is
+        if urged:
+            return "second_cue", urged
+        if n_moving >= SKEPTIC_PEOPLE_LEAVING:
+            return "second_cue", [p["id"] for p in moving]
+        return ("delay_over", alarm) if waited >= delay else (None, alarm)
     if urged:
         return "urged", urged
-    if tr["t_since_cue_s"] >= tr["premove_s"]:
+    if waited >= delay:
         return "delay_over", alarm
     if n_moving >= tr["social_threshold"]:
         return "social", [p["id"] for p in moving]

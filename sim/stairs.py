@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from sim.engine import Sim
 
 PICKUP_M = 1.0
+REPATH_TICKS = 10
 CROWDED_QUEUE_S = 20.0
 
 
@@ -74,6 +75,11 @@ def refuge_reached(sim: "Sim", a: "Agent") -> None:
 def update_helpers(sim: "Sim") -> None:
     """Pick up people waiting for help when their helper arrives; carried people follow helpers."""
     by_id = {a.id: a for a in sim.agents}
+    for p in sim.agents:  # release people whose helper gave up or left
+        h = by_id.get(p.helper) if p.helper else None
+        if p.helper and p.state not in ("carried", "exited") and (h is None or h.state == "exited" or h.helping != p.id):
+            p.helper = None
+            sim.event("help_released", agent=p.id, ref=h.id if h else None, text="helper is not coming")
     for h in sim.agents:
         if h.state == "exited" or not h.helping:
             continue
@@ -84,12 +90,15 @@ def update_helpers(sim: "Sim") -> None:
         if not h.carrying and sim.lv[h.row] == sim.lv[p.row] and \
                 np.linalg.norm(sim.pos[h.row] - sim.pos[p.row]) <= PICKUP_M and h.stair is None:
             _pick_up(sim, h, p)
+        elif not h.carrying and h.stair is None and not h.hold and sim.tick % REPATH_TICKS == 0:
+            sim.replan(h)  # the person may still be walking to the landing
         if h.carrying:
             sim.pos[p.row], sim.lv[p.row] = sim.pos[h.row], sim.lv[h.row]
 
 
 def _pick_up(sim: "Sim", h: "Agent", p: "Agent") -> None:
     h.carrying = True
+    h.helped_count += 1
     p.state, p.helper, p.waypoints, p.stair = "carried", h.id, [], None
     if p.first_move_t is None:
         p.first_move_t = sim.t

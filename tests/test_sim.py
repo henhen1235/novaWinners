@@ -113,3 +113,65 @@ def test_mobility_impaired_waits_at_refuge_and_is_carried() -> None:
     assert "waiting_at_refuge" in kinds
     assert "helping" in kinds
     assert all(a.exit_t is not None for a in sim.agents)
+
+
+def _view(persona: str, waited: float, premove: float, percepts: list[dict]) -> dict:
+    from sim.personas import resolve, sample_traits
+    tr = {**sample_traits(resolve(persona), np.random.default_rng(0)), "premove_s": premove,
+          "t_since_cue_s": waited, "activity": "CONTINUE_TASK", "state": "waiting", "pace": "brisk"}
+    return {"agent": {"id": "a_1", "persona": persona, "traits": tr, "entry_exit": "e1", "known_exits": ["e1"]},
+            "percepts": [{"id": f"p{i}", **p} for i, p in enumerate(percepts)], "beliefs": [],
+            "options": [{"id": "o1", "action": "EVACUATE", "exit": "e1", "route_m": 10, "queue_s": 0, "eta_s": 8},
+                        {"id": "o2", "action": "SEEK_INFO"}, {"id": "o3", "action": "CONTINUE_TASK"}]}
+
+
+def test_skeptic_needs_a_second_cue_or_long_wait() -> None:
+    from sim.policy import decide
+    alarm = [{"kind": "alarm"}]
+    assert decide(_view("skeptic", 60, 800, alarm))["choice"] != "o1"
+    assert decide(_view("skeptic", 60, 800, alarm + [{"kind": "people_moving", "count": 2}]))["choice"] == "o1"
+    assert decide(_view("skeptic", 300, 800, alarm))["choice"] == "o1"  # pressure timeout
+    assert decide(_view("older_adult", 300, 760, alarm))["choice"] == "o1"
+
+
+def test_nearest_staff_carries_wheelchair_user() -> None:
+    occ = [{"where": {"room": "L2_class_s1"}, "count": 1, "personas": {"mobility_impaired": 1.0}},
+           {"where": {"room": "L2_class_n3"}, "count": 1, "personas": {"staff": 1.0}},
+           {"where": {"room": "L1_class_n1"}, "count": 2, "personas": {"staff": 1.0}}]
+    sim = _school([], occ, duration=400)
+    assigned = [e for e in sim.replay_events if e["kind"] == "help_assigned"]
+    staff_l2 = next(a.id for a in sim.agents if a.persona == "staff" and a.spawn_room == "L2_class_n3")
+    assert assigned and assigned[0]["agent"] == staff_l2
+    assert all(a.exit_t is not None for a in sim.agents)
+    assert max(a.helped_count for a in sim.agents) <= 1
+
+
+def test_official_open_claim_clears_rumor_and_rumor_is_not_an_alarm() -> None:
+    ev = [{"id": "r", "type": "rumor", "t_start_s": 5, "at": {"room": "L1_corridor"},
+           "params": {"claim": {"exit_blocked": "exit_02"}, "radius_m": 30}},
+          {"id": "a", "type": "alarm_only", "t_start_s": 40, "at": {"room": "L1_corridor"}}]
+    occ = [{"where": {"room": "L1_corridor"}, "count": 6, "personas": {"regular": 1.0}}]
+    sim = Sim(SCENE, _scenario(ev, occ, duration=30), 2)
+    sim.run()
+    assert all(a.cue_t is None for a in sim.agents)  # the rumor alone started nobody
+    heard = [a.beliefs["exit_open:exit_02"] for a in sim.agents]
+    assert all(b["value"] is False for b in heard if b["source"]["kind"] != "observation")  # own sight wins
+    assert any(b["value"] is False for b in heard)
+    ev.append({"id": "pa", "type": "pa_announcement", "t_start_s": 20, "at": {"room": "L1_corridor"},
+               "params": {"text": "Main entrance is open", "claim": {"exit_open": "exit_02"}}})
+    sim = Sim(SCENE, _scenario(ev, occ, duration=30), 2)
+    sim.run()
+    assert all(a.beliefs["exit_open:exit_02"]["value"] is True for a in sim.agents)
+
+
+def test_room_signage_only_reaches_that_room() -> None:
+    occ = [{"where": {"room": "L1_office_n1"}, "count": 3, "personas": {"visitor": 1.0}, "familiar_exit": "exit_02"},
+           {"where": {"room": "L1_office_s3"}, "count": 3, "personas": {"visitor": 1.0}, "familiar_exit": "exit_02"}]
+    scen = {**_scenario([], occ, duration=1), "interventions": [{"type": "signage", "room": "L1_office_n1",
+                                                                   "exit": "exit_01", "p": 1.0}]}
+    sim = Sim(SCENE, scen, 4)
+    n1 = [a for a in sim.agents if a.spawn_room == "L1_office_n1"]
+    s3 = [a for a in sim.agents if a.spawn_room == "L1_office_s3"]
+    assert all("exit_01" in a.known_exits for a in n1)
+    assert not any("exit_01" in a.known_exits and a.known_exits[0] != "exit_01" and len(a.known_exits) == 1 for a in s3)
+    assert sim.signage == [("L1_office_n1", "exit_01", 1.0)]

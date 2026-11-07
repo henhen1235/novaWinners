@@ -65,4 +65,10 @@ def sample_traits(p: Persona, rng: np.random.Generator) -> dict:
         "sign_follow_p": p.sign_follow_p,
         "social_threshold": p.social_threshold,
         "stair_down_mps": p.stair_down, "stair_up_mps": p.stair_up, "uses_stairs": p.uses_stairs,
+        "pressure_timeout_s": pressure_timeout_s(p),
     }
+
+
+def pressure_timeout_s(p: Persona) -> float:
+    """Rule policy only: the persona's p95 pre-movement, clipped to 120..300 s (alarm still sounding)."""
+    return round(float(np.clip(p.premove_median * np.exp(1.645 * p.premove_sigma), 120.0, 300.0)), 1)

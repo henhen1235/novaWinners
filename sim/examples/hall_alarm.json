@@ -1,10 +1,10 @@
-{"schema_version": "0.1", "scene": "out/hall/scene.json", "seed": 42, "duration_s": 300,
+{"schema_version": "0.1", "scene": "out/hall/scene.json", "seed": 42, "duration_s": 420,
  "events": [
   {"id": "ev_alarm", "type": "alarm_only", "t_start_s": 0, "at": {"room": "r_002"}, "params": {}},
   {"id": "ev_block", "type": "blocked_exit", "t_start_s": 30, "at": {"exit": "e_002"}, "params": {}}
  ],
  "occupants": [
-  {"where": {"room": "r_001"}, "count": 12, "personas": {"regular": 0.6, "visitor": 0.3, "staff": 0.1}},
+  {"where": {"room": "r_002"}, "count": 12, "personas": {"regular": 0.6, "visitor": 0.3, "staff": 0.1}},
   {"where": {"room": "r_002"}, "count": 28, "personas": {"regular": 0.4, "visitor": 0.35, "older_adult": 0.1, "skeptic": 0.1, "staff": 0.05}}
  ],
  "assumptions": ["Alarm only, no visible hazard.", "Exit e_002 becomes blocked at t=30 s."]}

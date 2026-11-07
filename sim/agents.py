@@ -38,6 +38,7 @@ class Agent:
     helper: str | None = None  # id of the agent carrying this one
     helping: str | None = None  # id of the agent this one is going to help or carrying
     carrying: bool = False
+    helped_count: int = 0
     pace: str = "brisk"
     hold: bool = False  # stopped until the next decision applies (landing, smoky or crowded stair)
     stair_asked: list = field(default_factory=list)  # (stair id, level) already asked about
@@ -65,6 +66,9 @@ def _choice(rng: np.random.Generator, dist: dict[str, float]) -> str:
     keys = list(dist)
     w = np.asarray([max(float(dist[k]), 0.0) for k in keys])
     return keys[int(rng.choice(len(keys), p=w / w.sum()))] if w.sum() > 0 else keys[0]
+
+
+ENTRY_DECAY_M = 60.0
 
 
 def _exit_level(world: World) -> int:
@@ -104,7 +108,9 @@ def spawn(world: World, occupants: list[dict], seed: int,
             p = _spawn_point(world, room, lv, where, place_rng, [q for q, l in zip(pos, lvs) if l == lv])
             r = room or world.room_at(p, lv)
             tri = int(world.nav.locate(p[None], lv)[0])
-            entry = g.get("familiar_exit") if g.get("familiar_exit") in world.exits else _choice(rng, entry_w)
+            near_w = {e: w * float(np.exp(-min(world.route_m(e, tri), 1e4) / ENTRY_DECAY_M)) + 1e-12
+                      for e, w in entry_w.items()}  # people mostly came in by an entrance near where they are
+            entry = g.get("familiar_exit") if g.get("familiar_exit") in world.exits else _choice(rng, near_w)
             nearest = min(world.exits, key=lambda e: world.route_m(e, tri))
             if persona.knows_all or omniscient:
                 known = list(world.exits)
