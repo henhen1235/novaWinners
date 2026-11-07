@@ -118,6 +118,9 @@ s["assumptions"] = list(s.get("assumptions", [])) + ["Assisted evacuation plan: 
 pathlib.Path("out/demo/tepper_fire_plan.json").write_text(json.dumps(s, indent=1))
 EOF
 sim run out/demo/tepper_fire_plan.json "$PUBLIC/tepper/scene.json" tepper_fire_plan
+# Full-occupancy runs: Tepper weekday (1200 people, about 3 min) and Mudge at night (305 people).
+sim run      sim/examples/tepper_weekday_fire.json "$PUBLIC/tepper/scene.json"                 tepper_weekday_fire
+sim run      sim/examples/mudge_night_fire.json    "$PUBLIC/mudge/scene.json"                  mudge_night_fire
 
 # ---------- 5. Adversary vs optimizer runs ----------
 say "Adversary vs optimizer"
@@ -148,6 +151,9 @@ if "$PY" -m loop run --scene fixtures/tiny_office.scene.json --scenario loop/exa
 else
   fail "offline loop run on tiny_office failed"
 fi
+
+# Building and scenario lists for the viewer header (public/replays/index.json).
+(cd blueprint/viewer && node scripts/replay_index.ts) || fail "replay index failed"
 
 # ---------- Summary ----------
 say "Done"
