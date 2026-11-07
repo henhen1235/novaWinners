@@ -40,7 +40,7 @@ Read before starting: `README.md`, `docs/SIM_INTERFACES.md` (replay.json, decide
 hook, scenario.json), `docs/AGENT_COGNITION.md`, `research/COMPETITIVE.md` (demo plan,
 claims to avoid), `research/PITCH_IDEAS.md`, `design/DESIGN.md` (visual system).
 
-## T1. Viewer: multi-floor buildings (you own `blueprint/viewer/src/`, `blueprint/viewer/scripts/`)
+## T1. Viewer: multi-floor buildings  [TAKEN by Karthik's agent at 13:50; skip T1, start at T2, and do not edit `blueprint/viewer/`]
 
 The demo building (Tepper, 5 floors) is multi-level. Replay frames are getting a 5th
 element with the level id: `["a_01", x, z, state, "L2"]` (older replays have 4
