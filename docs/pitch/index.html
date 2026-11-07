@@ -1,0 +1,742 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rehearsal pitch</title>
+<meta name="description" content="Rehearsal: stress-test a building's evacuation before an emergency. Nova Hackathon, Carnegie Mellon, 2026.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Tokens: same names and values as design/tokens.css (inlined so the deck works from any folder). */
+:root {
+  --color-ground: #0F2135;
+  --color-surface: #142A40;
+  --color-raised: #1B354F;
+  --color-line: #284460;
+  --color-line-strong: #5A7C9E;
+  --color-text: #EAF0F6;
+  --color-text-muted: #A3B6CA;
+  --color-drafting: #8DB4DC;
+  --color-model: #D5DEE8;
+  --color-walkable: #6F93B8;
+  --color-exit: #007A43;
+  --color-exit-bright: #3DDB8E;
+  --color-hazard: #C8261E;
+  --color-hazard-bright: #FF7A5C;
+  --color-warn: #F5B83D;
+  --font-sans: "Barlow", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --font-cond: "Barlow Condensed", "Barlow", "Arial Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #0A1828; overflow: hidden; }
+body { color: var(--color-text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+
+/* 1920 x 1080 stage, scaled to fit the window */
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
+  transform-origin: center center; background: var(--color-ground);
+}
+.slide {
+  position: absolute; inset: 0; padding: 120px 112px 150px;
+  opacity: 0; visibility: hidden; transition: opacity 280ms ease, visibility 0s linear 280ms;
+  background: var(--color-ground);
+}
+.slide::before { /* faint drafting grid */
+  content: ""; position: absolute; inset: 40px; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(40,68,96,.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40,68,96,.28) 1px, transparent 1px);
+  background-size: 48px 48px;
+  border: 1.5px solid var(--color-line);
+}
+.slide.active { opacity: 1; visibility: visible; transition: opacity 280ms ease; }
+.slide > * { position: relative; }
+
+/* sheet chrome */
+.brand { position: absolute; top: 60px; left: 72px; display: flex; align-items: center; gap: 14px;
+  font-weight: 600; font-size: 24px; color: var(--color-text); }
+.brand svg { width: 34px; height: 34px; }
+.section { position: absolute; top: 64px; right: 72px; font-family: var(--font-mono); font-size: 20px;
+  color: var(--color-text-muted); }
+.titleblock { position: absolute; right: 40px; bottom: 40px; display: grid;
+  grid-template-columns: auto auto auto; border-top: 1.5px solid var(--color-line); border-left: 1.5px solid var(--color-line);
+  font-size: 18px; color: var(--color-text-muted); background: var(--color-ground); }
+.titleblock div { padding: 12px 22px; border-right: 1.5px solid var(--color-line); }
+.titleblock b { font-family: var(--font-mono); font-weight: 500; color: var(--color-text); }
+
+/* type */
+.kicker { font-family: var(--font-mono); font-size: 22px; color: var(--color-drafting); margin-bottom: 28px; }
+h1 { font-size: 92px; line-height: 1.04; font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 60px; line-height: 1.1; font-weight: 600; letter-spacing: -0.005em; max-width: 1560px; }
+.lede { font-size: 34px; line-height: 1.4; color: var(--color-text-muted); max-width: 1180px; }
+.muted { color: var(--color-text-muted); }
+.mono { font-family: var(--font-mono); }
+.g { color: var(--color-exit-bright); }
+.r { color: var(--color-hazard-bright); }
+.a { color: var(--color-warn); }
+.d { color: var(--color-drafting); }
+.src { font-size: 18px; color: var(--color-text-muted); font-family: var(--font-sans); }
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 17px; font-weight: 500;
+  padding: 3px 10px; border-radius: 3px; vertical-align: middle; }
+.chip.llm { background: rgba(141,180,220,.16); color: var(--color-drafting); border: 1px solid var(--color-drafting); }
+.chip.code { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-line-strong); }
+
+/* ---------- slide 1: hook ---------- */
+.hook { display: grid; grid-template-columns: 1fr 760px; gap: 72px; align-items: center; height: 100%; }
+.hook h1 { margin-bottom: 40px; }
+.hook .lede { font-size: 32px; }
+.plan-ill { width: 760px; height: 560px; }
+.plan-cap { margin-top: 10px; font-size: 18px; color: var(--color-text-muted); text-align: right; }
+.walker { fill: var(--color-text); }
+@media (prefers-reduced-motion: no-preference) {
+  .slide.active .route-draw { animation: draw 2.4s ease-out 0.4s both; }
+  .slide.active .pulse { animation: pulse 2.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+}
+@keyframes draw { from { stroke-dashoffset: 1200; } to { stroke-dashoffset: 0; } }
+@keyframes pulse { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(2.4); opacity: 0; } }
+
+/* ---------- slide 2: problem ---------- */
+.stats3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin-top: 64px; }
+.stat { background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 4px; padding: 40px 40px 34px; }
+.stat .num { font-family: var(--font-mono); font-size: 96px; line-height: 1; font-weight: 500; margin-bottom: 22px; }
+.stat p { font-size: 28px; line-height: 1.35; }
+.stat .src { margin-top: 22px; }
+.gap { margin-top: 44px; display: grid; grid-template-columns: 220px 1fr; gap: 32px; align-items: start;
+  border-top: 1.5px solid var(--color-line-strong); padding-top: 30px; }
+.gap .tag { font-family: var(--font-mono); font-size: 22px; color: var(--color-warn); padding-top: 6px; }
+.gap p { font-size: 32px; line-height: 1.4; }
+
+/* ---------- slide 3: what it does ---------- */
+.loop { margin-top: 70px; }
+.loop svg { width: 1696px; height: 470px; }
+.oneliner { margin-top: 26px; font-size: 30px; color: var(--color-text-muted); max-width: 1500px; }
+.oneliner b { color: var(--color-text); font-weight: 600; }
+
+/* ---------- demo slide ---------- */
+.demo { display: grid; grid-template-columns: 1fr 820px; gap: 80px; align-items: center; height: 100%; }
+.demo h1 { font-size: 132px; }
+.moments { list-style: none; counter-reset: m; }
+.moments li { counter-increment: m; display: grid; grid-template-columns: 90px 1fr; gap: 10px;
+  padding: 28px 0; border-bottom: 1.5px solid var(--color-line); }
+.moments li:first-child { border-top: 1.5px solid var(--color-line); }
+.moments li::before { content: "0" counter(m); font-family: var(--font-mono); font-size: 30px; color: var(--color-drafting); padding-top: 4px; }
+.moments b { display: block; font-size: 36px; font-weight: 600; margin-bottom: 6px; }
+.moments span { font-size: 26px; color: var(--color-text-muted); }
+
+/* ---------- architecture ---------- */
+.arch { margin-top: 30px; }
+.arch svg { width: 1484px; height: 490px; display: block; }
+.metrics { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1.25fr; gap: 0; margin-top: 6px; width: 1696px;
+  border-top: 1.5px solid var(--color-line-strong); }
+.metrics div { padding: 18px 28px 0 0; }
+.metrics .v { font-family: var(--font-mono); font-size: 40px; font-weight: 500; line-height: 1.05; white-space: nowrap; }
+.metrics .l { font-size: 21px; color: var(--color-text-muted); margin-top: 8px; line-height: 1.3; }
+#s-arch .titleblock { display: none; }
+
+/* ---------- cognition ---------- */
+.cog { display: grid; grid-template-columns: 1fr 520px; gap: 64px; margin-top: 48px; }
+.pipe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.step { background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 4px; padding: 20px 22px 22px; min-height: 150px; }
+.step .n { font-family: var(--font-mono); font-size: 18px; color: var(--color-text-muted); display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.step b { display: block; font-size: 28px; font-weight: 600; margin-bottom: 6px; }
+.step span { font-size: 21px; color: var(--color-text-muted); line-height: 1.3; display: block; }
+.step.llm { border-color: var(--color-drafting); background: rgba(141,180,220,.09); }
+.json { margin-top: 22px; background: #0B1A2A; border: 1.5px solid var(--color-line); border-radius: 4px;
+  padding: 22px 28px; font-family: var(--font-mono); font-size: 21px; line-height: 1.5; color: var(--color-text-muted); white-space: pre; }
+.json .k { color: var(--color-drafting); }
+.json .s { color: var(--color-text); }
+.json .e { color: var(--color-warn); }
+.side .big { padding: 0 0 26px; margin-bottom: 26px; border-bottom: 1.5px solid var(--color-line); }
+.side .big:last-child { border-bottom: 0; }
+.side .v { font-family: var(--font-mono); font-size: 72px; font-weight: 500; line-height: 1; }
+.side .v small { font-size: 30px; color: var(--color-text-muted); }
+.side .l { font-size: 25px; line-height: 1.35; margin-top: 12px; }
+.side .src { margin-top: 6px; }
+
+/* ---------- loop results ---------- */
+.score { display: grid; grid-template-columns: 1fr 560px; gap: 72px; margin-top: 56px; }
+.bars { display: grid; gap: 34px; }
+.bar .top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.bar .name { font-size: 32px; font-weight: 600; }
+.bar .name small { display: block; font-size: 23px; font-weight: 400; color: var(--color-text-muted); margin-top: 4px; }
+.bar .val { font-family: var(--font-mono); font-size: 64px; font-weight: 500; line-height: 1; }
+.bar .val small { font-size: 30px; color: var(--color-text-muted); }
+.track { height: 40px; background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 2px; position: relative; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 1px; }
+@media (prefers-reduced-motion: no-preference) {
+  .slide.active .fill { animation: grow 900ms cubic-bezier(.2,.7,.2,1) 300ms both; transform-origin: left; }
+}
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.moves { display: grid; gap: 22px; }
+.move { border-left: 4px solid var(--color-line-strong); padding: 6px 0 6px 26px; }
+.move .who { font-family: var(--font-mono); font-size: 20px; margin-bottom: 8px; }
+.move p { font-size: 25px; line-height: 1.38; }
+.move.adv { border-color: var(--color-hazard-bright); }
+.move.opt { border-color: var(--color-exit-bright); }
+.costline { margin-top: 44px; display: flex; gap: 56px; font-size: 24px; color: var(--color-text-muted);
+  border-top: 1.5px solid var(--color-line); padding-top: 24px; }
+.costline b { font-family: var(--font-mono); font-weight: 500; color: var(--color-text); font-size: 30px; margin-right: 8px; }
+
+/* ---------- accessibility + interviews ---------- */
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; margin-top: 52px; }
+.panel h3 { font-size: 36px; font-weight: 600; margin-bottom: 8px; }
+.panel .sub { font-size: 24px; color: var(--color-text-muted); margin-bottom: 30px; }
+.vs { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.vs .card { background: var(--color-surface); border: 1.5px solid var(--color-line); border-radius: 4px; padding: 32px 32px 34px; }
+.vs .card .h { font-size: 24px; color: var(--color-text-muted); margin-bottom: 16px; }
+.vs .card .v { font-family: var(--font-mono); font-size: 104px; font-weight: 500; line-height: 1; }
+.vs .card .v small { font-size: 36px; color: var(--color-text-muted); }
+.vs .card p { font-size: 26px; line-height: 1.35; margin-top: 18px; }
+.dots { display: flex; gap: 12px; margin-top: 24px; }
+.dots i { width: 30px; height: 30px; border-radius: 50%; display: block; }
+.q { font-size: 38px; font-weight: 500; margin: 6px 0 26px; }
+.q::before { content: "Q  "; font-family: var(--font-mono); color: var(--color-drafting); }
+table.abl { width: 100%; border-collapse: collapse; font-size: 28px; }
+table.abl th { text-align: left; font-weight: 500; font-size: 21px; color: var(--color-text-muted); padding: 0 12px 14px 0; border-bottom: 1.5px solid var(--color-line-strong); }
+table.abl td { padding: 30px 12px 30px 0; border-bottom: 1.5px solid var(--color-line); vertical-align: middle; }
+table.abl td.n { font-family: var(--font-mono); font-size: 64px; font-weight: 500; }
+.verdict { font-family: var(--font-mono); font-size: 21px; padding: 5px 12px; border-radius: 3px; white-space: nowrap; }
+.verdict.yes { color: var(--color-exit-bright); border: 1px solid var(--color-exit-bright); }
+.verdict.no { color: var(--color-text-muted); border: 1px solid var(--color-line-strong); }
+.note { font-size: 22px; color: var(--color-text-muted); margin-top: 22px; line-height: 1.4; }
+
+/* ---------- close ---------- */
+.close { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 60px; }
+.close h3 { font-family: var(--font-mono); font-size: 22px; font-weight: 500; color: var(--color-drafting); margin-bottom: 20px; }
+.close ul { list-style: none; }
+.close li { font-size: 28px; line-height: 1.38; padding: 16px 0; border-bottom: 1.5px solid var(--color-line); }
+.close li b { font-weight: 600; }
+.final { margin-top: 56px; font-size: 44px; font-weight: 600; line-height: 1.2; }
+
+/* nav chrome (outside the stage) */
+#progress { position: fixed; left: 0; bottom: 0; height: 4px; background: var(--color-exit-bright); transition: width 280ms ease; z-index: 5; }
+#hint { position: fixed; right: 14px; bottom: 12px; font: 12px var(--font-mono); color: #5A7C9E; z-index: 5; opacity: .8; }
+@media print {
+  html, body { overflow: visible; background: none; }
+  #stage { position: static; transform: none !important; }
+  .slide { position: relative; opacity: 1; visibility: visible; page-break-after: always; width: 1920px; height: 1080px; }
+  #progress, #hint { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- shared brand mark: drawing reference bubble -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="mark" viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="15" fill="none" stroke="#EAF0F6" stroke-width="2"/>
+      <line x1="2" y1="17" x2="32" y2="17" stroke="#EAF0F6" stroke-width="2"/>
+      <text x="17" y="13.5" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#3DDB8E">R</text>
+    </symbol>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5A7C9E"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3DDB8E"/>
+    </marker>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#FF7A5C" stroke-width="3"/>
+    </pattern>
+  </defs>
+</svg>
+
+<!-- ================= 1. HOOK ================= -->
+<section class="slide" data-title="Rehearsal">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Nova Hackathon · Carnegie Mellon</div>
+  <div class="hook">
+    <div>
+      <div class="kicker">01 / The question</div>
+      <h1>What if you could rehearse an evacuation before the alarm is real?</h1>
+      <p class="lede">Rehearsal turns a real building into a drill you can run, break, fix and measure, with AI occupants you can question afterwards.</p>
+    </div>
+    <div>
+      <svg class="plan-ill" viewBox="0 0 760 560" aria-label="Illustrative floor plan: a blocked exit and a route to an open exit">
+        <!-- walls (illustration, not a real building) -->
+        <g fill="none" stroke="#D5DEE8" stroke-width="6" stroke-linejoin="miter">
+          <path d="M40 40 H520 M580 40 H720 V520 H40 V300 M40 240 V40"/>
+          <path d="M300 40 V200 M300 260 V360 H360 M420 360 H720"/>
+          <path d="M40 360 H160 M220 360 H300"/>
+          <path d="M520 360 V420 M520 470 V520"/>
+        </g>
+        <g fill="none" stroke="#8DB4DC" stroke-width="1.5" opacity=".6">
+          <rect x="70" y="70" width="200" height="110"/><rect x="340" y="70" width="140" height="80"/>
+          <rect x="560" y="400" width="130" height="90"/>
+        </g>
+        <!-- walkable tint -->
+        <rect x="46" y="46" width="248" height="308" fill="#6F93B8" opacity=".08"/>
+        <!-- blocked exit (left wall gap 240-300) -->
+        <rect x="20" y="240" width="40" height="60" fill="url(#hatch)" stroke="#FF7A5C" stroke-width="3"/>
+        <path d="M100 252 l16 -28 l16 28 z" fill="none" stroke="#FF7A5C" stroke-width="3"/>
+        <text x="116" y="248" text-anchor="middle" font-family="Barlow, sans-serif" font-weight="700" font-size="16" fill="#FF7A5C">!</text>
+        <text x="74" y="330" font-family="Barlow Condensed, sans-serif" font-size="22" fill="#FF7A5C">Locked</text>
+        <!-- open exit top-right gap 520-580 -->
+        <circle class="pulse" cx="550" cy="40" r="20" fill="none" stroke="#3DDB8E" stroke-width="3"/>
+        <circle cx="550" cy="40" r="20" fill="#007A43"/>
+        <text x="550" y="47" text-anchor="middle" font-family="Barlow, sans-serif" font-weight="600" font-size="17" fill="#fff">Exit</text>
+        <!-- route -->
+        <path class="route-draw" d="M140 300 C 220 300, 260 230, 330 230 S 430 270, 470 250 S 540 150, 550 70"
+              fill="none" stroke="#3DDB8E" stroke-width="5" stroke-linecap="round" stroke-dasharray="1200" stroke-dashoffset="0"/>
+        <!-- occupants -->
+        <g class="walker">
+          <circle cx="140" cy="300" r="9"/><circle cx="170" cy="280" r="9"/><circle cx="118" cy="268" r="9"/>
+          <circle cx="210" cy="120" r="9"/><circle cx="380" cy="300" r="9"/><circle cx="620" cy="200" r="9"/>
+          <circle cx="600" cy="300" r="9"/><circle cx="420" cy="450" r="9"/>
+        </g>
+        <circle cx="160" cy="450" r="9" fill="#F5B83D"/>
+        <text x="180" y="457" font-family="Barlow Condensed, sans-serif" font-size="22" fill="#F5B83D">deciding</text>
+      </svg>
+      <div class="plan-cap">Illustration</div>
+    </div>
+  </div>
+  <div class="titleblock"><div>Sheet <b>01</b> / <b>09</b></div><div>The question</div><div>7 Nov 2026</div></div>
+</section>
+
+<!-- ================= 2. PROBLEM ================= -->
+<section class="slide" data-title="Problem">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">The problem</div>
+  <div class="kicker">02 / What the research says</div>
+  <h2>Evacuations go wrong on <span class="a">decisions</span>, not on walking speed.</h2>
+  <div class="stats3">
+    <div class="stat">
+      <div class="num a">3 min</div>
+      <p>median delay before WTC 1 survivors started to leave, 2001.</p>
+      <div class="src">NIST NCSTAR 1-7</div>
+    </div>
+    <div class="stat">
+      <div class="num a">~2/3</div>
+      <p>of Station nightclub occupants headed for the door they came in. A crush began there within 90 s.</p>
+      <div class="src">NIST NCSTAR 2</div>
+    </div>
+    <div class="stat">
+      <div class="num">Rare</div>
+      <p>mass panic. People wait for confirmation, finish tasks and believe what they hear.</p>
+      <div class="src">Drury et al., London 7/7 survivor accounts</div>
+    </div>
+  </div>
+  <div class="gap">
+    <div class="tag">The gap</div>
+    <p>A fire drill runs once a year and cannot stage a locked exit. Professional egress models need hours to days of CAD work, and they encode behavior as parameters set in advance.</p>
+  </div>
+  <div class="titleblock"><div>Sheet <b>02</b> / <b>09</b></div><div>Problem</div><div>Sources in research/</div></div>
+</section>
+
+<!-- ================= 3. WHAT IT DOES ================= -->
+<section class="slide" data-title="Rehearsal">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">What it does</div>
+  <div class="kicker">03 / Rehearsal</div>
+  <h2>Any building in. A drill that finds its own weak points out.</h2>
+  <div class="loop">
+    <svg viewBox="0 0 1696 470" aria-label="Capture, analyze, simulate, attack, fix, measure">
+      <g font-family="Barlow, sans-serif">
+        <!-- six stations -->
+        <g id="stations">
+          <!-- x positions: 0, 284, 568, 852, 1136, 1420; width 252 -->
+          <g transform="translate(0,40)">
+            <rect width="252" height="250" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#A3B6CA">1</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Capture</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">iPhone LiDAR or</tspan><tspan x="24" y="162">CAD floor plans to a</tspan><tspan x="24" y="190">validated 3D model</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">seconds</text>
+          </g>
+          <g transform="translate(284,40)">
+            <rect width="252" height="250" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#A3B6CA">2</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Analyze</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">Single points of</tspan><tspan x="24" y="162">failure, pinch points,</tspan><tspan x="24" y="190">smoke-clock estimate</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">graph + geometry</text>
+          </g>
+          <g transform="translate(568,40)">
+            <rect width="252" height="250" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#A3B6CA">3</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Simulate</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">Crowd on a navmesh,</tspan><tspan x="24" y="162">LLM occupants decide</tspan><tspan x="24" y="190">at decision points</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">multi-floor, stairs</text>
+          </g>
+          <g transform="translate(852,40)">
+            <rect width="252" height="250" rx="4" fill="#142A40" stroke="#FF7A5C" stroke-width="2"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#FF7A5C">4</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Attack</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">Adversary agent</tspan><tspan x="24" y="162">locks an exit, starts</tspan><tspan x="24" y="190">a fire, plants a rumor</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">agent</text>
+          </g>
+          <g transform="translate(1136,40)">
+            <rect width="252" height="250" rx="4" fill="#142A40" stroke="#3DDB8E" stroke-width="2"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#3DDB8E">5</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Fix</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">Optimizer agent picks</tspan><tspan x="24" y="162">fixes the code can</tspan><tspan x="24" y="190">execute and validate</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">agent</text>
+          </g>
+          <g transform="translate(1420,40)">
+            <rect width="276" height="250" rx="4" fill="#1B354F" stroke="#5A7C9E" stroke-width="1.5"/>
+            <text x="24" y="44" font-family="IBM Plex Mono, monospace" font-size="20" fill="#A3B6CA">6</text>
+            <text x="24" y="92" font-size="36" font-weight="600" fill="#EAF0F6">Measure</text>
+            <text font-size="22" fill="#A3B6CA"><tspan x="24" y="134">Re-run, compare</tspan><tspan x="24" y="162">before and after,</tspan><tspan x="24" y="190">interview occupants</tspan></text>
+            <text x="24" y="228" font-family="IBM Plex Mono, monospace" font-size="18" fill="#8DB4DC">evidence</text>
+          </g>
+        </g>
+        <!-- forward arrows -->
+        <g stroke="#5A7C9E" stroke-width="2.5" marker-end="url(#arr)">
+          <line x1="254" y1="165" x2="280" y2="165"/><line x1="538" y1="165" x2="564" y2="165"/>
+          <line x1="822" y1="165" x2="848" y2="165"/><line x1="1106" y1="165" x2="1132" y2="165"/>
+          <line x1="1390" y1="165" x2="1416" y2="165"/>
+        </g>
+        <!-- repeat loop from measure back to attack -->
+        <path d="M1558 292 V372 H978 V296" fill="none" stroke="#3DDB8E" stroke-width="2.5" stroke-dasharray="8 7" marker-end="url(#arrG)"/>
+        <text x="1268" y="410" text-anchor="middle" font-size="24" fill="#3DDB8E">repeat: attack the fixed building again</text>
+        <!-- bracket under 1-3 -->
+        <path d="M0 322 V340 H820 V322" fill="none" stroke="#284460" stroke-width="2"/>
+        <text x="410" y="378" text-anchor="middle" font-size="24" fill="#A3B6CA">a model of what would happen</text>
+      </g>
+    </svg>
+  </div>
+  <p class="oneliner"><b>The goal is a realistic picture, not a run where everyone survives.</b> People left behind are the findings. It is a planning tool; it does not certify a building.</p>
+  <div class="titleblock"><div>Sheet <b>03</b> / <b>09</b></div><div>What it does</div><div>github.com/henhen1235/novaWinners</div></div>
+</section>
+
+<!-- ================= 4. DEMO ================= -->
+<section class="slide" data-title="Live demo">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Live demo</div>
+  <div class="demo">
+    <div>
+      <div class="kicker">04 / Switch to the viewer</div>
+      <h1>Live demo</h1>
+      <p class="lede" style="margin-top:28px">About 90 seconds, recorded runs replayed in the 3D viewer.</p>
+    </div>
+    <ol class="moments">
+      <li><div><b>A real building, five floors</b><span>CMU Tepper, built from CAD floor plans</span></div></li>
+      <li><div><b>Attacked vs fixed</b><span>Two runs side by side, same building, same seed</span></div></li>
+      <li><div><b>"Why did you go that way?"</b><span>Click an occupant, get an answer from its decision log</span></div></li>
+    </ol>
+  </div>
+  <div class="titleblock"><div>Sheet <b>04</b> / <b>09</b></div><div>Demo</div><div>localhost:5173</div></div>
+</section>
+
+<!-- ================= 5. ARCHITECTURE ================= -->
+<section class="slide" id="s-arch" data-title="Architecture">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Architecture</div>
+  <div class="kicker">05 / How it works</div>
+  <h2>Geometry is computed. Judgment is checked.</h2>
+  <div class="arch">
+    <svg viewBox="0 0 1696 560" aria-label="Pipeline: inputs, capture, scene contract, run, use">
+      <g font-family="Barlow, sans-serif">
+        <!-- column labels -->
+        <g font-family="IBM Plex Mono, monospace" font-size="18" fill="#A3B6CA">
+          <text x="0" y="22">INPUT</text><text x="320" y="22">CAPTURE</text><text x="730" y="22">CONTRACT</text>
+          <text x="1060" y="22">RUN</text><text x="1446" y="22">USE</text>
+        </g>
+        <!-- inputs -->
+        <g>
+          <rect x="0" y="44" width="250" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+          <text x="20" y="84" font-size="26" font-weight="600" fill="#EAF0F6">iPhone LiDAR</text>
+          <text x="20" y="116" font-size="20" fill="#A3B6CA">Mesh or RoomPlan app</text>
+          <rect x="0" y="164" width="250" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+          <text x="20" y="204" font-size="26" font-weight="600" fill="#EAF0F6">CAD floor plans</text>
+          <text x="20" y="236" font-size="20" fill="#A3B6CA">multi-floor PDF sheets</text>
+          <rect x="0" y="284" width="250" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+          <text x="20" y="324" font-size="26" font-weight="600" fill="#EAF0F6">Blueprint PDF</text>
+          <text x="20" y="356" font-size="20" fill="#A3B6CA">vector or raster</text>
+        </g>
+        <g stroke="#5A7C9E" stroke-width="2.5" marker-end="url(#arr)">
+          <line x1="252" y1="92" x2="316" y2="150"/><line x1="252" y1="212" x2="316" y2="212"/><line x1="252" y1="332" x2="316" y2="274"/>
+        </g>
+        <!-- capture -->
+        <rect x="320" y="44" width="340" height="336" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+        <text x="342" y="86" font-size="28" font-weight="600" fill="#EAF0F6">Capture</text>
+        <g font-size="21" fill="#A3B6CA">
+          <text x="342" y="128">Find up, snap walls to axes</text>
+          <text x="342" y="162">Occupancy grid to walls,</text>
+          <text x="342" y="190">rooms, doors, obstacles</text>
+          <text x="342" y="224">Curved walls traced</text>
+          <text x="342" y="258">Plan layers to rooms, doors,</text>
+          <text x="342" y="286">stairs; scale from area labels</text>
+          <text x="342" y="322">OWLv2: exit signs, people</text>
+          <text x="342" y="350">removed from the scan</text>
+        </g>
+        <rect x="594" y="62" width="50" height="26" rx="3" fill="rgba(141,180,220,.16)" stroke="#8DB4DC"/>
+        <text x="619" y="81" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="15" fill="#8DB4DC">ML</text>
+        <line x1="662" y1="212" x2="726" y2="212" stroke="#5A7C9E" stroke-width="2.5" marker-end="url(#arr)"/>
+        <!-- contract gate -->
+        <rect x="730" y="44" width="250" height="336" rx="4" fill="#1B354F" stroke="#3DDB8E" stroke-width="2.5"/>
+        <text x="752" y="96" font-family="IBM Plex Mono, monospace" font-size="27" font-weight="500" fill="#EAF0F6">scene.json</text>
+        <g font-size="21" fill="#A3B6CA">
+          <text x="752" y="136">One frozen format for</text>
+          <text x="752" y="164">every input, scenario</text>
+          <text x="752" y="192">and optimizer patch</text>
+          <text x="752" y="238">Validator: rooms reach</text>
+          <text x="752" y="266">an exit, doors in range,</text>
+          <text x="752" y="294">navmesh connected</text>
+        </g>
+        <circle cx="766" cy="344" r="13" fill="#007A43"/>
+        <path d="M759 344 l5 5 l9 -10" fill="none" stroke="#fff" stroke-width="2.5"/>
+        <text x="788" y="351" font-size="21" font-weight="600" fill="#3DDB8E">0 errors or no run</text>
+        <g stroke="#5A7C9E" stroke-width="2.5" marker-end="url(#arr)">
+          <line x1="982" y1="110" x2="1056" y2="92"/><line x1="982" y1="212" x2="1056" y2="212"/>
+        </g>
+        <!-- run -->
+        <rect x="1060" y="44" width="330" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+        <text x="1082" y="84" font-size="26" font-weight="600" fill="#EAF0F6">Analysis</text>
+        <text x="1082" y="116" font-size="20" fill="#A3B6CA">failure points, pinch, smoke clock</text>
+        <rect x="1060" y="164" width="330" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+        <text x="1082" y="204" font-size="26" font-weight="600" fill="#EAF0F6">Crowd simulator</text>
+        <text x="1082" y="236" font-size="20" fill="#A3B6CA">navmesh A*, 0.5 s clock, door flow</text>
+        <rect x="1060" y="284" width="330" height="96" rx="4" fill="rgba(141,180,220,.09)" stroke="#8DB4DC" stroke-width="2"/>
+        <text x="1082" y="324" font-size="26" font-weight="600" fill="#EAF0F6">Occupant minds</text>
+        <text x="1082" y="356" font-size="20" fill="#A3B6CA">decide() only at decision points</text>
+        <rect x="1324" y="300" width="50" height="26" rx="3" fill="rgba(141,180,220,.16)" stroke="#8DB4DC"/>
+        <text x="1349" y="319" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="15" fill="#8DB4DC">LLM</text>
+        <line x1="1225" y1="262" x2="1225" y2="282" stroke="#8DB4DC" stroke-width="2.5" marker-end="url(#arr)" marker-start="url(#arr)"/>
+        <g stroke="#5A7C9E" stroke-width="2.5" marker-end="url(#arr)">
+          <line x1="1392" y1="212" x2="1442" y2="92"/><line x1="1392" y1="212" x2="1442" y2="212"/><line x1="1392" y1="212" x2="1442" y2="332"/>
+        </g>
+        <text x="1225" y="410" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="18" fill="#A3B6CA">replay.json + decisions.jsonl</text>
+        <!-- use -->
+        <rect x="1446" y="44" width="250" height="96" rx="4" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+        <text x="1466" y="84" font-size="26" font-weight="600" fill="#EAF0F6">3D viewer</text>
+        <text x="1466" y="116" font-size="20" fill="#A3B6CA">Three.js, floors, compare</text>
+        <rect x="1446" y="164" width="250" height="96" rx="4" fill="rgba(141,180,220,.09)" stroke="#8DB4DC" stroke-width="2"/>
+        <text x="1466" y="204" font-size="26" font-weight="600" fill="#EAF0F6">Interviews</text>
+        <text x="1466" y="236" font-size="20" fill="#A3B6CA">reasons tested</text>
+        <rect x="1446" y="284" width="250" height="96" rx="4" fill="rgba(141,180,220,.09)" stroke="#8DB4DC" stroke-width="2"/>
+        <text x="1466" y="324" font-size="26" font-weight="600" fill="#EAF0F6">Adversary</text>
+        <text x="1466" y="356" font-size="20" fill="#A3B6CA">vs optimizer</text>
+        <rect x="1630" y="300" width="50" height="26" rx="3" fill="rgba(141,180,220,.16)" stroke="#8DB4DC"/>
+        <text x="1655" y="319" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="15" fill="#8DB4DC">LLM</text>
+        <rect x="1630" y="180" width="50" height="26" rx="3" fill="rgba(141,180,220,.16)" stroke="#8DB4DC"/>
+        <text x="1655" y="199" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="15" fill="#8DB4DC">LLM</text>
+        <!-- patch loop back to the contract -->
+        <path d="M1571 382 V470 H855 V384" fill="none" stroke="#3DDB8E" stroke-width="2.5" stroke-dasharray="8 7" marker-end="url(#arrG)"/>
+        <text x="1213" y="504" text-anchor="middle" font-size="22" fill="#3DDB8E">every attack and fix is a patch, validated, then re-run</text>
+        <!-- legend -->
+        <g font-size="20" fill="#A3B6CA">
+          <rect x="0" y="470" width="30" height="20" rx="3" fill="#142A40" stroke="#284460" stroke-width="1.5"/>
+          <text x="42" y="487">code</text>
+          <rect x="120" y="470" width="30" height="20" rx="3" fill="rgba(141,180,220,.09)" stroke="#8DB4DC" stroke-width="2"/>
+          <text x="162" y="487">model</text>
+          <text x="0" y="530" font-size="20">LLMs never output coordinates.</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="metrics">
+    <div><div class="v">0.996 / 0.982</div><div class="l">door recall / precision,<br>30 synthetic scans</div></div>
+    <div><div class="v">6 mm</div><div class="l">median wall error;<br>2 to 8 s per scan</div></div>
+    <div><div class="v">4.8 s</div><div class="l">to ingest a 1.67M-triangle<br>real iPhone mesh</div></div>
+    <div><div class="v">576 rooms</div><div class="l">Tepper floors 1 to 5: 915 doors,<br>29 exits, 0 validator errors</div></div>
+  </div>
+  <div class="titleblock"><div>Sheet <b>05</b> / <b>09</b></div><div>Architecture</div><div>contract/ · sim/ · cognition/ · loop/</div></div>
+</section>
+
+<!-- ================= 6. COGNITION ================= -->
+<section class="slide" data-title="Occupants">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Behavioral simulation</div>
+  <div class="kicker">06 / Occupant minds</div>
+  <h2>Code computes what research can measure. The LLM only makes the judgment call.</h2>
+  <div class="cog">
+    <div>
+      <div class="pipe">
+        <div class="step"><div class="n">1 <span class="chip code">code</span></div><b>Trigger</b><span>alarm, smoke, fork, blocked path, someone needs help</span></div>
+        <div class="step"><div class="n">2 <span class="chip code">code</span></div><b>Perceive</b><span>what this person can see and hear; signs noticed 38% of the time</span></div>
+        <div class="step"><div class="n">3 <span class="chip code">code</span></div><b>Believe</b><span>each belief has a source, confidence and tick</span></div>
+        <div class="step"><div class="n">4 <span class="chip code">code</span></div><b>Feel</b><span>appraisal to fear and anxiety, spreads to neighbours</span></div>
+        <div class="step"><div class="n">5 <span class="chip code">code</span></div><b>Options</b><span>only exits this person knows about</span></div>
+        <div class="step llm"><div class="n">6 <span class="chip llm">LLM</span></div><b>Decide</b><span>five protective-action questions, with evidence ids</span></div>
+        <div class="step"><div class="n">7 <span class="chip code">code</span></div><b>Validate</b><span>repair once, else a persona rule</span></div>
+        <div class="step"><div class="n">8 <span class="chip code">code</span></div><b>Record</b><span>immutable log; replays exact and free</span></div>
+      </div>
+<div class="json"><span class="k">"threat_real"</span>: <span class="s">"yes"</span>,  <span class="k">"threat_evidence"</span>: [<span class="e">"p3"</span>, <span class="e">"b2"</span>],
+<span class="k">"choice"</span>: <span class="s">"o4"</span>,  <span class="k">"choice_evidence"</span>: [<span class="e">"p3"</span>, <span class="e">"p7"</span>],  <span class="k">"when"</span>: <span class="s">"now"</span>
+<span class="muted">// every id must exist and be visible to this occupant</span></div>
+    </div>
+    <div class="side">
+      <div class="big"><div class="v">63.8 s <small>vs ~60 s</small></div><div class="l">median time before LLM occupants start moving, against the research target</div></div>
+      <div class="big"><div class="v">~3&times;</div><div class="l">more of each choice explained by the persona than by which model plays it</div><div class="src">304 calls</div></div>
+      <div class="big"><div class="v">0</div><div class="l">"panic" states. Delay comes from noticing, doubting and preparing, as the literature finds.</div></div>
+    </div>
+  </div>
+  <div class="titleblock"><div>Sheet <b>06</b> / <b>09</b></div><div>Occupants</div><div>Protective Action Decision Model, Lindell and Perry 2012</div></div>
+</section>
+
+<!-- ================= 7. ADVERSARY VS OPTIMIZER ================= -->
+<section class="slide" data-title="Adversary vs optimizer">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Measured result</div>
+  <div class="kicker">07 / Adversary vs optimizer, scanned hall, 36 LLM occupants</div>
+  <h2>One agent breaks the building. Another fixes it. The simulator keeps score.</h2>
+  <div class="score">
+    <div class="bars">
+      <div class="bar">
+        <div class="top"><div class="name">Baseline<small>alarm, all exits open</small></div><div class="val">34<small>/36 out</small></div></div>
+        <div class="track"><div class="fill" style="width:94.44%;background:var(--color-model)"></div></div>
+      </div>
+      <div class="bar">
+        <div class="top"><div class="name r">Attacked<small>busiest exit locked</small></div><div class="val r">15<small>/36 out</small></div></div>
+        <div class="track"><div class="fill" style="width:41.67%;background:var(--color-hazard-bright)"></div></div>
+      </div>
+      <div class="bar">
+        <div class="top"><div class="name g">Fixed<small>optimizer's patch, same attack</small></div><div class="val g">33<small>/36 out</small></div></div>
+        <div class="track"><div class="fill" style="width:91.67%;background:var(--color-exit-bright)"></div></div>
+      </div>
+    </div>
+    <div class="moves">
+      <div class="move adv"><div class="who r">Adversary</div><p>Locked exit e_001: used by 23 of 36 people, 38.8% of the building's exit width. The target and the reason come from the numbers.</p></div>
+      <div class="move opt"><div class="who g">Optimizer</div><p>From a fixed menu of 7 executable fixes: a key holder unlocks e_001, 2 wardens posted, signage added. Patch validated, then re-run.</p></div>
+      <div class="move"><div class="who muted">Honest read</div><p>Time to clear 90% went from 115.5 s to 128 s. Single run, seed 42.</p></div>
+    </div>
+  </div>
+  <div class="costline">
+    <span><b>400</b>LLM decisions</span>
+    <span><b>$0.086</b>for the run</span>
+    <span><b>~0.94 s</b>per decision</span>
+    <span><b>$0</b>to replay</span>
+    <span style="margin-left:auto">gemini-2.5-flash-lite</span>
+  </div>
+  <div class="titleblock"><div>Sheet <b>07</b> / <b>09</b></div><div>Adversary vs optimizer</div><div>loop/ · single run, seed 42</div></div>
+</section>
+
+<!-- ================= 8. ACCESSIBILITY + EXPLAINABILITY ================= -->
+<section class="slide" data-title="Who gets left behind">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Why it matters</div>
+  <div class="kicker">08 / Findings an average hides</div>
+  <h2>See who gets left behind, and ask them why.</h2>
+  <div class="two">
+    <div class="panel">
+      <h3>Accessibility</h3>
+      <div class="sub">CMU Tepper, 5 floors, fire, 170 occupants</div>
+      <div class="vs">
+        <div class="card">
+          <div class="h">No assisted-evacuation plan</div>
+          <div class="v">166<small>/170</small></div>
+          <div class="dots"><i style="background:var(--color-hazard-bright)"></i><i style="background:var(--color-hazard-bright)"></i><i style="background:var(--color-hazard-bright)"></i></div>
+          <p>3 wheelchair users left waiting at stair refuges on floor 4</p>
+        </div>
+        <div class="card">
+          <div class="h">With the plan</div>
+          <div class="v g">169<small>/170</small></div>
+          <div class="dots"><i style="background:var(--color-exit-bright)"></i><i style="background:var(--color-exit-bright)"></i><i style="background:var(--color-exit-bright)"></i></div>
+          <p>Staff carry all 3 down the stairs and out</p>
+        </div>
+      </div>
+      <div class="note">Rule-based occupants, single run, seed 42. Elevators are recalled in a fire and not used.</div>
+    </div>
+    <div class="panel">
+      <h3>Explainability</h3>
+      <div class="sub">Answers come only from the occupant's decision log, then each reason is tested by removing it</div>
+      <div class="q">"Why the West Exit?"</div>
+      <table class="abl">
+        <tr><th>Reason the occupant cited</th><th>Choice flips when removed</th><th></th></tr>
+        <tr><td>Saw the fire</td><td class="n">7/7</td><td><span class="verdict yes">necessary</span></td></tr>
+        <tr><td>A stated belief</td><td class="n muted">0/7</td><td><span class="verdict no">stated, not decisive</span></td></tr>
+      </table>
+      <div class="note">The answer tells you which of its own reasons actually mattered.</div>
+    </div>
+  </div>
+  <div class="titleblock"><div>Sheet <b>08</b> / <b>09</b></div><div>Who gets left behind</div><div>sim/ stairs, refuges · cognition/ interview</div></div>
+</section>
+
+<!-- ================= 9. CLOSE ================= -->
+<section class="slide" data-title="Close">
+  <div class="brand"><svg><use href="#mark"/></svg>Rehearsal</div>
+  <div class="section">Limits and next</div>
+  <div class="kicker">09 / Where it stands</div>
+  <h2>Rehearse the emergency before it happens.</h2>
+  <div class="close">
+    <div>
+      <h3>What we do not claim</h3>
+      <ul>
+        <li><b>Not a certification.</b> A planning tool for deciding what to fix and test next.</li>
+        <li><b>Decisions are not yet validated</b> against real evacuations; movement follows standard flow and speed limits.</li>
+        <li><b>No fire physics.</b> Fire and smoke are scheduled blocking events.</li>
+        <li><b>Single runs, seed 42.</b> Not a general result.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Next</h3>
+      <ul>
+        <li><b>Verify movement</b> on standard test cases: free walking, door flow.</li>
+        <li><b>Many seeds,</b> with ranges on every number.</li>
+        <li><b>Live what-if mode:</b> add a fire or a person while you watch.</li>
+        <li><b>More buildings</b> from floor plans, starting with a dormitory.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="final">Scan or plan in. Drill, break, fix, measure. <span class="g">Find who gets left behind before it is real.</span></p>
+  <div class="titleblock"><div>Sheet <b>09</b> / <b>09</b></div><div>Rehearsal</div><div>github.com/henhen1235/novaWinners</div></div>
+</section>
+
+</div>
+<div id="progress"></div>
+<div id="hint">← → navigate · F fullscreen</div>
+
+<script>
+(() => {
+  const stage = document.getElementById("stage");
+  const slides = [...document.querySelectorAll(".slide")];
+  const progress = document.getElementById("progress");
+  let i = 0;
+
+  function fit() {
+    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+
+  function show(n, push = true) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle("active", k === i));
+    progress.style.width = `${((i + 1) / slides.length) * 100}%`;
+    document.title = `${i + 1}/${slides.length} · ${slides[i].dataset.title} · Rehearsal`;
+    if (push) history.replaceState(null, "", `#${i + 1}`);
+  }
+
+  function fromHash() {
+    const n = parseInt(location.hash.slice(1), 10);
+    return Number.isFinite(n) ? n - 1 : 0;
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n"].includes(k)) { e.preventDefault(); show(i + 1); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace", "p"].includes(k)) { e.preventDefault(); show(i - 1); }
+    else if (k === "Home") show(0);
+    else if (k === "End") show(slides.length - 1);
+    else if (/^[1-9]$/.test(k)) show(parseInt(k, 10) - 1);
+    else if (k === "f" || k === "F") {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    show(e.clientX > window.innerWidth / 3 ? i + 1 : i - 1);
+  });
+
+  let tx = null;
+  document.addEventListener("touchstart", (e) => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (tx === null) return;
+    const dx = e.changedTouches[0].clientX - tx;
+    if (Math.abs(dx) > 40) show(dx < 0 ? i + 1 : i - 1);
+    tx = null;
+  });
+
+  window.addEventListener("resize", fit);
+  window.addEventListener("hashchange", () => show(fromHash(), false));
+  fit();
+  show(fromHash(), false);
+})();
+</script>
+</body>
+</html>
