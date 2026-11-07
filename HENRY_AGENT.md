@@ -66,6 +66,14 @@ elements; treat missing level as the scene's first level).
      height (three.js clipping planes) to look into a floor.
    - **Exploded**: stacked view with a vertical spacing slider (1x to 3x floor height)
      so floors separate, same transparency rules.
+   Readability (user feedback: "each floor feels like a massive block"): never draw
+   ceilings or roofs; floors are a thin light slab with rooms lightly tinted by type;
+   add a Walls toggle `off | cutaway | full` with **cutaway as the default**: walls
+   clipped at 1.2 m above each floor's elevation (per-level clipping plane or a
+   geometry rebuild from scene.json walls), so you look down into every room and see
+   people; the cutaway applies per floor in stacked/exploded views. If a display.glb
+   contains slabs or tall meshes, apply the same per-level clip to it (or hide its wall
+   nodes and draw walls from scene.json). Persist as `&walls=off|cutaway|full`.
    Persist the chosen mode in the URL (`&view=side|stacked|exploded|single`). Check
    how professional tools present multi-floor evacuations (e.g. Thunderhead Pathfinder
    and Oasys MassMotion screenshots/docs: stacked floors with transparency, per-floor
