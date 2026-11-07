@@ -6,6 +6,8 @@ produced. A door with one adjacent face connects that room to ``outside``.
 
 from __future__ import annotations
 
+import re
+
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import polygonize, unary_union
 
@@ -84,13 +86,22 @@ def label_faces(faces: list[Polygon], texts: list[tuple[str, tuple[float, float]
                 continue
             if face.covers(Point(anchor)):
                 hits.append((size, text))
-        if not hits:
+        numbers = [(size, text) for text, anchor, size in texts if _ROOM_NUMBER.match(text.strip()) and face.covers(Point(anchor))]
+        if not hits and not numbers:
             labels.append(("Room", "unknown"))
             continue
         hits.sort(reverse=True)
-        name = hits[0][1]
-        labels.append((name, room_type_from_name(name)))
+        numbers.sort(reverse=True)
+        words = hits[0][1] if hits else ""
+        number = numbers[0][1].strip() if numbers else ""
+        name = f"{number} {words}".strip() if words != number else words
+        labels.append((name, room_type_from_name(words or name)))
     return labels
+
+
+# Room numbers on CAD sheets: "3404", "1001A". Pure digits are otherwise skipped as dimensions.
+_ROOM_NUMBER = re.compile(r"^\d{3,5}[A-Z]?$")
+_AREA_TAG = re.compile(r"^[\d,.]+\s*(sf|sq\.?\s*ft|ft2|m2|sqm)$", re.IGNORECASE)
 
 
 def _skip_text(text: str) -> bool:
@@ -102,6 +113,8 @@ def _skip_text(text: str) -> bool:
     if stripped.replace(" ", "").isdigit():
         return True
     if stripped in {"up", "dn", "down"}:
+        return True
+    if _AREA_TAG.match(stripped) or _ROOM_NUMBER.match(text.strip()):
         return True
     return False
 

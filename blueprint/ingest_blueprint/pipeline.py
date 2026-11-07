@@ -8,21 +8,25 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import cv2
 import numpy as np
+from shapely import affinity
 from shapely.geometry import LineString, Point, Polygon
 
 from contract.validate_scene import validate
 from export.assemble import assemble_scene
 from geometry.rooms import attach_doors, faces_from_walls, label_faces, room_type_from_name
+from geometry.infer_doors import infer_doors, needs_inference
 from geometry.stairs import align_levels, stair_room_indexes, tread_clusters
 from geometry.vectorize import snap_segments, split_gaps
 from ingest_blueprint.corrections import apply_corrections, manual_scale, scale_from_manual
 from ingest_blueprint.loader import load
 from ingest_blueprint.raster_rooms import extract as extract_raster_rooms
-from ingest_blueprint.scale import estimate_scale
+from ingest_blueprint.cad_raster import is_dense_cad, wall_raster_page
+from ingest_blueprint.scale import area_label_ratio, estimate_scale
 from ingest_blueprint.segment import deskew, detect_raster, detect_vector
 from ingest_blueprint.semantics import label_image, load_env
 from ingest_blueprint.types import DoorOpening, PlanPage, ScaleEstimate, Segment
@@ -66,12 +70,15 @@ def run(
     manual = manual_scale(corrections)
     level_payloads = []
     scales: list[ScaleEstimate] = []
+    notes: dict = {}
     for index, page in enumerate(pages):
         level_id = f"L{index + 1}"
         if use_ml:
             page = _try_ml(page)
         raster_faces = None
         raster_wall_m = 0.2
+        if is_dense_cad(page):
+            page = wall_raster_page(page)
         if page.strokes:
             scale = _scale_for(page, manual)
             walls, doors, thin = detect_vector(page, scale)
@@ -84,6 +91,10 @@ def run(
             else:
                 scale, raster_faces, doors, raster_wall_m = extract_raster_rooms(page)
                 walls, thin = [], []
+                if raster_faces:
+                    scale, raster_faces, doors, raster_wall_m = _rescale_from_area_labels(page, scale, raster_faces, doors, raster_wall_m, notes)
+                if needs_inference(doors, raster_faces):
+                    doors = infer_doors(raster_faces, doors)
                 if not raster_faces:
                     scale = _raster_door_scale(page)
                     walls, doors = detect_raster(page, scale)
@@ -162,6 +173,10 @@ def run(
         for issue in issues
         if issue["code"] != "SCHEMA_INVALID"
     ]
+    inferred = sum(1 for level in level_payloads for door in level["doors"] if door.inferred)
+    if inferred:
+        notes["inferred_doors"] = inferred
+    scene["extensions"].update(notes)
     scene_path = out / "scene.json"
     scene_path.write_text(json.dumps(scene, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     display = build_display(scene)
@@ -178,6 +193,24 @@ def run(
     return scene, exit_code
 
 
+def _rescale_from_area_labels(page: PlanPage, scale: ScaleEstimate, faces, doors, wall_m: float, notes: dict):
+    """Correct a raster scale with room area tags when at least three agree."""
+
+    texts_m = [(span.text, (span.center[0] / scale.px_per_m, span.center[1] / scale.px_per_m)) for span in page.texts]
+    ratio = area_label_ratio(faces, texts_m, wall_m)
+    if ratio is None:
+        return scale, faces, doors, wall_m
+    notes["scale_source"] = "area_labels"
+
+    def grow(point):
+        return (point[0] * ratio, point[1] * ratio)
+
+    faces = [affinity.scale(face, ratio, ratio, origin=(0, 0)) for face in faces]
+    doors = [replace(door, p1=grow(door.p1), p2=grow(door.p2), width_m=door.width_m * ratio) for door in doors]
+    # The contract has no area-tag method; tags are measured text, the closest is dimension_text.
+    return ScaleEstimate(scale.px_per_m / ratio, "dimension_text", 0.85), faces, doors, wall_m * ratio
+
+
 def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[DoorOpening] = ()) -> list[Segment]:
     """Centerlines along raster room edges so walkable can cut the wall thickness.
 
@@ -187,9 +220,11 @@ def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[
     0.2 m walls (assemble_scene); pass the real thickness there to lift it.
     """
 
+    # Neighbouring faces overlap by one wall thickness, so the far face's edge sits
+    # a full wall away from the door line; both must be cut.
+    near = thickness_m + 0.05
     thickness_m = min(thickness_m, 0.2)
     openings = [LineString([door.p1, door.p2]) for door in doors]
-    near = thickness_m * 0.75 + 0.03
     walls: list[Segment] = []
     for face in faces:
         ring = list(face.exterior.coords)
@@ -198,8 +233,35 @@ def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[
                 continue
             if any(opening.distance(Point(start)) <= near and opening.distance(Point(end)) <= near for opening in openings):
                 continue
-            walls.append(Segment((float(start[0]), float(start[1])), (float(end[0]), float(end[1])), thickness_m))
+            for piece_start, piece_end in _cut_openings(start, end, openings, near):
+                walls.append(Segment(piece_start, piece_end, thickness_m))
     return walls
+
+
+def _cut_openings(start, end, openings: list[LineString], near: float) -> list[tuple[tuple[float, float], tuple[float, float]]]:
+    """Split a face edge around every door that lies along it (within ``near``)."""
+
+    edge = LineString([start, end])
+    gaps = []
+    for opening in openings:
+        a, b = opening.coords[0], opening.coords[-1]
+        if edge.distance(Point(a)) <= near and edge.distance(Point(b)) <= near:
+            low, high = sorted((edge.project(Point(a)), edge.project(Point(b))))
+            gaps.append((low - 0.05, high + 0.05))
+    pieces, cursor = [], 0.0
+    for low, high in sorted(gaps):
+        if low > cursor:
+            pieces.append((cursor, low))
+        cursor = max(cursor, high)
+    if cursor < edge.length:
+        pieces.append((cursor, edge.length))
+    out = []
+    for low, high in pieces:
+        if high - low < 0.03:
+            continue
+        p, q = edge.interpolate(low), edge.interpolate(high)
+        out.append(((float(p.x), float(p.y)), (float(q.x), float(q.y))))
+    return out
 
 
 def _scale_for(page: PlanPage, manual) -> ScaleEstimate:

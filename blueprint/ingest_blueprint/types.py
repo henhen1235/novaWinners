@@ -76,6 +76,7 @@ class DoorOpening:
     label: str = "Exit"
     hits: list[int] = field(default_factory=list)
     swing: int = 0
+    inferred: bool = False  # placed by geometry.infer_doors, not seen on the drawing
 
     @property
     def midpoint(self) -> tuple[float, float]:

@@ -22,6 +22,7 @@ DOOR_M = 0.9
 SIMPLIFY_M = 0.02
 MANHATTAN_SHARE = 0.85
 OUTSIDE = 1
+MAX_ASPECT = 25.0  # longer and thinner than any corridor: title-block bands, slivers
 
 
 def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpening], float]:
@@ -40,16 +41,22 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
     kept = _drop_small(binary, 30)
     distance = cv2.distanceTransform(kept, cv2.DIST_L2, 5)
     positive = distance[distance > 0]
-    radius = float(np.percentile(positive, 70)) if positive.size else 3.0
     # Thick strokes are single-line walls. Double-line plans are thin, so keep
-    # the ink mask itself when the distance transform has nothing thick.
-    if radius >= 3.5:
-        thick = (distance >= max(1.5, radius * 0.45)).astype(np.uint8) * 255
-    else:
-        thick = kept
+    # the ink mask itself when the distance transform has nothing thick. The
+    # 90th percentile (not the median) sees 0.2 m walls drawn at 60 px/m,
+    # where arcs and text outnumber wall pixels.
+    radius = float(np.percentile(positive, 90)) if positive.size else 3.0
+    double_line = radius < 3.0
+    thick = kept if double_line else (distance >= max(1.5, radius * 0.35)).astype(np.uint8) * 255
     wall_px = _wall_thickness_px(thick, kept)
+    if not double_line:
+        thick = cv2.bitwise_or(thick, _straight_thin_lines(kept, thick, wall_px))
     seal, seal_px = _choose_seal(thick, wall_px)
-    labels = _watershed(thick, seal)
+    labels = _merge_open_seams(_watershed(thick, seal, wall_px), thick, seal_px)
+    if double_line:
+        # The watershed splits each gap between a wall's two hairlines at its
+        # centre, so faces already end on the centreline; the wall is that gap.
+        wall_px = _double_line_gap_px(labels, thick) + 1.0
     doors_px = _seam_doors(labels, thick, max_px=seal_px)
     widths = [width for width, _p1, _p2, _pair in doors_px if width >= seal_px * 0.4]
     if widths:
@@ -62,16 +69,71 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
         px_per_m = 100.0
         confidence = 0.3
     wall_m = max(0.1, wall_px / px_per_m)
-    faces, keep_labels = _label_faces(labels, thick, px_per_m, wall_m / 2.0)
+    faces, keep_labels = _label_faces(labels, thick, px_per_m, 0.0 if double_line else wall_m / 2.0)
     doors = []
     for width, p1, p2, pair in doors_px:
+        if not double_line and _glazed(kept, thick, p1, p2, wall_px):
+            continue
         width_m = width / px_per_m
-        if not 0.5 <= width_m <= 2.0 or not set(pair) - {OUTSIDE} <= keep_labels:
+        if width_m < 0.5 or (width_m > 2.0 and OUTSIDE not in pair) or not set(pair) - {OUTSIDE} <= keep_labels:
             continue
         doors.append(
             DoorOpening((p1[0] / px_per_m, p1[1] / px_per_m), (p2[0] / px_per_m, p2[1] / px_per_m), width_m, is_exit=OUTSIDE in pair)
         )
     return ScaleEstimate(px_per_m, "door_reference", confidence), faces, doors, wall_m
+
+
+def _straight_thin_lines(ink: np.ndarray, thick: np.ndarray, wall_px: float) -> np.ndarray:
+    """Thin ink that is long and straight (glazing, thin partitions) as wall pixels.
+
+    Windows are drawn as thin outlines between solid wall ends; left out, every
+    window is a gap in the envelope and its room leaks outside. Text, swing
+    arcs and dashes are short or round, and free-floating lines do not touch a
+    wall, so they stay out.
+    """
+
+    rim = max(3, int(wall_px))
+    walls = cv2.dilate(thick, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (rim, rim)))
+    thin = ((ink > 0) & (walls == 0)).astype(np.uint8)
+    near_wall = cv2.dilate(walls, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * rim + 1, 2 * rim + 1))) > 0
+    count, parts, stats, _ = cv2.connectedComponentsWithStats(thin, connectivity=8)
+    keep = np.zeros(count, np.uint8)
+    for index in range(1, count):
+        left, top, width, height, _area = (int(v) for v in stats[index])
+        if max(width, height) < 4 * wall_px:
+            continue
+        ys, xs = np.nonzero(parts[top : top + height, left : left + width] == index)
+        (_cx, _cy), (side_a, side_b), _angle = cv2.minAreaRect(np.column_stack((xs, ys)).astype(np.float32))
+        long_side, short_side = max(side_a, side_b), max(min(side_a, side_b), 1.0)
+        # Glazing spans between wall ends; scale bars, dimension lines and hatching float free.
+        touches = near_wall[ys + top, xs + left].any()
+        if touches and long_side >= 4 * wall_px and long_side / short_side >= 4:
+            keep[index] = 255
+    return keep[parts]
+
+
+def _glazed(ink: np.ndarray, thick: np.ndarray, p1, p2, wall_px: float) -> bool:
+    """True when thin ink spans the whole gap inside the wall line: a window, not a doorway.
+
+    Glazing is drawn as thin lines across the full opening, within the wall
+    thickness. A swing arc or an "EXIT" label covers only part of that strip.
+    """
+
+    length = math.dist(p1, p2)
+    if length < 2:
+        return False
+    mask = np.zeros(ink.shape, np.uint8)
+    cv2.line(mask, (int(p1[0]), int(p1[1])), (int(p2[0]), int(p2[1])), 255, max(3, int(wall_px)))
+    # The wall mask is the ink eroded, so its rim is "thin" ink too; grow it back first.
+    rim = max(3, int(wall_px))
+    walls = cv2.dilate(thick, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (rim, rim)))
+    ys, xs = np.nonzero((ink > 0) & (walls == 0) & (mask > 0))
+    if xs.size == 0:
+        return False
+    direction = (np.array(p2) - np.array(p1)) / length
+    along = (np.column_stack((xs, ys)) - np.array(p1)) @ direction
+    covered = np.unique(np.clip(along, 0, length - 1).astype(int)).size
+    return covered / length >= 0.9
 
 
 def _wall_thickness_px(thick: np.ndarray, ink: np.ndarray) -> float:
@@ -82,6 +144,14 @@ def _wall_thickness_px(thick: np.ndarray, ink: np.ndarray) -> float:
     distance = cv2.distanceTransform(ink, cv2.DIST_L2, 5)
     ridge = distance[skeletonize(thick > 0)]
     return float(2.0 * np.median(ridge)) if ridge.size else 4.0
+
+
+def _double_line_gap_px(labels: np.ndarray, thick: np.ndarray) -> float:
+    """Twice the median ink clearance on room-room seams: the spacing of double-line walls."""
+
+    clearance = cv2.distanceTransform((thick == 0).astype(np.uint8), cv2.DIST_L2, 5)
+    values = clearance[(labels == -1) & (thick == 0)]
+    return float(2.0 * np.median(values)) if values.size else 2.0
 
 
 def _choose_seal(thick: np.ndarray, wall_px: float) -> tuple[np.ndarray, float]:
@@ -124,21 +194,28 @@ def _min_room_px(shape) -> int:
     return max(400, int(shape[0] * shape[1] * 2e-4))
 
 
-def _watershed(thick: np.ndarray, seal: np.ndarray) -> np.ndarray:
-    """Labels: OUTSIDE for the page exterior, 2.. for sealed rooms, -1 on seams, 0 never."""
+def _watershed(thick: np.ndarray, seal: np.ndarray, wall_px: float) -> np.ndarray:
+    """Labels: OUTSIDE for the page exterior, 2.. for sealed rooms, -1 on seams, 0 never.
 
-    free = (seal == 0).astype(np.uint8)
+    Free space inside the building footprint is never exterior, even when a
+    glazed or open stretch of envelope (wider than any door) lets it leak out
+    to the page edge; it is cut along the footprint outline and seeded as rooms.
+    """
+
+    free = ((seal == 0) & (_footprint_outline(thick, wall_px) == 0)).astype(np.uint8)
     count, components, stats, _ = cv2.connectedComponentsWithStats(free, 4)
-    markers = np.zeros(thick.shape, np.int32)
+    lookup = np.zeros(count, np.int32)
     next_label = OUTSIDE + 1
     min_area = _min_room_px(thick.shape)
+    height, width = thick.shape
     for index in range(1, count):
-        component = components == index
-        if _touches_border(component.astype(np.uint8)):
-            markers[component] = OUTSIDE
-        elif stats[index, cv2.CC_STAT_AREA] >= min_area:
-            markers[component] = next_label
+        left, top, box_w, box_h, area = (int(v) for v in stats[index])
+        if left == 0 or top == 0 or left + box_w >= width or top + box_h >= height:
+            lookup[index] = OUTSIDE
+        elif area >= min_area:
+            lookup[index] = next_label
             next_label += 1
+    markers = lookup[components]
     # Seed the page margin as exterior even if the dilation sealed it shut.
     markers[0, :] = markers[-1, :] = OUTSIDE
     markers[:, 0] = markers[:, -1] = OUTSIDE
@@ -146,31 +223,104 @@ def _watershed(thick: np.ndarray, seal: np.ndarray) -> np.ndarray:
     return cv2.watershed(landscape, markers)
 
 
-def _seam_doors(labels: np.ndarray, thick: np.ndarray, max_px: float):
-    """Seams through free space between two labels, as (width_px, p1, p2, (a, b))."""
+def _footprint_outline(thick: np.ndarray, wall_px: float) -> np.ndarray:
+    """Outer outline of the building: wall ink closed by a disk, holes ignored.
 
-    seam = (labels == -1) & (thick == 0)
-    pairs: dict[tuple[int, int], list[tuple[int, int]]] = {}
-    padded = np.pad(labels, 1, constant_values=-1)
-    for y, x in zip(*np.nonzero(seam)):
-        window = padded[y : y + 3, x : x + 3]
-        found = sorted({int(v) for v in window.ravel() if v > 0})
-        if len(found) == 2:
-            pairs.setdefault((found[0], found[1]), []).append((x, y))
+    The disk is 2% of the page. Where the envelope is already closed the
+    outline lies on the ink and changes nothing. ponytail: a page fraction;
+    size it in metres once scale is known (12 wall thicknesses was tried and
+    cost exits on the synthetic plans).
+    """
+
+    size = _odd(max(15, 0.02 * max(thick.shape)))
+    closed = cv2.morphologyEx(thick, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    outline = np.zeros_like(thick)
+    cv2.drawContours(outline, contours, -1, 255, 3)
+    return outline
+
+
+def _neighbour_labels(labels: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Largest and smallest positive label in each 3x3 window (smallest is 1e7 where none)."""
+
+    big = np.float32(1e7)
+    kernel = np.ones((3, 3), np.uint8)
+    high = cv2.dilate(np.where(labels > 0, labels, 0).astype(np.float32), kernel)
+    low = -cv2.dilate(np.where(labels > 0, -labels.astype(np.float32), -big), kernel)
+    return high, low
+
+
+def _merge_open_seams(labels: np.ndarray, thick: np.ndarray, seal_px: float) -> np.ndarray:
+    """Join labels whose seam is longer than a door and runs through open floor.
+
+    Big open areas (atria, lobbies, corridors) are seeded as several pieces
+    where the dilation pinches them; the seam between two such pieces is an
+    opening wider than any door, not a wall, so they are one space.
+    """
+
+    high, low = _neighbour_labels(labels)
+    seam = (labels == -1) & (thick == 0) & (high > OUTSIDE) & (low > OUTSIDE) & (low < 1e7) & (high != low)
+    clearance = cv2.distanceTransform((thick == 0).astype(np.uint8), cv2.DIST_L2, 5)
+    count, parts, stats, _ = cv2.connectedComponentsWithStats(seam.astype(np.uint8), connectivity=8)
+    parent = np.arange(int(labels.max()) + 1)
+
+    def find(node: int) -> int:
+        while parent[node] != node:
+            parent[node] = parent[parent[node]]
+            node = parent[node]
+        return node
+
+    merged = False
+    for index in range(1, count):
+        left, top, width, height, _area = (int(v) for v in stats[index])
+        if np.hypot(width, height) <= seal_px * 1.1:
+            continue
+        ys, xs = np.nonzero(parts[top : top + height, left : left + width] == index)
+        if np.median(clearance[ys + top, xs + left]) < seal_px / 4.0:
+            continue
+        a, b = find(int(low[ys[0] + top, xs[0] + left])), find(int(high[ys[0] + top, xs[0] + left]))
+        if a != b:
+            parent[a] = b
+            merged = True
+    if not merged:
+        return labels
+    lookup = np.array([find(node) for node in range(len(parent))], np.int32)
+    relabeled = np.where(labels > 0, lookup[np.maximum(labels, 0)], labels)
+    high, low = _neighbour_labels(relabeled)
+    inner = (relabeled == -1) & (high == low) & (high > 0)
+    relabeled[inner] = high[inner].astype(np.int32)
+    return relabeled
+
+
+def _seam_doors(labels: np.ndarray, thick: np.ndarray, max_px: float):
+    """Seams through free space between two labels, as (width_px, p1, p2, (a, b)).
+
+    A seam no longer than the seal is a door. A longer seam to the exterior that
+    runs through open floor is an opening in the envelope (glazing, an entrance
+    the drawing leaves open) and is kept as an exit.
+    """
+
+    clearance = cv2.distanceTransform((thick == 0).astype(np.uint8), cv2.DIST_L2, 5)
+    high, low = _neighbour_labels(labels)
+    seam = (labels == -1) & (thick == 0) & (high > 0) & (low < 1e7) & (high != low)
+    count, parts, stats, _ = cv2.connectedComponentsWithStats(seam.astype(np.uint8), connectivity=8)
     doors = []
-    for pair, points in pairs.items():
-        mask = np.zeros(thick.shape, np.uint8)
-        xs, ys = zip(*points)
-        mask[list(ys), list(xs)] = 255
-        count, parts = cv2.connectedComponents(cv2.dilate(mask, np.ones((3, 3), np.uint8)), connectivity=8)
-        for index in range(1, count):
-            pts = np.column_stack(np.nonzero((parts == index) & (mask > 0)))[:, ::-1].astype(np.float64)
-            if len(pts) < 3:
-                continue
-            p1, p2 = _extent(pts)
-            width = float(np.hypot(p2[0] - p1[0], p2[1] - p1[1]))
-            if width <= max_px * 1.1:
-                doors.append((width, p1, p2, pair))
+    for index in range(1, count):
+        left, top, width, height, area = (int(v) for v in stats[index])
+        if area < 3:
+            continue
+        ys, xs = np.nonzero(parts[top : top + height, left : left + width] == index)
+        if np.hypot(width, height) > max_px * 1.1 and (
+            int(low[ys[0] + top, xs[0] + left]) != OUTSIDE or np.median(clearance[ys + top, xs + left]) < max_px / 4.0
+        ):
+            continue
+        pts = np.column_stack((xs + left, ys + top)).astype(np.float64)
+        pair_low = low[ys + top, xs + left].astype(np.int64)
+        pair_high = high[ys + top, xs + left].astype(np.int64)
+        keys, counts = np.unique(pair_low * 1_000_000 + pair_high, return_counts=True)
+        key = int(keys[np.argmax(counts)])
+        p1, p2 = _extent(pts)
+        doors.append((float(np.hypot(p2[0] - p1[0], p2[1] - p1[1])), p1, p2, (key // 1_000_000, key % 1_000_000)))
     return doors
 
 
@@ -186,13 +336,18 @@ def _extent(points: np.ndarray) -> tuple[tuple[float, float], tuple[float, float
 def _label_faces(labels: np.ndarray, thick: np.ndarray, px_per_m: float, offset_m: float) -> tuple[list[Polygon], set[int]]:
     """Room faces: each watershed region's free space, offset out to the wall centreline."""
 
+    from scipy.ndimage import find_objects
+
     rooms = []
-    free = thick == 0
-    for label in range(OUTSIDE + 1, int(labels.max()) + 1):
-        component = ((labels == label) & free).astype(np.uint8)
-        if component.sum() < 0.8 * px_per_m * px_per_m:
+    room_labels = np.where((thick == 0) & (labels > OUTSIDE), labels, 0)
+    for label, window in enumerate(find_objects(room_labels), start=1):
+        if window is None:
             continue
-        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        component = (room_labels[window] == label).astype(np.uint8)
+        # Pixel threshold, same as the seeds: px_per_m may still be a guess here.
+        if component.sum() < _min_room_px(labels.shape):
+            continue
+        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE, offset=(window[1].start, window[0].start))
         if not contours:
             continue
         contour = max(contours, key=cv2.contourArea)
@@ -206,15 +361,21 @@ def _label_faces(labels: np.ndarray, thick: np.ndarray, px_per_m: float, offset_
             points = _axis_snap(points)
         if len(points) < 3:
             continue
-        polygon = Polygon(points).buffer(offset_m, join_style=2)
+        polygon = Polygon(points).buffer(offset_m, join_style=2) if offset_m > 0 else Polygon(points).buffer(0)
         if not polygon.is_valid:
             polygon = polygon.buffer(0)
         if polygon.geom_type == "MultiPolygon":
             polygon = max(polygon.geoms, key=lambda part: part.area)
-        if polygon.geom_type == "Polygon" and polygon.area > 1.0:
+        if polygon.geom_type == "Polygon" and not polygon.is_empty and _aspect(polygon) <= MAX_ASPECT:
             faces.append(polygon)
             kept.add(label)
     return faces, kept
+
+
+def _aspect(polygon: Polygon) -> float:
+    corners = list(polygon.minimum_rotated_rectangle.exterior.coords)
+    sides = sorted((math.dist(corners[0], corners[1]), math.dist(corners[1], corners[2])))
+    return sides[1] / max(sides[0], 1e-6)
 
 
 def _is_manhattan(rings: list[list[tuple[float, float]]]) -> bool:
@@ -251,17 +412,11 @@ def _axis_snap(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
     return snapped
 
 
-def _touches_border(mask: np.ndarray) -> bool:
-    return bool(mask[0].any() or mask[-1].any() or mask[:, 0].any() or mask[:, -1].any())
-
-
 def _drop_small(mask: np.ndarray, min_area: int) -> np.ndarray:
     count, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
-    kept = np.zeros_like(mask)
-    for label in range(1, count):
-        if stats[label, cv2.CC_STAT_AREA] >= min_area:
-            kept[labels == label] = 255
-    return kept
+    keep = np.where(stats[:, cv2.CC_STAT_AREA] >= min_area, 255, 0).astype(mask.dtype)
+    keep[0] = 0
+    return keep[labels]
 
 
 def _odd(value: float) -> int:

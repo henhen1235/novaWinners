@@ -16,6 +16,42 @@ _MILLIMETER = re.compile(r"(?<!\d)(\d{3,5})(?!\d)")
 _FEET = re.compile(r"(\d+)\s*'\s*-?\s*(\d+(?:\.\d+)?)\s*\"")
 
 
+_AREA = re.compile(r"^\s*([\d,]+(?:\.\d+)?)\s*(sf|sq\.?\s*ft|ft2|m2|m\u00b2|sqm)\s*$", re.IGNORECASE)
+SQFT_M2 = 0.09290304
+
+
+def area_label_ratio(faces, texts_m, wall_m: float) -> float | None:
+    """Linear scale correction from room area tags ("395 SF", "12.5 m2").
+
+    For each face holding exactly one area tag, compare the face's net area
+    (inset by half a wall) with the tag. Returns the median length ratio
+    true/current (multiply coordinates by it), or None with fewer than three
+    tags or when the tags disagree by more than 25%.
+    """
+
+    from shapely.geometry import Point
+
+    tags = []
+    for text, anchor in texts_m:
+        match = _AREA.match(text)
+        if match:
+            value = float(match.group(1).replace(",", ""))
+            metric = match.group(2).lower() in {"m2", "m\u00b2", "sqm"}
+            tags.append((value if metric else value * SQFT_M2, Point(anchor)))
+    ratios = []
+    for face in faces:
+        inside = [m2 for m2, point in tags if face.contains(point)]
+        net = face.buffer(-wall_m / 2.0, join_style=2).area
+        if len(inside) == 1 and inside[0] > 1.0 and net > 0:
+            ratios.append((inside[0] / net) ** 0.5)
+    if len(ratios) < 3:
+        return None
+    ratios.sort()
+    middle = ratios[len(ratios) // 2]
+    spread = ratios[3 * len(ratios) // 4] / ratios[len(ratios) // 4]
+    return middle if spread <= 1.25 else None
+
+
 def px_per_m_from_door_widths(widths_px: list[float], assumed_m: float = 0.9) -> float:
     """Convert detected door widths in pixels to px/m. ``assumed_m`` is the reference door."""
 
@@ -48,26 +84,36 @@ def _length(points: list[tuple[float, float]]) -> float:
     return ((x1 - x0) ** 2 + (y1 - y0) ** 2) ** 0.5
 
 
-def _near_lines(page: PlanPage, center: tuple[float, float], radius_px: float) -> list[Stroke]:
-    """Lines whose body passes within ``radius_px`` of a text anchor, not just their midpoint."""
+def _line_array(page: PlanPage) -> "np.ndarray":
+    """Thin straight strokes as an (N, 5) array: x0, y0, x1, y1, width_px."""
 
-    found = []
-    for stroke in _line_strokes(page):
-        if _point_segment_distance(center, stroke.points[0], stroke.points[-1]) <= radius_px:
-            found.append(stroke)
-    return found
+    import numpy as np
+
+    rows = [
+        (*stroke.points[0], *stroke.points[-1], stroke.width_px)
+        for stroke in _line_strokes(page)
+        if stroke.width_px <= 6.0 and _length(stroke.points) >= 20.0
+    ]
+    return np.asarray(rows, np.float64).reshape(-1, 5)
 
 
-def _point_segment_distance(point, start, end) -> float:
-    vx = end[0] - start[0]
-    vy = end[1] - start[1]
-    length_sq = vx * vx + vy * vy
-    if length_sq < 1e-9:
-        return ((point[0] - start[0]) ** 2 + (point[1] - start[1]) ** 2) ** 0.5
-    t = ((point[0] - start[0]) * vx + (point[1] - start[1]) * vy) / length_sq
-    t = max(0.0, min(1.0, t))
-    nearest = (start[0] + t * vx, start[1] + t * vy)
-    return ((point[0] - nearest[0]) ** 2 + (point[1] - nearest[1]) ** 2) ** 0.5
+def _closest_line(lines, center: tuple[float, float], radius_px: float) -> tuple[float, float] | None:
+    """(distance, length) of the thin line passing closest to ``center`` within ``radius_px``."""
+
+    import numpy as np
+
+    if not len(lines):
+        return None
+    start, end = lines[:, 0:2], lines[:, 2:4]
+    vector = end - start
+    length_sq = np.maximum((vector**2).sum(axis=1), 1e-9)
+    t = np.clip(((np.asarray(center) - start) * vector).sum(axis=1) / length_sq, 0.0, 1.0)
+    nearest = start + vector * t[:, None]
+    distance = np.hypot(*(nearest - np.asarray(center)).T)
+    index = int(np.argmin(distance))
+    if distance[index] > radius_px:
+        return None
+    return float(distance[index]), float(np.sqrt(length_sq[index]))
 
 
 def _plausible(px_per_m: float) -> bool:
@@ -75,52 +121,46 @@ def _plausible(px_per_m: float) -> bool:
 
 
 def _scale_bar(page: PlanPage) -> ScaleEstimate | None:
+    lines = _line_array(page)
     best: tuple[float, float] | None = None
     for span in page.texts:
         numbers = [float(value) for value in _METER.findall(span.text)]
         meters = max(numbers) if numbers else 0.0
         if meters < 0.5:
             continue
-        candidates = _near_lines(page, span.center, 80.0)
-        for stroke in candidates:
-            # Walls are thick. A scale bar is a thin stroke sitting next to the label.
-            if stroke.width_px > 6.0:
-                continue
-            length = _length(stroke.points)
-            if length < 20.0:
-                continue
-            px_per_m = length / meters
-            if not _plausible(px_per_m):
-                continue
-            distance = _point_segment_distance(span.center, stroke.points[0], stroke.points[-1])
-            if best is None or distance < best[0]:
-                best = (distance, px_per_m)
+        hit = _closest_line(lines, span.center, 80.0)
+        if hit is None or not _plausible(hit[1] / meters):
+            continue
+        if best is None or hit[0] < best[0]:
+            best = (hit[0], hit[1] / meters)
     if best is None:
         return None
     return ScaleEstimate(px_per_m=best[1], method="scale_bar", confidence=0.95)
 
 
 def _dimension(page: PlanPage) -> ScaleEstimate | None:
-    best: tuple[float, float] | None = None
+    """Dimension strings beside lines. Several must agree within 5%.
+
+    Room numbers on CAD sheets ("3401") parse as millimetres and sit beside
+    random walls, so a lone candidate is trusted only when it is the only one.
+    """
+
+    lines = _line_array(page)
+    candidates = []
     for span in page.texts:
         meters = _parse_dimension_meters(span.text)
         if meters is None or meters < 0.5:
             continue
-        for stroke in _near_lines(page, span.center, 70.0):
-            if stroke.width_px > 6.0:
-                continue
-            length = _length(stroke.points)
-            if length < 20.0:
-                continue
-            px_per_m = length / meters
-            if not _plausible(px_per_m):
-                continue
-            distance = _point_segment_distance(span.center, stroke.points[0], stroke.points[-1])
-            if best is None or distance < best[0]:
-                best = (distance, px_per_m)
-    if best is None:
+        hit = _closest_line(lines, span.center, 70.0)
+        if hit is not None and _plausible(hit[1] / meters):
+            candidates.append(hit[1] / meters)
+    if not candidates:
         return None
-    return ScaleEstimate(px_per_m=best[1], method="dimension_text", confidence=0.8)
+    support = [[other for other in candidates if abs(other - value) <= 0.05 * value] for value in candidates]
+    best = max(support, key=len)
+    if len(best) < 2 and len(candidates) > 1:
+        return None
+    return ScaleEstimate(px_per_m=float(median(best)), method="dimension_text", confidence=0.8)
 
 
 def _parse_dimension_meters(text: str) -> float | None:

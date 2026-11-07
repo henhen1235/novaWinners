@@ -25,7 +25,11 @@ def bench(plan_dirs: list[Path], out_root: Path) -> list[dict]:
         if plan is None or not truth.is_file():
             continue
         start = time.perf_counter()
-        scene, code = run(plan, out_root / directory.name, no_llm=True)
+        try:
+            scene, code = run(plan, out_root / directory.name, no_llm=True)
+        except Exception as error:  # noqa: BLE001 - a crash is a row in the table, not the end of the run
+            rows.append({"name": directory.name, **{key: "crash" for key in COLUMNS}, "errors": type(error).__name__, "seconds": "-"})
+            continue
         seconds = time.perf_counter() - start
         score = score_scenes(scene, load_scene(truth))
         errors = sum(1 for warning in scene["warnings"] if warning["severity"] == "error")
