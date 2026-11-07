@@ -58,6 +58,16 @@ else
   fail "samples/cmu/tepper/scene.json missing (pull main)"
 fi
 
+# Mudge House (dorm). Not added to SCENES: its full analysis takes over 10 minutes.
+if [ -f samples/cmu/mudge/scene.json ]; then
+  mkdir -p "$PUBLIC/mudge"
+  cp samples/cmu/mudge/scene.json "$PUBLIC/mudge/"
+  [ -f samples/cmu/mudge/display.glb ] && cp samples/cmu/mudge/display.glb "$PUBLIC/mudge/"
+  echo "mudge: copied"
+else
+  fail "samples/cmu/mudge/scene.json missing (pull main)"
+fi
+
 mkdir -p "$PUBLIC/fixtures"
 cp fixtures/tiny_office.scene.json fixtures/two_floor_school.scene.json "$PUBLIC/fixtures/"
 echo "fixtures: copied"
