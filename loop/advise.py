@@ -18,6 +18,8 @@ import json
 import math
 import ssl
 import statistics
+import time
+import urllib.error
 import urllib.request
 from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -268,8 +270,15 @@ def call_llm(messages: list[dict], tools: list[dict], model: str) -> tuple[dict,
         raise RuntimeError("OPENROUTER_API_KEY not set (env or repo .env)")
     req = urllib.request.Request("https://openrouter.ai/api/v1/chat/completions", raw,
                                  {"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300, context=ssl.create_default_context(cafile=certifi.where())) as r:
-        resp = json.load(r)
+    for attempt in range(4):  # shared key: back off on 429
+        try:
+            with urllib.request.urlopen(req, timeout=300, context=ssl.create_default_context(cafile=certifi.where())) as r:
+                resp = json.load(r)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == 3:
+                raise
+            time.sleep(15 * (attempt + 1))
     if "choices" not in resp:
         raise RuntimeError(f"OpenRouter error: {str(resp.get('error', resp))[:300]}")
     msg = {k: v for k, v in resp["choices"][0]["message"].items() if k in ("role", "content", "tool_calls") and v is not None}
