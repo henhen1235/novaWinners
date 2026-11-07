@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Unit = Field(ge=0.0, le=1.0)
 
@@ -84,7 +84,41 @@ class Decision(BaseModel):
     padm: Padm
     say: str | None = None
     feel: str = "calm"
-    confidence: float = Unit
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _hoist(cls, v: object) -> object:
+        """Some models (llama-4-scout) nest say/feel/confidence inside padm or give feel as a dict of scores."""
+        if not isinstance(v, dict):
+            return v
+        v = dict(v)
+        padm = v.get("padm") if isinstance(v.get("padm"), dict) else {}
+        for k in ("say", "feel", "confidence"):
+            if k not in v and k in padm:
+                v[k] = padm[k]
+        if isinstance(v.get("feel"), dict):
+            nums = {k: x for k, x in v["feel"].items() if isinstance(x, (int, float))}
+            v["feel"] = max(nums, key=nums.get) if nums else "calm"
+        return v
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _coerce_confidence(cls, v: object) -> float:
+        """Tolerate "0.8", "80%", 80, "high" (seen from llama-4-scout); clamp to [0, 1]."""
+        if isinstance(v, str):
+            t = v.strip().lower().rstrip("%")
+            words = {"high": 0.8, "medium": 0.5, "moderate": 0.5, "low": 0.2, "very high": 0.95, "very low": 0.05}
+            if t in words:
+                return words[t]
+            try:
+                v = float(t) / (100 if v.strip().endswith("%") else 1)
+            except ValueError:
+                return 0.5
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            v = float(v) / 100 if v >= 10 else float(v)  # 80 means 80%; 1.7 is clamped to 1
+            return min(1.0, max(0.0, v))
+        return 0.5
 
 
 class Validation(BaseModel):

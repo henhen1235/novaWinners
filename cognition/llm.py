@@ -41,10 +41,30 @@ def available() -> bool:
     return _key() is not None
 
 
+JSON_ONLY = "\n\nReply with the JSON object only: no prose before or after it, no code fences."
+# Per-model request shapes, first matching prefix wins (research/MODEL_CASTING_RUN.md):
+# gpt-oss rejects reasoning off ("Reasoning is mandatory") and spends hidden tokens, so low effort and room;
+# llama-4 has no endpoint that accepts response_format here, so ask for JSON in the prompt instead.
+SHAPES: list[tuple[str, dict]] = [
+    ("openai/gpt-oss", {"reasoning": {"effort": "low"}, "min_tokens": 400}),
+    ("meta-llama/", {"reasoning": None, "response_format": None, "json_hint": True}),
+]
+
+
+def shape(model: str) -> dict:
+    return next((s for prefix, s in SHAPES if model.startswith(prefix)), {})
+
+
 def _body(messages: list[dict], model: str, temperature: float, max_tokens: int) -> dict:
-    return {"model": model, "messages": messages, "temperature": temperature, "max_tokens": max_tokens,
-            "reasoning": {"enabled": False}, "response_format": {"type": "json_object"},
-            "usage": {"include": True}}
+    """Request body; models without an entry in SHAPES get exactly the default body (cache keys unchanged)."""
+    sh = shape(model)
+    if sh.get("json_hint") and messages and messages[-1].get("role") == "user":
+        messages = messages[:-1] + [{**messages[-1], "content": messages[-1]["content"] + JSON_ONLY}]
+    body = {"model": model, "messages": messages, "temperature": temperature,
+            "max_tokens": max(max_tokens, sh.get("min_tokens", 0)),
+            "reasoning": sh.get("reasoning", {"enabled": False}),
+            "response_format": sh.get("response_format", {"type": "json_object"}), "usage": {"include": True}}
+    return {k: v for k, v in body.items() if v is not None}
 
 
 def _hit(body: dict, tag: str) -> Path:
