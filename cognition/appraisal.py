@@ -40,6 +40,8 @@ def parse_claims(text: str) -> dict:
     """Crude claims from free speech, so an agent's `say` can spread a rumor. ponytail: keywords only."""
     t = (text or "").lower()
     out: dict = {}
+    for i, w in enumerate(("one", "two", "three", "four", "five", "six", "seven", "eight", "nine"), 1):
+        t = re.sub(rf"\bexit {w}\b", f"exit {i}", t)
     m = _EXIT_RE.search(t)
     if m and re.search(r"block|lock|closed|shut|can't get|cannot get|jammed", t):
         out["exit_blocked"] = f"e_{int(m.group(1) or m.group(2)):03d}"
