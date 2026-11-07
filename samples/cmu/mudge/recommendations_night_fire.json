@@ -1,0 +1,351 @@
+{
+ "model": "anthropic/claude-opus-5.5",
+ "summary": "303 of 305 people got out, but the last one left at 542 s. Smoke in the fire room (r_A105) reaches 1.8 m at about 121 s, so the margin is -421 s. Two problems drive this: slow pre-movement (median 71 s, p90 166 s, visitors slowest) and two mobility-impaired people left waiting at stair refuges because there is no assisted evacuation plan. Exit width and queueing are not the problem: there was almost no queueing and exit capacity is well above what is needed. Several single rooms, if lost, cut off many other rooms.",
+ "evidence": [
+  {
+   "id": "E1",
+   "text": "RSET overall: alarm at 0 s; pre-movement median 71.0 s (p90 165.5); travel median 32.5 s; queueing median 0.0 s (p90 0.0); last exit 542.0 s; evacuated 303/305 by 600.0 s."
+  },
+  {
+   "id": "E2",
+   "text": "RSET mobility_impaired (2 people, 0 out): pre-movement median 321.5 s, travel median None s, queueing median None s, last exit None s."
+  },
+  {
+   "id": "E3",
+   "text": "RSET regular (274 people, 274 out): pre-movement median 69.8 s, travel median 32.5 s, queueing median 0.0 s, last exit 376.0 s."
+  },
+  {
+   "id": "E4",
+   "text": "RSET staff (2 people, 2 out): pre-movement median 27.5 s, travel median 17.2 s, queueing median 0.2 s, last exit 72.0 s."
+  },
+  {
+   "id": "E5",
+   "text": "RSET visitor (27 people, 27 out): pre-movement median 90.5 s, travel median 35.5 s, queueing median 0.0 s, last exit 542.0 s."
+  },
+  {
+   "id": "E6",
+   "text": "ASET estimate: smoke from the fire in r_A105 (t=0 s) reaches 1.8 m in that room after 121.1 s (closed-room zone estimate, analysis/smoke.py, room of origin only). Against the last exit (542.0 s) the ASET-RSET margin is -420.9 s (negative: not everyone is out in time)."
+  },
+  {
+   "id": "E7",
+   "text": "Stragglers: 2 of 305 still inside at the end; by persona {'mobility_impaired': 2}; by state {'waiting_at_refuge': 2}; by room {'r_A300B': 1, 'r_C200D': 1}."
+  },
+  {
+   "id": "E8",
+   "text": "Straggler a_029 (mobility_impaired): ends waiting_at_refuge on L3 in room r_A300B; last decision at t=85.5 s: GO_TO_REFUGE, evidence ['p1'], why: 'I cannot take the stairs; I wait at the landing for help.'."
+  },
+  {
+   "id": "E9",
+   "text": "Straggler a_253 (mobility_impaired): ends waiting_at_refuge on L2 in room r_C200D; last decision at t=555.5 s: GO_TO_REFUGE, evidence ['p1'], why: 'I cannot take the stairs; I wait at the landing for help.'."
+  },
+  {
+   "id": "E10",
+   "text": "Exit exit_1_04 (L1, 1.526 m): 50 people (17%); peak flow 0.72 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 2 queued within 5 m."
+  },
+  {
+   "id": "E11",
+   "text": "Exit exit_1_16 (L1, 1.526 m): 46 people (15%); peak flow 0.59 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E12",
+   "text": "Exit exit_1_02 (L1, 0.92 m): 41 people (14%); peak flow 1.20 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E13",
+   "text": "Exit exit_1_13 (L1, 0.917 m): 32 people (11%); peak flow 0.76 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E14",
+   "text": "Exit exit_1_09 (L1, 0.8 m): 30 people (10%); peak flow 0.62 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 0 queued within 5 m."
+  },
+  {
+   "id": "E15",
+   "text": "Exit exit_1_01 (L1, 0.8 m): 23 people (8%); peak flow 0.62 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E16",
+   "text": "Exit exit_1_14 (L1, 0.8 m): 20 people (7%); peak flow 0.50 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E17",
+   "text": "Exit exit_1_17 (L1, 0.8 m): 20 people (7%); peak flow 0.50 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E18",
+   "text": "Exit exit_1_03 (L1, 0.8 m): 17 people (6%); peak flow 0.50 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E19",
+   "text": "Exit exit_1_15 (L1, 1.02 m): 11 people (4%); peak flow 0.29 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 1 queued within 5 m."
+  },
+  {
+   "id": "E20",
+   "text": "Exit exit_1_07 (L1, 2.0 m): 6 people (2%); peak flow 0.10 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 0 queued within 5 m."
+  },
+  {
+   "id": "E21",
+   "text": "Exit exit_1_06 (L1, 0.914 m): 4 people (1%); peak flow 0.22 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 0 queued within 5 m."
+  },
+  {
+   "id": "E22",
+   "text": "Exit exit_1_11 (L1, 0.8 m): 2 people (1%); peak flow 0.12 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 0 queued within 5 m."
+  },
+  {
+   "id": "E23",
+   "text": "Exit exit_1_05 (L1, 0.914 m): 1 people (0%); peak flow 0.11 p/s/m over 10 s against the sim's 1.3 p/s/m maximum; max 0 queued within 5 m."
+  },
+  {
+   "id": "E24",
+   "text": "Unused exits (3 of 17): ['exit_1_08', 'exit_1_10', 'exit_1_12']."
+  },
+  {
+   "id": "E25",
+   "text": "Stair queues (max people queued within 5 m of a stair end): {'stair_A_1_C19F': 2, 'stair_1_2_C100D': 2, 'stair_A_1_C19C': 1, 'stair_A_1_B19C': 1, 'stair_A_1_B19': 1}."
+  },
+  {
+   "id": "E26",
+   "text": "Screening, not a code review: egress width 18.5 m of exits for 305 occupants; at 0.2 in per occupant (IBC 1005.3.2 as quoted in research/MAPPING_IDEAS.md, unverified) 1.55 m is needed: enough. Exits per level against occupant load: not checked (no factor in analysis/ or research/)."
+  },
+  {
+   "id": "E27",
+   "text": "Screening, not a code review: accessible means of egress: 2 people end the run waiting at a stair refuge (rooms {'r_A300B': 1, 'r_C200D': 1}); no assisted evacuation plan is in the scenario"
+  },
+  {
+   "id": "E28",
+   "text": "Single point of failure (room r_B19): losing it strands 30 rooms (40 occupants by IBC load) and removes 0% of exit width (analysis/spof.py)."
+  },
+  {
+   "id": "E29",
+   "text": "Single point of failure (room r_A300): losing it strands 22 rooms (27 occupants by IBC load) and removes 0% of exit width (analysis/spof.py)."
+  },
+  {
+   "id": "E30",
+   "text": "Single point of failure (room r_B308): losing it strands 11 rooms (14 occupants by IBC load) and removes 0% of exit width (analysis/spof.py)."
+  },
+  {
+   "id": "E31",
+   "text": "Single point of failure (room r_B307A): losing it strands 10 rooms (13 occupants by IBC load) and removes 0% of exit width (analysis/spof.py)."
+  },
+  {
+   "id": "E32",
+   "text": "Single point of failure (room r_A203B): losing it strands 9 rooms (18 occupants by IBC load) and removes 0% of exit width (analysis/spof.py)."
+  },
+  {
+   "id": "E33",
+   "text": "Pinch points: not computed (more than 150 rooms)."
+  }
+ ],
+ "findings": [
+  {
+   "title": "Required egress time is far longer than the time before smoke arrives",
+   "detail": "The last person left at 542 s. Smoke reaches 1.8 m in r_A105 at 121 s, giving a margin of -420.9 s.",
+   "refs": [
+    "r_A105"
+   ],
+   "evidence": [
+    "E1",
+    "E6"
+   ]
+  },
+  {
+   "title": "Mobility-impaired people left at refuges",
+   "detail": "Two people, a_029 in r_A300B and a_253 in r_C200D, were still waiting for help at 600 s. No assisted evacuation plan exists.",
+   "refs": [
+    "r_A300B",
+    "r_C200D"
+   ],
+   "evidence": [
+    "E2",
+    "E7",
+    "E8",
+    "E9",
+    "E27"
+   ]
+  },
+  {
+   "title": "Pre-movement time dominates; visitors are slowest",
+   "detail": "Median pre-movement was 71 s with p90 at 166 s. Visitors had a median of 90.5 s, and the last visitor left at 542 s. Staff were quick (27.5 s). Queueing was close to zero.",
+   "refs": [],
+   "evidence": [
+    "E1",
+    "E3",
+    "E4",
+    "E5"
+   ]
+  },
+  {
+   "title": "Exit use is uneven; three exits unused",
+   "detail": "exit_1_02 reached 1.20 of the 1.3 p/s/m cap. exit_1_08, exit_1_10 and exit_1_12 were not used at all, and exit_1_07 (2.0 m wide) took only 6 people.",
+   "refs": [
+    "exit_1_02",
+    "exit_1_08",
+    "exit_1_10",
+    "exit_1_12",
+    "exit_1_07"
+   ],
+   "evidence": [
+    "E12",
+    "E20",
+    "E24"
+   ]
+  },
+  {
+   "title": "Single points of failure",
+   "detail": "Losing r_B19 strands 30 rooms; losing r_A300 strands 22 rooms.",
+   "refs": [
+    "r_B19",
+    "r_A300",
+    "r_B308"
+   ],
+   "evidence": [
+    "E28",
+    "E29",
+    "E30"
+   ]
+  }
+ ],
+ "recommendations": [
+  {
+   "title": "Assisted evacuation plan with named helpers for the L2 and L3 refuges",
+   "kind": "assisted_plan",
+   "audience": "operations",
+   "refs": [
+    "r_A300B",
+    "r_C200D"
+   ],
+   "evidence": [
+    "E7",
+    "E8",
+    "E9",
+    "E27"
+   ],
+   "basis": "P4",
+   "why": "Without assigned helpers, people at refuges wait indefinitely.",
+   "expected_effect": "The two refuge stragglers are evacuated.",
+   "effort": "medium",
+   "verified": null
+  },
+  {
+   "title": "Direct PA message at alarm",
+   "kind": "pa_procedure",
+   "audience": "operations",
+   "refs": [
+    "r_A105"
+   ],
+   "evidence": [
+    "E1",
+    "E5",
+    "E6"
+   ],
+   "basis": "P2",
+   "why": "Pre-movement time dominates the total.",
+   "expected_effect": "Lower median and p90 pre-movement; earlier last exit.",
+   "effort": "low",
+   "verified": null
+  },
+  {
+   "title": "Fire warden on L3 to sweep the floor",
+   "kind": "staffing",
+   "audience": "operations",
+   "refs": [
+    "r_A300"
+   ],
+   "evidence": [
+    "E3",
+    "E29"
+   ],
+   "basis": "P3",
+   "why": "Wardens get people moving faster and direct them to exits.",
+   "expected_effect": "Shorter pre-movement on L3.",
+   "effort": "low",
+   "verified": null
+  },
+  {
+   "title": "Signs toward the unused exit_1_08",
+   "kind": "signage",
+   "audience": "operations",
+   "refs": [
+    "exit_1_08",
+    "r_A100"
+   ],
+   "evidence": [
+    "E24"
+   ],
+   "basis": "P5",
+   "why": "Occupants know few exits, so some exits go unused.",
+   "expected_effect": "Load spread more evenly across exits.",
+   "effort": "low",
+   "verified": null
+  },
+  {
+   "title": "Add exit at door_3_089 (r_A310) with an outside stair",
+   "kind": "add_exit",
+   "audience": "design",
+   "refs": [
+    "door_3_089",
+    "r_A300"
+   ],
+   "evidence": [
+    "E29",
+    "E8"
+   ],
+   "basis": "P7",
+   "why": "r_A300 is a single point of failure for 22 rooms.",
+   "expected_effect": "An L3 route that does not depend on r_A300.",
+   "effort": "high",
+   "verified": null
+  },
+  {
+   "title": "Add exit at door_2_166 with an outside stair",
+   "kind": "add_exit",
+   "audience": "design",
+   "refs": [
+    "door_2_166",
+    "r_A203B"
+   ],
+   "evidence": [
+    "E32"
+   ],
+   "basis": "P7",
+   "why": "r_A203B is a single point of failure for 9 rooms.",
+   "expected_effect": "An L2 route that bypasses r_A203B.",
+   "effort": "high",
+   "verified": null
+  },
+  {
+   "title": "Widen exit_1_02 to 1.38 m",
+   "kind": "widen_door",
+   "audience": "design",
+   "refs": [
+    "exit_1_02"
+   ],
+   "evidence": [
+    "E12"
+   ],
+   "basis": "P1",
+   "why": "Its peak flow (1.20 p/s/m) is close to the 1.3 p/s/m cap.",
+   "expected_effect": "More capacity at the busiest exit.",
+   "effort": "medium",
+   "verified": null
+  },
+  {
+   "title": "Add exit at door_A_071 (LA) with an outside stair",
+   "kind": "add_exit",
+   "audience": "design",
+   "refs": [
+    "door_A_071"
+   ],
+   "evidence": [
+    "E25",
+    "E28"
+   ],
+   "basis": "P7",
+   "why": "r_B19 is a single point of failure for 30 rooms, and the LA stairs show queues.",
+   "expected_effect": "A second way out of LA.",
+   "effort": "high",
+   "verified": null
+  }
+ ],
+ "combined": null,
+ "cost_usd": 0.0841
+}

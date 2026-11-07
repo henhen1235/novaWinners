@@ -12,3 +12,4 @@ ios/**/DerivedData/
 .playwright-mcp/
 samples/scans/*/mesh.ply
 samples/scans/*/keyframes/
+samples/scans/

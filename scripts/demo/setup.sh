@@ -162,6 +162,10 @@ else
   fail "offline loop run on tiny_office failed"
 fi
 
+# Post-run analysis (Claude Opus over each run's evidence), recorded in samples/ so no LLM call here.
+cp samples/cmu/tepper/recommendations_weekday_fire.json "$PUBLIC/replays/tepper_weekday_fire/recommendations.json" 2>/dev/null || fail "tepper recommendations missing"
+cp samples/cmu/mudge/recommendations_night_fire.json "$PUBLIC/replays/mudge_night_fire/recommendations.json" 2>/dev/null || fail "mudge recommendations missing"
+
 # Building and scenario lists for the viewer header (public/replays/index.json).
 (cd blueprint/viewer && node scripts/replay_index.ts) || fail "replay index failed"
 

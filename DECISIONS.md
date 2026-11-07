@@ -47,7 +47,7 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   polygons, so areas match. Floats in scene.json are rounded to 1 mm.
 
 - D16. One canonical contract at repo root, the union of WS-A's and WS-B's
-  required sets (see CONTRACT_CHANGE_REQUEST.md). JSON keys, types and nesting
+  required sets (see docs/team/CONTRACT_CHANGE_REQUEST.md). JSON keys, types and nesting
   are unchanged. Now required: `walls`, `rooms`, `doors`, `exits` (no default)
   and `assets` with non-null `display_model`, `floorplan_overlay`,
   `navmesh_debug` (paths relative to scene.json). Still required as before:
