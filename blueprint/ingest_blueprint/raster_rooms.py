@@ -1,9 +1,10 @@
 """Raster rooms from the white space enclosed by a sealed wall mask.
 
 Hough lines on a skeleton stop short of corners, so polygonize never closes.
-A morphological close bridges door gaps, flood-fill drops the page exterior,
-and each remaining component is a room. Door width is the ink gap along that
-bridge, not the inflated closing kernel.
+A disk dilation bridges door gaps at any wall angle, a marker watershed grows
+each sealed room back into the unclosed free space, and the seams between
+labels give doors. Nothing assumes axis-aligned walls; Manhattan snapping is
+applied only when the recovered outlines are already orthogonal.
 """
 
 from __future__ import annotations
@@ -17,7 +18,23 @@ from shapely.geometry import Polygon
 from ingest_blueprint.types import DoorOpening, PlanPage, ScaleEstimate
 
 
-def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpening]]:
+DOOR_M = 0.9
+SIMPLIFY_M = 0.02
+MANHATTAN_SHARE = 0.85
+OUTSIDE = 1
+
+
+def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpening], float]:
+    """Rooms, doors and scale from a raster page, with no axis assumption.
+
+    A disk dilation seals door gaps in walls of any orientation. Its free-space
+    components (plus the page exterior) seed a marker watershed over the
+    unclosed free space, so rooms keep their true outline, curves included.
+    A seam between two labels that runs through free space is a door; one
+    against the exterior label is an exit. Returns scale, faces (offset to
+    the wall centreline), doors and the measured wall thickness in metres.
+    """
+
     gray = cv2.cvtColor(page.raster, cv2.COLOR_RGB2GRAY)
     binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 8)
     kept = _drop_small(binary, 30)
@@ -30,15 +47,13 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
         thick = (distance >= max(1.5, radius * 0.45)).astype(np.uint8) * 255
     else:
         thick = kept
-    small_k = _odd(max(15, radius * 3))
-    big_k = _odd(max(101, radius * 14))
-    small = cv2.morphologyEx(thick, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (small_k, small_k)))
-    big = cv2.morphologyEx(thick, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (big_k, big_k)))
-    gaps = _door_gaps(thick, big, small)
-    gaps = [gap for gap in gaps if 70 <= gap[0] <= 150]
-    gaps = _merge_gaps(gaps, 50.0)
-    if gaps:
-        px_per_m = float(np.median([gap[0] for gap in gaps])) / 0.9
+    wall_px = _wall_thickness_px(thick, kept)
+    seal, seal_px = _choose_seal(thick, wall_px)
+    labels = _watershed(thick, seal)
+    doors_px = _seam_doors(labels, thick, max_px=seal_px)
+    widths = [width for width, _p1, _p2, _pair in doors_px if width >= seal_px * 0.4]
+    if widths:
+        px_per_m = float(np.median(widths)) / DOOR_M
         confidence = 0.55
     else:
         px_per_m = 100.0
@@ -46,95 +61,174 @@ def extract(page: PlanPage) -> tuple[ScaleEstimate, list[Polygon], list[DoorOpen
     if not 15.0 <= px_per_m <= 500.0:
         px_per_m = 100.0
         confidence = 0.3
-    faces = _rooms(big, px_per_m)
+    wall_m = max(0.1, wall_px / px_per_m)
+    faces, keep_labels = _label_faces(labels, thick, px_per_m, wall_m / 2.0)
     doors = []
-    for length, p1, p2 in gaps:
-        width_m = length / px_per_m
-        if not 0.6 <= width_m <= 3.0:
+    for width, p1, p2, pair in doors_px:
+        width_m = width / px_per_m
+        if not 0.5 <= width_m <= 2.0 or not set(pair) - {OUTSIDE} <= keep_labels:
             continue
         doors.append(
-            DoorOpening((p1[0] / px_per_m, p1[1] / px_per_m), (p2[0] / px_per_m, p2[1] / px_per_m), width_m)
+            DoorOpening((p1[0] / px_per_m, p1[1] / px_per_m), (p2[0] / px_per_m, p2[1] / px_per_m), width_m, is_exit=OUTSIDE in pair)
         )
-    return ScaleEstimate(px_per_m, "door_reference", confidence), faces, doors
+    return ScaleEstimate(px_per_m, "door_reference", confidence), faces, doors, wall_m
 
 
-def _rooms(closed: np.ndarray, px_per_m: float) -> list[Polygon]:
-    interior = (closed == 0).astype(np.uint8)
-    flood = interior.copy()
-    mask = np.zeros((interior.shape[0] + 2, interior.shape[1] + 2), np.uint8)
-    cv2.floodFill(flood, mask, (2, 2), 0)
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(flood, 8)
-    faces: list[Polygon] = []
+def _wall_thickness_px(thick: np.ndarray, ink: np.ndarray) -> float:
+    """Median wall width: twice the ink distance transform on the skeleton of the wall mask."""
+
+    from skimage.morphology import skeletonize
+
+    distance = cv2.distanceTransform(ink, cv2.DIST_L2, 5)
+    ridge = distance[skeletonize(thick > 0)]
+    return float(2.0 * np.median(ridge)) if ridge.size else 4.0
+
+
+def _choose_seal(thick: np.ndarray, wall_px: float) -> tuple[np.ndarray, float]:
+    """Disk dilation that encloses the most rooms.
+
+    Dilation, not closing: a closing disk can always poke into a gap in a thin
+    wall, so it never seals one. The watershed grows the shrunken seeds back
+    to the true outline. Too small leaves door gaps open (rooms merge with the
+    exterior); too large swallows corridors. Door width over wall thickness
+    runs about 4-12 on real plans, so try that ladder and keep the size with
+    the most sealed rooms (smallest on ties).
+    """
+
+    best = None
+    for factor in (4, 5.5, 7, 9, 12):
+        size = _odd(max(15, wall_px * factor))
+        seal = cv2.dilate(thick, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size)))
+        rooms = _sealed_count(seal)
+        if best is None or rooms > best[0]:
+            best = (rooms, seal, float(size))
+    return best[1], best[2]
+
+
+def _sealed_count(seal: np.ndarray) -> int:
+    count, components, stats, _ = cv2.connectedComponentsWithStats((seal == 0).astype(np.uint8), 4)
+    min_area = _min_room_px(seal.shape)
+    rooms = 0
     for index in range(1, count):
-        if stats[index, cv2.CC_STAT_AREA] < 2500:
+        if stats[index, cv2.CC_STAT_AREA] < min_area:
             continue
-        component = (labels == index).astype(np.uint8)
-        if _touches_border(component):
+        left, top = stats[index, cv2.CC_STAT_LEFT], stats[index, cv2.CC_STAT_TOP]
+        right = left + stats[index, cv2.CC_STAT_WIDTH]
+        bottom = top + stats[index, cv2.CC_STAT_HEIGHT]
+        if left > 0 and top > 0 and right < seal.shape[1] and bottom < seal.shape[0]:
+            rooms += 1
+    return rooms
+
+
+def _min_room_px(shape) -> int:
+    return max(400, int(shape[0] * shape[1] * 2e-4))
+
+
+def _watershed(thick: np.ndarray, seal: np.ndarray) -> np.ndarray:
+    """Labels: OUTSIDE for the page exterior, 2.. for sealed rooms, -1 on seams, 0 never."""
+
+    free = (seal == 0).astype(np.uint8)
+    count, components, stats, _ = cv2.connectedComponentsWithStats(free, 4)
+    markers = np.zeros(thick.shape, np.int32)
+    next_label = OUTSIDE + 1
+    min_area = _min_room_px(thick.shape)
+    for index in range(1, count):
+        component = components == index
+        if _touches_border(component.astype(np.uint8)):
+            markers[component] = OUTSIDE
+        elif stats[index, cv2.CC_STAT_AREA] >= min_area:
+            markers[component] = next_label
+            next_label += 1
+    # Seed the page margin as exterior even if the dilation sealed it shut.
+    markers[0, :] = markers[-1, :] = OUTSIDE
+    markers[:, 0] = markers[:, -1] = OUTSIDE
+    landscape = cv2.cvtColor(thick, cv2.COLOR_GRAY2BGR)
+    return cv2.watershed(landscape, markers)
+
+
+def _seam_doors(labels: np.ndarray, thick: np.ndarray, max_px: float):
+    """Seams through free space between two labels, as (width_px, p1, p2, (a, b))."""
+
+    seam = (labels == -1) & (thick == 0)
+    pairs: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    padded = np.pad(labels, 1, constant_values=-1)
+    for y, x in zip(*np.nonzero(seam)):
+        window = padded[y : y + 3, x : x + 3]
+        found = sorted({int(v) for v in window.ravel() if v > 0})
+        if len(found) == 2:
+            pairs.setdefault((found[0], found[1]), []).append((x, y))
+    doors = []
+    for pair, points in pairs.items():
+        mask = np.zeros(thick.shape, np.uint8)
+        xs, ys = zip(*points)
+        mask[list(ys), list(xs)] = 255
+        count, parts = cv2.connectedComponents(cv2.dilate(mask, np.ones((3, 3), np.uint8)), connectivity=8)
+        for index in range(1, count):
+            pts = np.column_stack(np.nonzero((parts == index) & (mask > 0)))[:, ::-1].astype(np.float64)
+            if len(pts) < 3:
+                continue
+            p1, p2 = _extent(pts)
+            width = float(np.hypot(p2[0] - p1[0], p2[1] - p1[1]))
+            if width <= max_px * 1.1:
+                doors.append((width, p1, p2, pair))
+    return doors
+
+
+def _extent(points: np.ndarray) -> tuple[tuple[float, float], tuple[float, float]]:
+    center = points.mean(axis=0)
+    _u, _s, vt = np.linalg.svd(points - center, full_matrices=False)
+    projection = (points - center) @ vt[0]
+    a = center + vt[0] * projection.min()
+    b = center + vt[0] * projection.max()
+    return (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
+
+
+def _label_faces(labels: np.ndarray, thick: np.ndarray, px_per_m: float, offset_m: float) -> tuple[list[Polygon], set[int]]:
+    """Room faces: each watershed region's free space, offset out to the wall centreline."""
+
+    rooms = []
+    free = thick == 0
+    for label in range(OUTSIDE + 1, int(labels.max()) + 1):
+        component = ((labels == label) & free).astype(np.uint8)
+        if component.sum() < 0.8 * px_per_m * px_per_m:
             continue
-        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(component, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         if not contours:
             continue
         contour = max(contours, key=cv2.contourArea)
-        approx = cv2.approxPolyDP(contour, 2.5, True)
-        points = _axis_snap([(float(point[0][0]) / px_per_m, float(point[0][1]) / px_per_m) for point in approx])
+        approx = cv2.approxPolyDP(contour, max(1.0, SIMPLIFY_M * px_per_m), True)
+        rooms.append((label, [(float(pt[0][0]) / px_per_m, float(pt[0][1]) / px_per_m) for pt in approx]))
+    manhattan = _is_manhattan([points for _label, points in rooms])
+    faces: list[Polygon] = []
+    kept: set[int] = set()
+    for label, points in rooms:
+        if manhattan:
+            points = _axis_snap(points)
         if len(points) < 3:
             continue
-        polygon = Polygon(points).buffer(0.10)
+        polygon = Polygon(points).buffer(offset_m, join_style=2)
         if not polygon.is_valid:
             polygon = polygon.buffer(0)
         if polygon.geom_type == "MultiPolygon":
             polygon = max(polygon.geoms, key=lambda part: part.area)
         if polygon.geom_type == "Polygon" and polygon.area > 1.0:
             faces.append(polygon)
-    return faces
+            kept.add(label)
+    return faces, kept
 
 
-def _door_gaps(thick: np.ndarray, big: np.ndarray, small: np.ndarray) -> list[tuple[float, tuple[float, float], tuple[float, float]]]:
-    bridge = ((big > 0) & (small == 0)).astype(np.uint8)
-    count, _labels, stats, _ = cv2.connectedComponentsWithStats(bridge, 8)
-    height, width = thick.shape
-    gaps = []
-    for index in range(1, count):
-        box_w = int(stats[index, cv2.CC_STAT_WIDTH])
-        box_h = int(stats[index, cv2.CC_STAT_HEIGHT])
-        short, long = sorted((box_w, box_h))
-        if long < 40 or long > 220 or short > 42:
-            continue
-        x = int(stats[index, cv2.CC_STAT_LEFT])
-        y = int(stats[index, cv2.CC_STAT_TOP])
-        if box_w >= box_h:
-            row = min(height - 1, y + box_h // 2)
-            length = _longest_zero(thick[row, x : x + box_w])
-            p1 = (float(x), float(row))
-            p2 = (float(x + box_w), float(row))
-        else:
-            col = min(width - 1, x + box_w // 2)
-            length = _longest_zero(thick[y : y + box_h, col])
-            p1 = (float(col), float(y))
-            p2 = (float(col), float(y + box_h))
-        if length >= 40:
-            gaps.append((float(length), p1, p2))
-    return gaps
+def _is_manhattan(rings: list[list[tuple[float, float]]]) -> bool:
+    """True when at least MANHATTAN_SHARE of edge length lies within 5 deg of 0 or 90 deg."""
 
-
-def _merge_gaps(gaps, radius_px: float):
-    used: set[int] = set()
-    merged = []
-    for index, gap in enumerate(gaps):
-        if index in used:
-            continue
-        group = [index]
-        mid = ((gap[1][0] + gap[2][0]) / 2.0, (gap[1][1] + gap[2][1]) / 2.0)
-        for other_index, other in enumerate(gaps):
-            if other_index <= index or other_index in used:
-                continue
-            other_mid = ((other[1][0] + other[2][0]) / 2.0, (other[1][1] + other[2][1]) / 2.0)
-            if abs(other_mid[0] - mid[0]) <= radius_px and abs(other_mid[1] - mid[1]) <= radius_px:
-                used.add(other_index)
-                group.append(other_index)
-        used.add(index)
-        merged.append(max((gaps[item] for item in group), key=lambda item: item[0]))
-    return merged
+    total = aligned = 0.0
+    for ring in rings:
+        for start, end in zip(ring, ring[1:] + ring[:1]):
+            length = math.dist(start, end)
+            angle = math.degrees(math.atan2(end[1] - start[1], end[0] - start[0])) % 90.0
+            total += length
+            if min(angle, 90.0 - angle) <= 5.0:
+                aligned += length
+    return total > 0 and aligned / total >= MANHATTAN_SHARE
 
 
 def _axis_snap(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -155,17 +249,6 @@ def _axis_snap(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
                 snapped[index] = (x_value, start[1])
                 snapped[nxt] = (x_value, end[1])
     return snapped
-
-
-def _longest_zero(values) -> int:
-    best = current = 0
-    for value in values:
-        if int(value) == 0:
-            current += 1
-            best = max(best, current)
-        else:
-            current = 0
-    return best
 
 
 def _touches_border(mask: np.ndarray) -> bool:

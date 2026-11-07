@@ -78,7 +78,7 @@ def detect_raster(page: PlanPage, scale: ScaleEstimate) -> tuple[list[Segment], 
     lines = cv2.HoughLinesP(skeleton, 1, np.pi / 180.0, threshold=20, minLineLength=min_len, maxLineGap=gap)
     segments: list[Segment] = []
     if lines is not None:
-        for x0, y0, x1, y1 in lines[:, 0]:
+        for x0, y0, x1, y1 in lines.reshape(-1, 4):
             p1 = (float(x0) / scale.px_per_m, float(y0) / scale.px_per_m)
             p2 = (float(x1) / scale.px_per_m, float(y1) / scale.px_per_m)
             segments.append(Segment(p1, p2, 0.2))
@@ -106,8 +106,11 @@ def deskew(page: PlanPage) -> PlanPage:
         angles.append(degrees)
     if not angles:
         return page
+    # Only a consistent small skew is scan rotation. Curved walls and angled
+    # wings (Tepper) give scattered angles; rotating by their median tilts the plan.
     angle = float(np.median(angles))
-    if abs(angle) < 0.2:
+    agreeing = sum(1 for value in angles if abs(value - angle) <= 1.0)
+    if abs(angle) < 0.2 or abs(angle) > 10.0 or agreeing < 0.6 * len(angles):
         return page
     height, width = page.raster.shape[:2]
     matrix = cv2.getRotationMatrix2D((width / 2.0, height / 2.0), angle, 1.0)

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 from contract.validate_scene import validate
 from export.assemble import assemble_scene
@@ -71,6 +71,7 @@ def run(
         if use_ml:
             page = _try_ml(page)
         raster_faces = None
+        raster_wall_m = 0.2
         if page.strokes:
             scale = _scale_for(page, manual)
             walls, doors, thin = detect_vector(page, scale)
@@ -81,7 +82,7 @@ def run(
                 walls, doors = detect_raster(page, scale)
                 thin = []
             else:
-                scale, raster_faces, doors = extract_raster_rooms(page)
+                scale, raster_faces, doors, raster_wall_m = extract_raster_rooms(page)
                 walls, thin = [], []
                 if not raster_faces:
                     scale = _raster_door_scale(page)
@@ -105,7 +106,7 @@ def run(
                 _mark_nearest_exit(doors, anchor_m, item["name"])
         faces = raster_faces if raster_faces else faces_from_walls(walls, doors)
         if raster_faces and not walls:
-            walls = _boundary_walls(faces)
+            walls = _boundary_walls(faces, raster_wall_m, doors)
         labels = label_faces(faces, texts)
         labels = _apply_vision_types(faces, labels, vision, scale.px_per_m)
         stair_indexes = stair_room_indexes(
@@ -177,16 +178,27 @@ def run(
     return scene, exit_code
 
 
-def _boundary_walls(faces: list[Polygon]) -> list[Segment]:
-    """Centerlines along raster room edges so walkable can cut the wall thickness."""
+def _boundary_walls(faces: list[Polygon], thickness_m: float = 0.2, doors: list[DoorOpening] = ()) -> list[Segment]:
+    """Centerlines along raster room edges so walkable can cut the wall thickness.
 
+    A raster face runs into its half of each door gap, so the edge across the
+    gap sits on the doorway; it is skipped or the wall would close the door.
+    ponytail: thickness capped at 0.2 m because door bridges are sized for
+    0.2 m walls (assemble_scene); pass the real thickness there to lift it.
+    """
+
+    thickness_m = min(thickness_m, 0.2)
+    openings = [LineString([door.p1, door.p2]) for door in doors]
+    near = thickness_m * 0.75 + 0.03
     walls: list[Segment] = []
     for face in faces:
         ring = list(face.exterior.coords)
         for start, end in zip(ring, ring[1:]):
-            if (start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2 < 0.15**2:
+            if (start[0] - end[0]) ** 2 + (start[1] - end[1]) ** 2 < 0.03**2:
                 continue
-            walls.append(Segment((float(start[0]), float(start[1])), (float(end[0]), float(end[1])), 0.2))
+            if any(opening.distance(Point(start)) <= near and opening.distance(Point(end)) <= near for opening in openings):
+                continue
+            walls.append(Segment((float(start[0]), float(start[1])), (float(end[0]), float(end[1])), thickness_m))
     return walls
 
 
