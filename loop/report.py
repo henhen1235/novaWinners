@@ -13,7 +13,7 @@ from .run_loop import fmt
 
 REPO = Path(__file__).resolve().parents[1]
 TOKENS = REPO / "design" / "tokens.css"
-CHARTS = [("t95_s", "Time to clear 95% (s)"), ("stragglers", "Stragglers"), ("misled_by_rumor", "Misled by rumor"),
+CHARTS = [("t95_s", "Time to clear 95% (s)"), ("t90_s", "Time to clear 90% (s)"), ("stragglers", "Stragglers"), ("misled_by_rumor", "Misled by rumor"),
           ("max_queue", "Max queued at once")]
 COLOR = {"baseline": "var(--color-line-strong)", "attack": "var(--color-hazard-bright)", "fixed": "var(--color-exit-bright)"}
 VIEWER = "http://localhost:5173/"
@@ -26,7 +26,7 @@ def _kind(stage: str) -> str:
 
 def _val(s: dict, k: str) -> float:
     v = s.get(k)
-    return float(s["duration_s"] if k == "t95_s" and v is None else (v or 0))
+    return float(s["duration_s"] if k in ("t95_s", "t90_s") and v is None else (v or 0))
 
 
 def chart(board: dict, key: str, title: str) -> str:
@@ -71,12 +71,12 @@ def _viewer_links(board: dict, d: Path) -> str:
 
 
 def _table(board: dict) -> str:
-    head = "<tr><th>stage</th><th>t95 s</th><th>evacuated</th><th>stragglers</th><th>misled</th><th>max queue</th><th>LLM calls</th><th>cost $</th></tr>"
+    head = "<tr><th>stage</th><th>t95 s</th><th>t90 s</th><th>evacuated</th><th>stragglers</th><th>misled</th><th>max queue</th><th>LLM calls</th><th>cost $</th></tr>"
     body = []
     for st in board["stages"]:
         m, ps = st["median"], list(st["per_seed"].values())
         rng = lambda k: f'<span class="rg">{min(_val(s, k) for s in ps):g}-{max(_val(s, k) for s in ps):g}</span>'  # noqa: E731
-        body.append(f'<tr class="{_kind(st["stage"])}"><td>{E(st["label"])}</td><td>{E(fmt(m, "t95_s"))} {rng("t95_s")}</td>'
+        body.append(f'<tr class="{_kind(st["stage"])}"><td>{E(st["label"])}</td><td>{E(fmt(m, "t95_s"))} {rng("t95_s")}</td><td>{m["t90_s"]:g} {rng("t90_s")}</td>'
                     f'<td>{m["evacuated"]:g}/{m["total"]}</td><td>{m["stragglers"]:g} {rng("stragglers")}</td>'
                     f'<td>{m["misled_by_rumor"]:g} {rng("misled_by_rumor")}</td><td>{m["max_queue"]:g}</td>'
                     f'<td>{m["llm_calls"]:g}</td><td>{m["cost_usd"]:.4f}</td></tr>')

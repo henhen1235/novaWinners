@@ -102,7 +102,7 @@ def test_loop_scoreboard_and_replay(tmp_path, monkeypatch):
     attacked, fixed = a["stages"][1]["median"], a["stages"][2]["median"]
     assert attacked["total"] == fixed["total"] == 8
     assert a["rounds"][0]["optimizer"]["source"] == "llm" and len(a["rounds"][0]["optimizer"]["interventions"]) == 2
-    assert set(a["rounds"][0]["improvement"]) == {"t95_s", "stragglers", "misled_by_rumor", "max_queue"}
+    assert set(a["rounds"][0]["improvement"]) == {"t95_s", "t90_s", "stragglers", "misled_by_rumor", "max_queue"}
     assert (out / "r1_attack" / "s42" / "decisions.jsonl").exists() and (out / "report.md").exists()
     first = (out / "r1_fixed" / "s42" / "replay.json").read_text()
     b = run(str(REPO / SCENE_PATH), str(scen), str(out), rounds=1, decide="cognition", seeds=(42,), llm=fake_llm)

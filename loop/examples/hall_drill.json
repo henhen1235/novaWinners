@@ -1,0 +1,10 @@
+{"schema_version": "0.1", "scene": "out/hall/scene.json", "seed": 42, "duration_s": 300,
+ "events": [
+  {"id": "ev_alarm", "type": "alarm_only", "t_start_s": 0, "at": {"room": "r_002"}, "params": {}}
+ ],
+ "occupants": [
+  {"where": {"room": "r_002"}, "count": 36,
+   "personas": {"regular": 0.5, "visitor": 0.3, "staff": 0.05, "older_adult": 0.1, "skeptic": 0.05},
+   "models": {"google/gemini-2.5-flash-lite": 1.0}}
+ ],
+ "assumptions": ["Fire alarm at t=0 in the scanned hall, 36 people inside; no hazard, no blocked exit: the adversary adds those."]}

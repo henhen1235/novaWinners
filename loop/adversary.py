@@ -67,15 +67,19 @@ Find the 1-{MAX_INJECTIONS} failures that hurt this building's evacuation the mo
 a fire or smoke in a room whose loss strands people, a false rumor that an exit is blocked.
 Rules: use only ids from the brief. Every `why` must cite numbers from the analysis or the metrics
 (exit usage, stranded occupants, exit width share, smoke time, pinch width). At least one exit must stay
-open. Tool results return validation errors: fix them and call again. Call submit when done."""
+open. Prefer failures a building manager could plausibly face and fix (a locked or obstructed exit, a
+false rumor, a fire in one room); a hazard that cuts every route at once teaches nothing new.
+Tool results return validation errors: fix them and call again. Call submit when done."""
 
 
 class _Attack:
     """Tool handler: accumulates validated events onto a copy of the scenario."""
 
-    def __init__(self, scene: dict, scenario: dict, round_no: int) -> None:
+    def __init__(self, scene: dict, scenario: dict, round_no: int, analysis: dict | None = None) -> None:
         self.scene, self.sc, self.round = scene, copy.deepcopy(scenario), round_no
         self.injections: list[dict] = []
+        self.cut_all = {s["id"] for s in (analysis or {}).get("spof", {}).get("ranked", [])
+                        if s["kind"] == "room" and s.get("exit_width_left_share", 1) == 0}
 
     def _event(self, name: str, a: dict) -> dict:
         eid = f"adv{self.round}_{len(self.injections) + 1}"
@@ -104,6 +108,11 @@ class _Attack:
         blocked = {e["at"].get("exit") for e in cand["events"] if e["type"] == "blocked_exit"}
         if len(blocked) >= len(self.scene["exits"]):
             errs.append("at least one exit must stay open")
+        if any(e["type"] == ev["type"] and e["at"] == ev["at"] for e in self.sc.get("events", [])):
+            errs.append(f"a {ev['type']} at {ev['at']} is already in the scenario; pick a new failure")
+        if ev["type"] in ("fire", "smoke") and ev["at"].get("room") in self.cut_all:
+            errs.append(f"{ev['at']['room']} cuts every route to every exit (exit width left 0%); "
+                        "pick a failure the building could survive with the right procedures")
         if errs:
             return {"ok": False, "errors": errs}, False
         self.sc = cand
@@ -146,7 +155,7 @@ def heuristic_calls(scene: dict, analysis: dict, scenario: dict, metrics: dict, 
 def attack(scene: dict, analysis: dict, scenario: dict, metrics: dict, round_no: int = 1,
            no_llm: bool = False, llm: Callable = call_llm, model: str = MODEL) -> dict:
     """Returns {scenario, injections, source, cost_usd, llm_calls, messages}."""
-    h = _Attack(scene, scenario, round_no)
+    h = _Attack(scene, scenario, round_no, analysis)
     res = {"messages": [], "cost_usd": 0.0, "llm_calls": 0}
     source = "heuristic"
     if not no_llm:

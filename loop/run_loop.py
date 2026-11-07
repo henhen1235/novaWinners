@@ -29,15 +29,15 @@ from .simrun import run_one
 
 log = logging.getLogger("loop")
 SEEDS = (42, 43, 44)
-METRICS = ("t95_s", "evacuated", "stragglers", "misled_by_rumor", "max_queue", "pre_move_median_s",
+METRICS = ("t95_s", "t90_s", "evacuated", "stragglers", "misled_by_rumor", "max_queue", "pre_move_median_s",
            "cost_usd", "llm_calls", "decisions")
-LOWER_IS_BETTER = ("t95_s", "stragglers", "misled_by_rumor", "max_queue")
+LOWER_IS_BETTER = ("t95_s", "t90_s", "stragglers", "misled_by_rumor", "max_queue")
 
 
 def _num(s: dict, k: str) -> float:
     """Metric value; an unreached 95% clear time counts as the run duration (reported as '>=')."""
     v = s.get(k)
-    return float(s["duration_s"] if k == "t95_s" and v is None else (v or 0))
+    return float(s["duration_s"] if k in ("t95_s", "t90_s") and v is None else (v or 0))
 
 
 def aggregate(summaries: list[dict]) -> dict:
@@ -146,11 +146,11 @@ def fmt(m: dict, k: str) -> str:
 
 
 def report_md(b: dict) -> str:
-    rows = ["| stage | t95 s | evacuated | stragglers | misled | max queue | LLM calls | cost $ |",
-            "|---|---|---|---|---|---|---|---|"]
+    rows = ["| stage | t95 s | t90 s | evacuated | stragglers | misled | max queue | LLM calls | cost $ |",
+            "|---|---|---|---|---|---|---|---|---|"]
     for st in b["stages"]:
         m = st["median"]
-        rows.append(f"| {st['label']} | {fmt(m, 't95_s')} | {m['evacuated']:g}/{m['total']} | {m['stragglers']:g} | "
+        rows.append(f"| {st['label']} | {fmt(m, 't95_s')} | {m['t90_s']:g} | {m['evacuated']:g}/{m['total']} | {m['stragglers']:g} | "
                     f"{m['misled_by_rumor']:g} | {m['max_queue']:g} | {m['llm_calls']:g} | {m['cost_usd']:.4f} |")
     lines = [f"# Adversary vs optimizer: {b['name']}", "",
              f"Scene `{b['scene']}`, {b['occupants']} occupants, decide={b['decide']}, seeds {b['seeds']} "

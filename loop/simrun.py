@@ -131,6 +131,8 @@ def summarize(sim: Sim, body: dict, n_original: int | None, wall_s: float) -> di
     times = sorted(a.exit_t - sim.alarm_t for a in orig if a.exit_t is not None)
     need = math.ceil(CLEAR_SHARE * n)
     t95 = round(times[need - 1], 1) if n and len(times) >= need else None
+    need90 = math.ceil(0.9 * n)
+    t90 = round(times[need90 - 1], 1) if n and len(times) >= need90 else None
     misled = [x for x in m.get("misled_by_rumor", []) if x in ids]
     max_q, exit_q = _queues(sim, body["frames"])
     strag = [a for a in orig if a.exit_t is None]
@@ -138,7 +140,7 @@ def summarize(sim: Sim, body: dict, n_original: int | None, wall_s: float) -> di
     misled_recs = [r for r in recs if r["agent_id"] in set(misled)]
     strag_recs = [r for r in recs if r["agent_id"] in {a.id for a in strag}]
     return {
-        "t95_s": t95, "t95_reached": t95 is not None, "duration_s": sim.duration,
+        "t95_s": t95, "t95_reached": t95 is not None, "t90_s": t90, "duration_s": sim.duration,
         "evacuated": len(times), "total": n, "stragglers": len(strag), "misled_by_rumor": len(misled),
         "max_queue": max_q, "max_near_exit": exit_q, "exit_usage": m["exit_usage"],
         "pre_move_median_s": m["pre_movement_s"]["median"], "decisions": len(recs),
