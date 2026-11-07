@@ -73,6 +73,16 @@ def _segment(g: G.Grid, m: G.Masks, ceiling: float) -> tuple[list[dict], list[di
     return walls, rooms, doors, detect_obstacles(g, m, walls)
 
 
+def _traced_walls(g: G.Grid, lines: list[list[float]], thickness_m: float = 0.15) -> np.ndarray:
+    """Rasterize human-traced walls [[x1, z1, x2, z2], ...] (scene meters) as blocked cells."""
+    mask = np.zeros(g.shape, np.uint8)
+    t = max(1, int(round(thickness_m / g.res)))
+    for x1, z1, x2, z2 in lines:
+        (r1, c1), (r2, c2) = g.rc(np.array([[x1, z1], [x2, z2]]))
+        cv2.line(mask, (int(c1), int(r1)), (int(c2), int(r2)), 1, t)
+    return mask > 0
+
+
 def _confirm_exits(scan: Scan, matrix: np.ndarray, g: G.Grid, openings: list[dict], tagged: bool,
                    min_faces: int = 20) -> tuple[list[dict], list[dict]]:
     """Split openings into (confirmed, unconfirmed) by ARKit door faces on the opening.
@@ -261,8 +271,13 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     glass = G.class_mask(scan, o.matrix, g, (6,), (0.15, 2.0), bridge_m=1.2)
     glass &= ~(cv2.dilate(G.class_mask(scan, o.matrix, g, (7,), (0.3, 2.0)).astype(np.uint8),
                           np.ones((7, 7), np.uint8)) > 0)
+    traced = _traced_walls(g, corr.get("walls", []))  # human-traced glass walls (tools.tag_exits)
+    glass |= traced
     m = G.build_masks(g, barrier=glass if glass.any() else None)
     walls, rooms, doors, obstacles = _segment(g, m, o.ceiling_height_m)
+    walls = walls + [{"id": f"w_fix_{k + 1:03d}", "level": LEVEL, "height_m": round(o.ceiling_height_m, 3),
+                      "polygon": ring(LineString([w[:2], w[2:]]).buffer(0.06, cap_style="flat"))}
+                     for k, w in enumerate(corr.get("walls", [])) if np.hypot(w[2] - w[0], w[3] - w[1]) > 0.05]
     openings, wide = G.exit_openings(g, m)
     # Glass walls: LiDAR sees through glass, so a curtain wall split by mullions looks like a row
     # of door-width openings to unscanned space. With ARKit labels (Mesh mode) an opening is an
