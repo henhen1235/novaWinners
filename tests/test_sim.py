@@ -41,9 +41,26 @@ def test_path_goes_through_doors_not_walls() -> None:
         assert line.intersects(LineString(seg)), f"path does not pass {door}"
 
 
-def test_everyone_exits_without_events() -> None:
-    sim = _run(_scenario([], duration=900))  # lognormal pre-movement has a long tail
-    assert all(a.exit_t is not None for a in sim.agents), [a.id for a in sim.agents if a.exit_t is None]
+def test_everyone_who_starts_moving_gets_out() -> None:
+    sim = _run(_scenario([], duration=900))  # movement layer: nobody gets stuck once walking
+    moved = [a for a in sim.agents if a.first_move_t is not None]
+    assert moved and all(a.exit_t is not None for a in moved), [a.id for a in moved if a.exit_t is None]
+
+
+def test_pre_movement_follows_research_lognormals() -> None:
+    from sim.personas import PERSONAS, sample_traits
+    rng = np.random.default_rng(0)
+    for name in ("regular", "visitor", "skeptic"):
+        p = PERSONAS[name]
+        draws = np.array([sample_traits(p, rng)["premove_s"] for _ in range(4000)])
+        p90 = p.premove_median * np.exp(1.2816 * p.premove_sigma)
+        assert abs(np.median(draws) / p.premove_median - 1) < 0.08, name
+        assert abs(np.percentile(draws, 90) / p90 - 1) < 0.12, name
+    # A run with only an alarm: office-style median in minutes-ish range, right-skewed tail (SR143, NCSTAR 1-7).
+    sim = _run(_scenario([{"id": "a", "type": "alarm_only", "t_start_s": 0, "at": {"room": "L1_corridor"}}],
+                         duration=900))
+    pre = np.array([a.first_move_t for a in sim.agents if a.first_move_t is not None])
+    assert 20 <= np.median(pre) <= 180 and np.percentile(pre, 90) > 1.5 * np.median(pre)
 
 
 def test_blocked_exit_never_used_after_block() -> None:
@@ -79,8 +96,10 @@ SCHOOL = json.loads((Path(__file__).parents[1] / "fixtures/two_floor_school.scen
 
 
 def _school(events: list[dict], occupants: list[dict], duration: float = 300, seed: int = 5,
-            tweak: dict | None = None) -> Sim:
-    sim = Sim(SCHOOL, {"duration_s": duration, "events": events, "occupants": occupants}, seed)
+            tweak: dict | None = None, plan: bool = False) -> Sim:
+    scen = {"duration_s": duration, "events": events, "occupants": occupants,
+            "interventions": [{"type": "assisted_evacuation_plan"}] if plan else []}
+    sim = Sim(SCHOOL, scen, seed)
     for a in sim.agents:
         a.traits.update((tweak or {}).get(a.persona, {}))
     sim.run()
@@ -104,15 +123,14 @@ def test_blocked_stair_reroutes_to_the_other() -> None:
     assert all(a.exit_t is not None for a in sim.agents)
 
 
-def test_mobility_impaired_waits_at_refuge_and_is_carried() -> None:
+def test_without_a_plan_wheelchair_user_waits_at_refuge() -> None:
     occ = [{"where": {"room": "L2_class_s1"}, "count": 1, "personas": {"mobility_impaired": 1.0}},
-           {"where": {"room": "L1_corridor"}, "count": 1, "personas": {"staff": 1.0}}]
-    tweak = {"mobility_impaired": {"premove_s": 0.0}, "staff": {"premove_s": 1e6, "notice_s": 1e6}}
-    sim = _school([], occ, duration=400, tweak=tweak)
+           {"where": {"room": "L1_corridor"}, "count": 2, "personas": {"staff": 1.0}}]
+    sim = _school([], occ, duration=400, tweak={"mobility_impaired": {"premove_s": 0.0}})
     kinds = [e["kind"] for e in sim.replay_events]
-    assert "waiting_at_refuge" in kinds
-    assert "helping" in kinds
-    assert all(a.exit_t is not None for a in sim.agents)
+    p = next(a for a in sim.agents if a.persona == "mobility_impaired")
+    assert "waiting_at_refuge" in kinds and "help_assigned" not in kinds
+    assert p.exit_t is None and p.state == "waiting_at_refuge"  # a straggler is a finding, not a bug
 
 
 def _view(persona: str, waited: float, premove: float, percepts: list[dict]) -> dict:
@@ -125,20 +143,23 @@ def _view(persona: str, waited: float, premove: float, percepts: list[dict]) -> 
                         {"id": "o2", "action": "SEEK_INFO"}, {"id": "o3", "action": "CONTINUE_TASK"}]}
 
 
-def test_skeptic_needs_a_second_cue_or_long_wait() -> None:
+def test_skeptic_needs_a_second_cue_and_tails_are_kept() -> None:
     from sim.policy import decide
     alarm = [{"kind": "alarm"}]
     assert decide(_view("skeptic", 60, 800, alarm))["choice"] != "o1"
     assert decide(_view("skeptic", 60, 800, alarm + [{"kind": "people_moving", "count": 2}]))["choice"] == "o1"
-    assert decide(_view("skeptic", 300, 800, alarm))["choice"] == "o1"  # pressure timeout
-    assert decide(_view("older_adult", 300, 760, alarm))["choice"] == "o1"
+    pa = [{"kind": "message", "urgent": True, "official": True, "text": "Evacuate now"}]
+    assert decide(_view("skeptic", 60, 800, alarm + pa))["choice"] == "o1"
+    assert decide(_view("skeptic", 300, 800, alarm))["choice"] != "o1"  # no cap on the lognormal tail
+    assert decide(_view("older_adult", 300, 760, alarm))["choice"] != "o1"
+    assert decide(_view("older_adult", 761, 760, alarm))["choice"] == "o1"
 
 
-def test_nearest_staff_carries_wheelchair_user() -> None:
+def test_assisted_evacuation_plan_nearest_staff_carries_wheelchair_user() -> None:
     occ = [{"where": {"room": "L2_class_s1"}, "count": 1, "personas": {"mobility_impaired": 1.0}},
            {"where": {"room": "L2_class_n3"}, "count": 1, "personas": {"staff": 1.0}},
            {"where": {"room": "L1_class_n1"}, "count": 2, "personas": {"staff": 1.0}}]
-    sim = _school([], occ, duration=400)
+    sim = _school([], occ, duration=400, plan=True)
     assigned = [e for e in sim.replay_events if e["kind"] == "help_assigned"]
     staff_l2 = next(a.id for a in sim.agents if a.persona == "staff" and a.spawn_room == "L2_class_n3")
     assert assigned and assigned[0]["agent"] == staff_l2

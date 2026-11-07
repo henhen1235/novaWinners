@@ -146,7 +146,7 @@ def _percepts(sim: "Sim", a: "Agent", seen: list["Agent"]) -> list[dict]:
     out += _exit_signs(sim, a) + _stair_percepts(sim, a)
     if a.persona == "staff":
         out += [{"kind": "needs_help", "ref": b.id, "level": sim.world.nav.level_ids[sim.lv[b.row]],
-                 "state": b.state, "channel": "radio"} for b in help_targets(sim, a)]
+                 "state": b.state, "channel": "radio" if sim.assisted else "sight"} for b in help_targets(sim, a)]
     return [{"id": f"p{i + 1}", **d} for i, d in enumerate(out)]
 
 
@@ -218,7 +218,8 @@ def _help_cost(sim: "Sim", s: "Agent", b: "Agent") -> tuple[float, int]:
 
 
 def help_targets(sim: "Sim", a: "Agent") -> list["Agent"]:
-    """Targets this staff member should help: the one it is on, or those it is the nearest free staff for."""
+    """Who this staff member could help: the one it is on; under an assisted-evacuation plan the people it
+    is the nearest free staff for; otherwise only people it can see waiting at a refuge."""
     if a.persona != "staff":
         return []
     if a.helping:
@@ -228,6 +229,9 @@ def help_targets(sim: "Sim", a: "Agent") -> list["Agent"]:
              and s.stair is None]
     if a not in staff:
         return []
+    if not sim.assisted:
+        waiting = [b for b in _waiting_for_help(sim) if b.state == "waiting_at_refuge"]
+        return [b for b in waiting if b in neighbors(sim, a, STAIR_SIGHT_M)]
     return [b for b in _waiting_for_help(sim) if min(staff, key=lambda s: _help_cost(sim, s, b)) is a]
 
 
@@ -291,7 +295,8 @@ def _help_options(sim: "Sim", a: "Agent", tri: int) -> list[dict]:
         corr = sim.world.nav.astar(tri, sim.tri_of(b))
         if corr is not None:
             route = sum(sim.world.nav.walk_len(i, j) for i, j in zip(corr[:-1], corr[1:]))
-            out.append({"action": "HELP", "target": b.id, "level": sim.world.nav.level_ids[sim.lv[b.row]],
+            out.append({"action": "HELP", "target": b.id, "assigned": sim.assisted,
+                        "level": sim.world.nav.level_ids[sim.lv[b.row]],
                         "route_m": round(route, 1), "eta_s": round(route / pace_speed(a, "brisk"), 1)})
     return out
 

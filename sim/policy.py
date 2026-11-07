@@ -12,6 +12,8 @@ blocked and prefers the exit they came in by.
 
 from __future__ import annotations
 
+import hashlib
+
 FAMILIAR_BONUS_S = 15.0
 SKEPTIC_PEOPLE_LEAVING = 2
 MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP")  # how much longer a route to the entry exit may be and still win
@@ -23,6 +25,22 @@ def _blocked_beliefs(view: dict) -> set[str]:
         if b["key"].startswith("exit_open:") and b["value"] is False and b.get("conf", 0) >= 0.5:
             out.add(b["key"].split(":", 1)[1])
     return out
+
+
+UNTRAINED_HELP_P = 0.3  # NCSTAR 1-7: 30 percent of WTC survivors helped someone before leaving
+
+
+def _unit(*parts: str) -> float:
+    """Stable pseudo-random number in [0, 1) from strings (keeps decide() a pure function)."""
+    return int(hashlib.sha256("|".join(parts).encode()).hexdigest()[:8], 16) / 2 ** 32
+
+
+def _help_choices(view: dict) -> list[dict]:
+    """HELP options this person takes: always under an assisted-evacuation plan, else sometimes (staff only)."""
+    if view["agent"]["persona"] != "staff":
+        return []
+    return [o for o in view["options"] if o["action"] == "HELP"
+            and (o.get("assigned") or _unit(view["agent"]["id"], o["target"]) < UNTRAINED_HELP_P)]
 
 
 def _go_reason(view: dict) -> tuple[str | None, list[str]]:
@@ -42,12 +60,10 @@ def _go_reason(view: dict) -> tuple[str | None, list[str]]:
     if official:
         return "official", official
     needs = [p["id"] for p in per if p["kind"] == "needs_help"]
-    if needs and a["persona"] == "staff":
+    if needs and _help_choices(view):
         return "help_needed", needs
     waited = tr["t_since_cue_s"] or 0.0
-    # Escalating pressure: the alarm keeps sounding and the building empties, so even the
-    # long tail of the pre-movement distribution moves by the persona's p95 (capped at 5 min).
-    delay = min(tr["premove_s"], tr.get("pressure_timeout_s") or tr["premove_s"])
+    delay = tr["premove_s"]  # the persona's lognormal draw, long tail included
     if a["persona"] == "skeptic":  # the alarm alone is not enough; any second cue is
         if urged:
             return "second_cue", urged
@@ -141,8 +157,8 @@ def decide(view: dict) -> dict:
         choice = opts.get(act) or view["options"][0]
         return _result(view, choice, "Not sure it is real yet; waiting for more cues.", evidence, False, None, "calm")
     pace = _pace(view, reason)
-    help_opt = _nearest(view, "HELP")
-    if help_opt and view["agent"]["persona"] == "staff":
+    help_opt = min(_help_choices(view), key=lambda o: o.get("route_m", 0), default=None)
+    if help_opt:
         return _result(view, help_opt, f"{help_opt['target']} cannot use the stairs; I go and help.", evidence, True,
                        "I'm coming to help you.", pace)
     blocked = _blocked_beliefs(view)

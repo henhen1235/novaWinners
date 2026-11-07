@@ -61,6 +61,8 @@ class Sim:
         self.alarm_t = self._alarm_time()
         self.hooks = list(hooks or [])  # called at the start of every tick (interventions, loop/ drivers)
         self.signage: list[tuple[str, str, float]] = []  # (room, exit, p) signs seen on the way
+        self.assisted = bool((scenario.get("params") or {}).get("assisted_evacuation")) or any(
+            it.get("type") == "assisted_evacuation_plan" for it in scenario.get("interventions", []))
         self._apply_interventions(scenario.get("interventions", []))
         self.tick = 0
         self.t = 0.0
@@ -84,7 +86,7 @@ class Sim:
                     here = not it.get("room") or a.spawn_room == it["room"]
                     if here and it["exit"] not in a.known_exits and a.rng.random() < p:
                         a.known_exits.append(it["exit"])
-            else:
+            elif it.get("type") != "assisted_evacuation_plan":  # that one is read in __init__
                 log.warning("intervention %s not supported here; use events/occupants", it.get("type"))
 
     def _alarm_time(self) -> float:

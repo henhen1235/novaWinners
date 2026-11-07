@@ -66,7 +66,7 @@ def advance(sim: "Sim", a: "Agent", dt: float) -> None:
 def refuge_reached(sim: "Sim", a: "Agent") -> None:
     a.state = "waiting_at_refuge"
     sim.event("waiting_at_refuge", agent=a.id, ref=a.target_stair, text="waiting at the stair landing for help")
-    for s in sim.active():  # radio call to wardens still in the building
+    for s in sim.active() if sim.assisted else []:  # the plan's radio call to wardens still inside
         if s.persona == "staff" and not s.helping and s.stair is None:
             s.cue_t = sim.t if s.cue_t is None else s.cue_t
             sim.trigger(s, "help_request", a.id)

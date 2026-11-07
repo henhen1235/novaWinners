@@ -71,10 +71,15 @@ from scene.links (type stairs, cost_multiplier, bidirectional) or scene.stairs. 
 persona trait (0.6 m/s down, 0.4 up; older adults 0.3 down), stair flow 1.1 persons/s per meter of
 stair width. Elevators are never used. People who cannot use stairs (mobility_impaired) are offered
 GO_TO_REFUGE and wait at the landing (state waiting_at_refuge) until a staff agent chooses HELP;
-the helper carries them (0.6 m/s level, 0.3 m/s stairs, state helping / carried). HELP is
-offered only to the nearest free staff member for each person (planar meters plus 30 m per floor
-apart, path reachable), at most one person per staff member; events help_assigned, helping
-(pick-up) and help_released (helper gave up or left). The person entered by is drawn with a
+the helper carries them (0.6 m/s level, 0.3 m/s stairs, state helping / carried). Without an
+assisted-evacuation plan (the default) HELP is offered only to staff who can see someone waiting
+at a refuge, and the rule policy accepts it for about 30 percent of such pairs (NCSTAR 1-7: 30
+percent helped someone); stragglers at refuges are a finding. With the plan
+(`interventions: [{"type": "assisted_evacuation_plan"}]` or `params.assisted_evacuation: true`)
+the nearest free staff member for each person who cannot use stairs (planar meters plus 30 m per
+floor apart, path reachable) is radioed, offered HELP with `assigned: true` and the rule policy
+always takes it; at most one person per staff member. Events help_assigned, helping (pick-up),
+help_released (helper gave up or left). The person entered by is drawn with a
 preference for entrances near where they start (weight exp(-route_m / 60)).
 
 The decider owns the choices; the sim only executes walking, queuing and stopping. Decision
@@ -84,14 +89,14 @@ changed; the agent keeps walking its old path until the decision applies), rumor
 (speech only when it is news for the listener or from staff/PA, at most once per 8 s per listener),
 door_reached, level_reached (every landing: the agent stops until the decision applies; keep going
 down or leave the stairwell), stair_smoke / stair_crowded (once per stair and floor, agent waits),
-help_request (staff, radio), picked_up (helper, after picking someone up).
+help_request (staff, radio; only under an assisted-evacuation plan), picked_up (helper, after picking someone up).
 
 view.agent: id, persona, model, pos [x, z], level, room, known_exits, entry_exit, target_exit,
 target_stair, carrying (id or null), traits (speed_mps, premove_s, notice_s, sign_follow_p,
-social_threshold, stair_down_mps, stair_up_mps, uses_stairs, pressure_timeout_s, t_since_cue_s,
-activity, state, pace). pressure_timeout_s (persona p95 pre-movement clipped to 120..300 s) is used
-only by the rule policy: everyone moves by then, and skeptics also move on any second cue (urgent or
-official speech, smoke, two or more people seen leaving).
+social_threshold, stair_down_mps, stair_up_mps, uses_stairs, t_since_cue_s, activity, state, pace).
+premove_s is a draw from the persona's lognormal (research/EVAC_PSYCHOLOGY.md) with its long tail
+and no cap. The rule policy moves at premove_s, earlier on a strong cue; skeptics ignore the alarm
+alone and move on a second cue (staff or PA instruction, smoke, two or more people seen leaving).
 
 view.percepts kinds: alarm, fire / smoke (where, level, dist_m), people_moving (count, toward),
 person (ref, persona, doing, state, toward, dist_m; up to 8 nearest in sight), message (from, text,
@@ -149,6 +154,7 @@ to the model for repair. Each round writes `out/loop/<name>/rN/interventions.jso
 | pa_announcement | t_s, text, exit_open? | events += pa_announcement at t_s, params.claim {exit_open} | t_s within the run |
 | unlock_exit | exit | events += open_exit at (blocked_exit t_start_s + 30 s) | exit must have a blocked_exit with cause locked, chained or obstructed |
 | assign_familiar_exit | room, exit | occupants in room get familiar_exit = exit | |
+| assisted_evacuation_plan | (none) | interventions += {type: assisted_evacuation_plan} | once; trained staff carry people who cannot use stairs |
 | widen_door | door, width_m | scene doors[].width_m (and the exit's width_m) | > current, <= min(1.5x, 2.4 m) |
 
 Adversary injections are plain scenario events with ids `advN_k`: blocked_exit
