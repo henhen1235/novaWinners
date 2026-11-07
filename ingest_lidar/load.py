@@ -22,6 +22,41 @@ class Scan:
     faces: np.ndarray | None
     colors: np.ndarray | None  # (n, 3) uint8 per vertex, or None
     info: dict = field(default_factory=dict)
+    # ARKit ARMeshClassification per face (0 none, 1 wall, 2 floor, 3 ceiling,
+    # 4 table, 5 seat, 6 window, 7 door) when the file carries it, else None.
+    face_classes: np.ndarray | None = None
+
+
+ARKIT_PLY_COMMENT = b"comment rehearsal arkit mesh v1"
+ARKIT_CLASSES = ("none", "wall", "floor", "ceiling", "table", "seat", "window", "door")
+
+
+def _load_arkit_ply(path: Path) -> Scan | None:
+    """Read RoomScanner's Mesh-mode PLY (binary LE, float xyz, int triangles + uchar class).
+
+    Returns None if the file is not in that exact layout, so the generic loader runs.
+    Frame: ARKit world, gravity aligned, Y up, meters.
+    """
+    raw = path.read_bytes()
+    end = raw.find(b"end_header\n")
+    if end < 0 or ARKIT_PLY_COMMENT not in raw[:end]:
+        return None
+    header = raw[:end].decode("ascii", "replace").splitlines()
+    counts = {ln.split()[1]: int(ln.split()[2]) for ln in header if ln.startswith("element ")}
+    body = raw[end + len(b"end_header\n"):]
+    nv, nf = counts.get("vertex", 0), counts.get("face", 0)
+    v = np.frombuffer(body, dtype="<f4", count=nv * 3).reshape(nv, 3).astype(np.float64)
+    face_dt = np.dtype([("n", "u1"), ("idx", "<i4", (3,)), ("cls", "u1")])  # 14 bytes, packed
+    faces = np.frombuffer(body, dtype=face_dt, count=nf, offset=nv * 12)
+    if nf and (faces["n"] != 3).any():
+        raise ValueError(f"{path.name}: Mesh-mode PLY must contain triangles only")
+    f = faces["idx"].astype(np.int64)
+    if nf and (f.max() >= nv or f.min() < 0):
+        raise ValueError(f"{path.name}: face index out of range")
+    cls = faces["cls"].astype(np.uint8)
+    info = _info(path, v, f, False, False)
+    info["arkit_classes"] = {name: int((cls == k).sum()) for k, name in enumerate(ARKIT_CLASSES)}
+    return Scan(v, f, None, info, cls)
 
 
 def _load_usd(path: Path) -> trimesh.Trimesh:
@@ -61,6 +96,10 @@ def _load_usd(path: Path) -> trimesh.Trimesh:
 def load_scan(path: Path) -> Scan:
     """Load OBJ/PLY/GLB/GLTF/STL/USD(Z) as a mesh, or a face-less PLY as a point cloud."""
     path = Path(path)
+    if path.suffix.lower() == ".ply":
+        arkit = _load_arkit_ply(path)
+        if arkit is not None:
+            return arkit
     if path.suffix.lower() in (".usd", ".usda", ".usdc", ".usdz"):
         geom = _load_usd(path)
     else:

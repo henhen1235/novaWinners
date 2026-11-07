@@ -190,7 +190,9 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     scan = load_scan(input_path)
     if scale:
         scan = Scan(scan.vertices * scale, scan.faces, scan.colors, scan.info)
-    o = orient(scan, up_override=up or corr.get("up"))
+    # ARKit meshes are gravity aligned (world +Y is up): use that instead of estimating it.
+    arkit_up = "+y" if scan.face_classes is not None else None
+    o = orient(scan, up_override=up or corr.get("up") or arkit_up)
     if not scale and not PLAUSIBLE_CEILING_M[0] <= o.ceiling_height_m <= PLAUSIBLE_CEILING_M[1]:
         # a 5 cm grid over a scan in cm would need ~10^4 x more cells; stop with a hint instead
         # up detection itself uses metric gates and may be wrong here; a storey's smallest extent is its height
