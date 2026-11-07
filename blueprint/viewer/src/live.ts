@@ -267,8 +267,8 @@ export function startLive(context: ViewerContext, target: string | null) {
     clearPlacedPeople();
     const rulesOnly = params.get("decide") === "policy";
     $("#live-mode").textContent = rulesOnly
-      ? "Rules only. This run does not ask a model. Open the page without ?decide=policy for a model call per person."
-      : "Each person asks openai/gpt-oss-120b. A line that says Rules filled in means that call failed or was replaced.";
+      ? "This run uses the built-in rules."
+      : "Each person asks openai/gpt-oss-120b.";
     status.textContent = notes.length ? `Starting ${people} people with ${notes.join(" and ")}` : `Starting ${people} people`;
     pendingStart = false;
   }

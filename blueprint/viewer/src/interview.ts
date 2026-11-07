@@ -149,9 +149,16 @@ async function ask(question: string) {
 
 function sourceLine(record: DecisionRecord) {
   const model = record.model?.includes("/") ? record.model : "the model";
-  if (record.source === "model") return `Model call · ${model} chose this`;
-  if (record.source === "fallback") return `Rules filled in · ${model} was asked and this answer was not used${record.note ? ` (${record.note})` : ""}`;
-  return "Rules only · no model was asked for this decision";
+  if (record.source === "model") return `Model · ${model}`;
+  if (record.source === "fallback") return `Rules · ${model} was asked and this answer was not used${record.note ? ` (${record.note})` : ""}`;
+  return "Rules · no model was asked";
+}
+
+function whoLine(info: { persona?: string; speed?: number } | undefined, runName: string, compared: boolean) {
+  const persona = (info?.persona ?? "person").replace(/_/g, " ");
+  const name = persona.charAt(0).toUpperCase() + persona.slice(1);
+  const speed = typeof info?.speed === "number" ? `${info.speed.toFixed(2)} m/s` : "";
+  return [name, speed, compared ? runName : ""].filter(Boolean).join(", ");
 }
 
 function thought(record: DecisionRecord | undefined) {
@@ -207,9 +214,7 @@ function drawTimeline(player: Player, run: Run, agentId: string) {
 export function openInterview(player: Player, run: Run, agent: number, onClose: () => void) {
   const info = run.doc.agents[agent];
   $("#iv-title").textContent = info.id;
-  const persona = info.persona.replace(/_/g, " ");
-  const speed = typeof info.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}own decision${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  $("#iv-who").textContent = whoLine(info, run.name, player.runs.length > 1);
   $("#iv-answer").replaceChildren();
   const items = drawTimeline(player, run, info.id);
   current = { player, run, agent, onClose, items };
@@ -223,9 +228,7 @@ export function refreshInterview() {
   if (!current) return;
   const { player, run, agent } = current;
   const info = run.doc.agents[agent];
-  const persona = (info?.persona ?? "person").replace(/_/g, " ");
-  const speed = typeof info?.speed === "number" ? `${info.speed.toFixed(2)} m/s, ` : "";
-  $("#iv-who").textContent = `${persona.charAt(0).toUpperCase() + persona.slice(1)}, ${speed}own decision${player.runs.length > 1 ? `, ${run.name}` : ""}`;
+  $("#iv-who").textContent = whoLine(info, run.name, player.runs.length > 1);
   current.items = drawTimeline(player, run, info.id);
   updateInterview(player.time());
 }
