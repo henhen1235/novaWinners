@@ -377,7 +377,8 @@ export function play(context: ViewerContext, runs: Run[], live?: LiveHooks): Pla
       const used = run.exitCounts.get(exit.id)!.textContent !== "0";
       tag.visible = used && (view !== "single" || exit.level === focus);
     }
-    if (run === runs[0] && levelIds.length > 1) for (const [id, n] of perFloor) context.setFloorCount(id, n);
+    // Per-floor counts are one run's; with two runs side by side they would mislabel the right half.
+    if (run === runs[0] && levelIds.length > 1 && runs.length === 1) for (const [id, n] of perFloor) context.setFloorCount(id, n);
   }
 
 
