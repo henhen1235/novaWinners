@@ -19,6 +19,7 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Callable
 
+from analysis import occupancy, smoke, spof
 from analysis.__main__ import analyze
 from scenario.chat import call_llm
 
@@ -55,6 +56,19 @@ def paired_delta(before: list[dict], after: list[dict], key: str) -> dict:
     """after - before per seed: median and [min, max]."""
     d = [_num(a, key) - _num(b, key) for b, a in zip(before, after)]
     return {"median": round(statistics.median(d), 2), "min": round(min(d), 2), "max": round(max(d), 2)}
+
+
+PINCH_MAX_ROOMS = 150  # the pinch raster took > 10 min on Tepper (559 rooms, 5 levels)
+
+
+def _analyze(scene: dict) -> dict:
+    """analysis.analyze; on big scenes without the pinch raster (the agents then see no pinch points)."""
+    if len(scene["rooms"]) <= PINCH_MAX_ROOMS:
+        return analyze(scene)
+    occ = occupancy.analyze(scene)
+    return {"scene": scene["meta"]["name"], "occupancy": occ,
+            "spof": spof.analyze(scene, {k: v["load"] for k, v in occ["rooms"].items()}),
+            "pinch": {"rooms": [], "skipped": f"more than {PINCH_MAX_ROOMS} rooms"}, "smoke": smoke.analyze(scene)}
 
 
 def _dump(path: Path, obj: object) -> None:
@@ -106,7 +120,7 @@ class Loop:
     def run(self, rounds: int) -> dict:
         self.out.mkdir(parents=True, exist_ok=True)
         cached = self.out / "analysis.json"  # same scene, same result; the big scenes take minutes
-        analysis = json.loads(cached.read_text()) if cached.exists() else analyze(self.scene)
+        analysis = json.loads(cached.read_text()) if cached.exists() else _analyze(self.scene)
         _dump(cached, analysis)
         scene, sc = self.scene, copy.deepcopy(self.scenario)
         sums = self.stage("r0_baseline", "baseline", scene, sc)
