@@ -84,10 +84,12 @@ def _traced_walls(g: G.Grid, lines: list[list[float]], thickness_m: float = 0.15
 
 
 def _confirm_exits(scan: Scan, matrix: np.ndarray, g: G.Grid, openings: list[dict], tagged: bool,
-                   min_faces: int = 20) -> tuple[list[dict], list[dict]]:
+                   min_faces: int = 20, signs: list | None = None, sign_m: float = 3.0
+                   ) -> tuple[list[dict], list[dict]]:
     """Split openings into (confirmed, unconfirmed) by ARKit door faces on the opening.
 
-    Door-labeled faces (class 7) at 0.3-2.0 m within 0.3 m of the opening segment confirm it.
+    Door-labeled faces (class 7) at 0.3-2.0 m within 0.3 m of the opening segment confirm it,
+    and so does a detected exit sign (signs, [x, z] in scene) within sign_m of the segment.
     Without labels, or if nothing is confirmed and no tags exist, all openings stay exits
     (best effort, the scene must have an exit).
     """
@@ -100,7 +102,8 @@ def _confirm_exits(scan: Scan, matrix: np.ndarray, g: G.Grid, openings: list[dic
     for op in openings:
         seg = LineString(op["segment"])
         n = sum(1 for x, z in c[:, [0, 2]] if seg.distance(Point(x, z)) <= 0.3) if len(c) else 0
-        (confirmed if n >= min_faces else unconfirmed).append(op)
+        sign = any(seg.distance(Point(s)) <= sign_m for s in signs or [])
+        (confirmed if n >= min_faces or sign else unconfirmed).append(op)
     if not confirmed and not tagged:
         return openings, []
     return confirmed, unconfirmed
@@ -220,12 +223,46 @@ def _debug(out: Path, g: G.Grid, m: G.Masks, scene: dict) -> None:
     for r in scene["rooms"]:
         cv2.putText(img, r["id"], px(r["centroid"]), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
     cv2.imwrite(str(d / "overview.png"), img)
+    if scene["points_of_interest"] or "cv" in scene["extensions"]:
+        _debug_pois(d, img, px, scene)
     feats = [{"type": "Feature", "properties": {"kind": "room", "id": r["id"]},
               "geometry": {"type": "Polygon", "coordinates": [r["polygon"] + [r["polygon"][0]]]}}
              for r in scene["rooms"]]
     feats += [{"type": "Feature", "properties": {"kind": "door", "id": dd["id"], "is_exit": dd["is_exit"]},
                "geometry": {"type": "LineString", "coordinates": dd["segment"]}} for dd in scene["doors"]]
     (d / "scene.geojson").write_text(json.dumps({"type": "FeatureCollection", "features": feats}))
+
+
+POI_BGR = {"fire_exit_sign": (0, 170, 0), "fire_extinguisher": (0, 0, 230), "aed": (230, 0, 230),
+           "alarm_pull": (0, 128, 255)}
+
+
+def _debug_pois(d: Path, img: np.ndarray, px, scene: dict) -> None:
+    """debug/pois.png: overview upscaled 3x with POI markers (filled) and door/stairs evidence (ring)."""
+    f = 3
+    big = cv2.resize(img, None, fx=f, fy=f, interpolation=cv2.INTER_NEAREST)
+
+    def bpx(xz: list[float]) -> tuple[int, int]:
+        c, r = px(xz)
+        return c * f + f // 2, r * f + f // 2
+
+    for c in scene["extensions"].get("cv", {}).get("clusters", []):
+        if c["kept"] and c["label"] in ("door", "stairs"):
+            cv2.circle(big, bpx(c["position"]), 7, (255, 128, 0) if c["label"] == "door" else (160, 160, 0), 2)
+    for p in scene["points_of_interest"]:
+        cv2.circle(big, bpx(p["position"]), 8, POI_BGR.get(p["kind"], (0, 0, 0)), -1)
+        cv2.putText(big, p["kind"], (bpx(p["position"])[0] + 10, bpx(p["position"])[1] + 4),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+    for e in scene["exits"]:
+        cv2.drawMarker(big, bpx(e["position"]), (0, 0, 255), cv2.MARKER_TILTED_CROSS, 14, 2)
+    legend = [("exit sign", POI_BGR["fire_exit_sign"]), ("extinguisher", POI_BGR["fire_extinguisher"]),
+              ("aed", POI_BGR["aed"]), ("alarm pull", POI_BGR["alarm_pull"]), ("door (ring)", (255, 128, 0)),
+              ("stairs (ring)", (160, 160, 0)),
+              ("exit (x)", (0, 0, 255))]
+    for i, (name, col) in enumerate(legend):
+        cv2.circle(big, (12, 14 + 18 * i), 6, col, -1)
+        cv2.putText(big, name, (24, 19 + 18 * i), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 1)
+    cv2.imwrite(str(d / "pois.png"), big)
 
 
 def _load_inputs(corrections: Path | None, exit_tags: Path | None, input_path: Path) -> tuple[dict, list]:
@@ -235,8 +272,24 @@ def _load_inputs(corrections: Path | None, exit_tags: Path | None, input_path: P
     return corr, tags
 
 
+def _run_cv(input_path: Path, out_dir: Path, i2s: np.ndarray) -> tuple[dict | None, dict | None]:
+    """Keyframe detection when keyframes/frames.jsonl sits next to the mesh; skips with a warning
+    when the CV extras (requirements-cv.txt) are not installed."""
+    kf = input_path.parent / "keyframes"
+    if not (kf / "frames.jsonl").exists():
+        return None, None
+    from .detect import run_cv
+
+    try:
+        return run_cv(kf, i2s, out_dir=out_dir, level=LEVEL), None
+    except ImportError as exc:
+        print(f"CV_UNAVAILABLE: {exc}; install requirements-cv.txt for keyframe detection")
+        return None, _warn("CV_UNAVAILABLE", f"keyframes found but detection skipped: {exc}")
+
+
 def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path | None = None,
-        exit_tags: Path | None = None, up: str | None = None, scale: float | None = None) -> dict:
+        exit_tags: Path | None = None, up: str | None = None, scale: float | None = None,
+        cv: bool = True) -> dict:
     """Run Path B on one scan; writes outputs to out_dir and returns the scene dict."""
     input_path, out_dir = Path(input_path), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -264,6 +317,18 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         warnings.append(_warn("SCALE_LOW_CONFIDENCE", f"floor-to-ceiling {o.ceiling_height_m:.2f} m outside "
                               "[2.2, 4.5]; check units or pass --scale"))
     g = G.build_grid(G.sample_points(scan, o.matrix), ceiling_m=o.ceiling_height_m)
+    i2s = o.matrix @ np.diag([scale or 1.0] * 3 + [1.0])  # true file -> scene map, including --scale
+    cvres, cv_warn = _run_cv(input_path, out_dir, i2s) if cv else (None, None)
+    warnings += [cv_warn] if cv_warn else []
+    g_people = g
+    if cvres and cvres["people"]:
+        from .people import remove_people
+
+        g, people_removed, people_mask = remove_people(scan, o.matrix, g, cvres["people"])
+        cvres["extensions"]["people_removed"] = people_removed
+        if people_removed:
+            warnings.append(_warn("PEOPLE_REMOVED", f"removed {len(people_removed)} person-sized blobs "
+                                  "with a person detected on them from the occupancy grid"))
     # Interior glass (Mesh mode): LiDAR sees the next room's floor through glass and nothing at
     # body height, so walkable space would run straight through a glass partition and each pane
     # between frames would read as a door. ARKit labels those surfaces "window" (6): block them
@@ -274,6 +339,13 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     traced = _traced_walls(g, corr.get("walls", []))  # human-traced glass walls (tools.tag_exits)
     glass |= traced
     m = G.build_masks(g, barrier=glass if glass.any() else None)
+    if g is not g_people:
+        from .people import write_people_debug
+
+        before = G.build_masks(g_people, barrier=glass if glass.any() else None)
+        (out_dir / "debug").mkdir(parents=True, exist_ok=True)
+        write_people_debug(out_dir / "debug" / "people.png", g, before.walkable, m.walkable, people_mask,
+                           cvres["people"], before.occupied & ~people_mask)
     walls, rooms, doors, obstacles = _segment(g, m, o.ceiling_height_m)
     walls = walls + [{"id": f"w_fix_{k + 1:03d}", "level": LEVEL, "height_m": round(o.ceiling_height_m, 3),
                       "polygon": ring(LineString([w[:2], w[2:]]).buffer(0.06, cap_style="flat"))}
@@ -282,7 +354,8 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     # Glass walls: LiDAR sees through glass, so a curtain wall split by mullions looks like a row
     # of door-width openings to unscanned space. With ARKit labels (Mesh mode) an opening is an
     # exit only if door-labeled faces lie on it; human exit tags always win (see _exits).
-    openings, unconfirmed = _confirm_exits(scan, o.matrix, g, openings, bool(tags))
+    openings, unconfirmed = _confirm_exits(scan, o.matrix, g, openings, bool(tags),
+                                           signs=cvres["exit_signs"] if cvres else None)
     warnings += [_warn("EXIT_UNCONFIRMED", f"{op['width_m']} m opening at {op['center']} has no ARKit door "
                        "on it (glass or scan edge?); not an exit unless tagged") for op in unconfirmed]
     if tags:
@@ -314,7 +387,6 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     if dropped:
         warnings.append(_warn("ROOM_UNREACHABLE", f"dropped {dropped:.2f} m^2 of navmesh triangles that only "
                               "touch the rest at T-junctions"))
-    i2s = o.matrix @ np.diag([scale or 1.0] * 3 + [1.0])  # true file -> scene map, including --scale
     scene = {
         "schema_version": "1.0",
         "meta": {"name": input_path.stem, "source": "lidar", "source_file": input_path.name, "units": "meters",
@@ -325,7 +397,7 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         "levels": [{"id": LEVEL, "name": "Scanned floor", "elevation_m": 0.0,
                     "ceiling_height_m": round(o.ceiling_height_m, 3)}],
         "walls": walls, "rooms": rooms, "doors": doors, "exits": exits, "stairs": [], "elevators": [],
-        "obstacles": obstacles, "points_of_interest": [],
+        "obstacles": obstacles, "points_of_interest": cvres["points_of_interest"] if cvres else [],
         "walkable": {LEVEL: walkable_to_contract(kept)}, "navmesh": navmesh, "links": [],
         "assets": {"display_model": "display.glb", "floorplan_overlay": "debug/overview.png",
                    "navmesh_debug": "navmesh_debug.glb"},
@@ -336,6 +408,11 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
                                  "grid": {"x0": g.x0, "z0": g.z0, "res": g.res,
                                           "png": "debug/overview.png"}}},
     }
+    if cvres:
+        scene["extensions"]["cv"] = {**cvres["extensions"], "exit_signs": cvres["exit_signs"],
+                                     "exits_near_sign": [e["id"] for e in exits if any(
+                                         np.hypot(e["position"][0] - x, e["position"][1] - z) <= 3.0
+                                         for x, z in cvres["exit_signs"])]}
     if not no_llm:
         from .semantics import label_rooms
 

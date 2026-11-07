@@ -1,4 +1,4 @@
-"""CLI: python -m ingest_lidar INPUT -o OUT_DIR [--no-llm] [--corrections c.json] [--exit-tags t.json]."""
+"""CLI: python -m ingest_lidar INPUT -o OUT_DIR [--no-llm] [--corrections c.json] [--exit-tags t.json] [--no-cv]."""
 
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exit-tags", type=Path, help="exit_tags.json: [[x, z, label], ...] in scene frame")
     ap.add_argument("--up", help="force the input file's up axis, e.g. +y or -z")
     ap.add_argument("--scale", type=float, help="multiply input coordinates by this factor")
+    ap.add_argument("--no-cv", action="store_true", help="skip keyframe detection (keyframes/frames.jsonl)")
     a = ap.parse_args(argv)
     try:
         scene = run(a.input, a.out, no_llm=a.no_llm, corrections=a.corrections, exit_tags=a.exit_tags,
-                    up=a.up, scale=a.scale)
+                    up=a.up, scale=a.scale, cv=not a.no_cv)
     except ValueError as exc:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
