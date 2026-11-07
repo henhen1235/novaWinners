@@ -3,17 +3,46 @@
 // depends on a particular building.
 import * as THREE from "three";
 import type { SceneDoc, ViewerContext } from "./context";
+import { clockText } from "./names";
 
-type Finding = { title: string; detail: string; refs?: string[] };
+type Evidence = { id: string; text: string };
+type Finding = { title: string; detail: string; refs?: string[]; evidence?: string[] };
+type Outcome = { evacuated?: number; total?: number; t90_s?: number; t_last_s?: number; stragglers?: number };
 type Recommendation = {
   title: string;
   kind: string;
+  audience?: "operations" | "design";
   refs?: string[];
+  evidence?: string[];
+  basis?: string;
   why: string;
   expected_effect?: string;
   effort?: "low" | "medium" | "high";
+  verified?: { simulated?: boolean; seeds?: number; before?: Outcome; after?: Outcome } | null;
 };
-type Analysis = { model?: string; summary?: string; findings?: Finding[]; recommendations?: Recommendation[] };
+type Analysis = { model?: string; summary?: string; evidence?: Evidence[]; findings?: Finding[]; recommendations?: Recommendation[]; cost_usd?: number };
+
+const AUDIENCES: [string, string][] = [["operations", "For the safety team"], ["design", "For the architect"]];
+
+/** The simulator's check of a suggestion, in one plain sentence. */
+function verdict(item: Recommendation): string {
+  const check = item.verified;
+  if (!check?.simulated) return "Not tested in simulation";
+  const runs = check.seeds ? `${check.seeds} simulated run${check.seeds === 1 ? "" : "s"}` : "simulation";
+  const { before, after } = check;
+  const total = after?.total ?? before?.total;
+  const out = before?.evacuated !== undefined && after?.evacuated !== undefined && before.evacuated !== after.evacuated
+    ? `${before.evacuated} to ${after.evacuated}${total ? ` of ${total}` : ""} out`
+    : "";
+  // When the count does not move, the time the last person got out is the effect worth saying.
+  const last = before?.t_last_s !== undefined && after?.t_last_s !== undefined && Math.round(before.t_last_s) !== Math.round(after.t_last_s)
+    ? `last person out ${clockText(before.t_last_s)} to ${clockText(after.t_last_s)}`
+    : "";
+  const effects = [out, last].filter(Boolean);
+  if (effects.length) return `Tested in ${runs}: ${effects.join("; ")}`;
+  if (before?.evacuated !== undefined && after?.evacuated !== undefined) return `Tested in ${runs}: no change (${after.evacuated}${total ? ` of ${total}` : ""} out)`;
+  return `Tested in ${runs}`;
+}
 type Spot = { level: string; x: number; z: number; shape: "area" | "point"; polygon?: number[][] };
 
 const KIND_LABEL: Record<string, string> = {
@@ -67,6 +96,7 @@ export function startSuggestions(context: ViewerContext, replayUrl: string): Sug
   const placed: THREE.Object3D[] = []; // highlight groups, each under its own floor
   const pulses: THREE.Mesh[] = [];
   let data: Analysis | null = null;
+  let evidence = new Map<string, string>();
   let shown = false;
 
   const elevation = (level: string) => context.doc.levels.find((item) => item.id === level)?.elevation_m ?? 0;
@@ -130,11 +160,19 @@ export function startSuggestions(context: ViewerContext, replayUrl: string): Sug
     const tags = el("span", "suggest-tags");
     tags.append(el("span", "suggest-tag", KIND_LABEL[item.kind] ?? KIND_LABEL.other));
     if (item.effort) tags.append(el("span", "suggest-effort", EFFORT_LABEL[item.effort] ?? item.effort));
-    head.append(name, tags);
+    const tested = el("span", item.verified?.simulated ? "suggest-verdict tested" : "suggest-verdict", verdict(item));
+    head.append(name, tags, tested);
     const body = el("div", "suggest-body");
     body.hidden = true;
     body.append(el("p", "", item.why));
+    if (item.basis) body.append(el("p", "", `Basis: ${item.basis}`));
     if (item.expected_effect) body.append(el("p", "suggest-effect", `Expected effect: ${item.expected_effect}`));
+    const cited = (item.evidence ?? []).map((id) => evidence.get(id)).filter((text): text is string => Boolean(text));
+    if (cited.length) {
+      const list = el("ul", "suggest-evidence");
+      for (const text of cited) list.append(el("li", "", text));
+      body.append(el("p", "suggest-evidence-title", "From the run"), list);
+    }
     head.addEventListener("mouseenter", () => mark(item.refs, item.kind, false));
     head.addEventListener("focus", () => mark(item.refs, item.kind, false));
     head.addEventListener("click", () => {
@@ -153,9 +191,18 @@ export function startSuggestions(context: ViewerContext, replayUrl: string): Sug
     if (!data) return;
     section.replaceChildren(title);
     if (data.summary) section.append(el("p", "suggest-summary", data.summary));
-    const list = el("ol", "suggest-list");
-    for (const item of data.recommendations ?? []) list.append(row(item));
-    section.append(list);
+    evidence = new Map((data.evidence ?? []).map((item) => [item.id, item.text]));
+    const all = data.recommendations ?? [];
+    // Who acts on it: the people running the building, or the people changing it.
+    const groups = AUDIENCES.map(([key, label]) => [label, all.filter((item) => (item.audience ?? "operations") === key)] as const);
+    const other = all.filter((item) => item.audience && !AUDIENCES.some(([key]) => key === item.audience));
+    for (const [label, items] of [...groups, ["Other suggestions", other] as const]) {
+      if (!items.length) continue;
+      section.append(el("h3", "suggest-group", label));
+      const list = el("ol", "suggest-list");
+      for (const item of items) list.append(row(item));
+      section.append(list);
+    }
     if (data.findings?.length) {
       const fold = el("details", "suggest-findings");
       fold.append(el("summary", "", "What the analysis noticed"));
@@ -166,6 +213,7 @@ export function startSuggestions(context: ViewerContext, replayUrl: string): Sug
         button.type = "button";
         button.addEventListener("click", () => mark(finding.refs, "other", true));
         li.append(button, el("p", "", finding.detail));
+        for (const id of finding.evidence ?? []) if (evidence.has(id)) li.append(el("p", "suggest-cite", evidence.get(id)!));
         items.append(li);
       }
       fold.append(items);
