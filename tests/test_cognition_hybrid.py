@@ -81,10 +81,24 @@ def test_routine_triggers_make_no_llm_call(trig, ref):
     assert "Plan: finish_task" in r["record"]["decision"]["padm"]["why"]
 
 
-@pytest.mark.parametrize("trig", ["hazard_seen", "heard", "rumor_heard", "path_blocked", "elevator_recalled"])
+@pytest.mark.parametrize("trig", ["hazard_seen", "rumor_heard", "path_blocked", "elevator_recalled"])
 def test_surprise_triggers_call_the_llm(trig):
     r = hybrid.decide(sim_view(trigger=trig, smoke=True))
     assert len(CALLS) == 1 and r["record"]["source"] == "llm" and r["record"]["escalation"] == trig
+
+
+def heard_view(text, official=False, aid="a_09"):
+    v = sim_view(aid=aid, trigger="heard", ref="a_02")
+    v["percepts"].append({"id": "m_1", "kind": "message", "from": "a_02", "text": text, "urgent": True,
+                          "official": official, "channel": "hearing", "ref": "m_1"})
+    return v
+
+
+def test_heard_escalates_only_for_news():
+    assert hybrid.decide(heard_view("Let's go!", aid="a_10"))["record"]["source"] == "playbook" and not CALLS
+    assert hybrid.decide(heard_view("Exit 1 is locked", aid="a_11"))["record"]["escalation"] == "heard"
+    assert hybrid.decide(heard_view("Everyone out", official=True, aid="a_12"))["record"]["escalation"] == "heard"
+    assert hybrid.decide(heard_view("Fire! Get out!", aid="a_13"))["record"]["escalation"] == "heard"
 
 
 def test_new_cue_escalates_once_then_is_routine():
@@ -101,20 +115,20 @@ def test_blocked_route_escalates():
 
 def test_cost_cap_stops_new_calls(monkeypatch):
     monkeypatch.setenv("NOVA_COST_CAP", "0")
-    r = hybrid.decide(sim_view(trigger="heard", smoke=True))
+    r = hybrid.decide(sim_view(trigger="hazard_seen", smoke=True))
     assert not CALLS and r["record"]["source"] == "playbook" and "cost cap" in r["record"]["validation"]["errors"][0]
 
 
 def test_playbook_prompt_reaches_the_llm():
-    hybrid.decide(sim_view(trigger="heard"))
-    inp = D.build_inputs(sim_view(trigger="heard", aid="a_02"))
+    hybrid.decide(sim_view(trigger="hazard_seen"))
+    inp = D.build_inputs(sim_view(trigger="hazard_seen", aid="a_02"))
     user = D.prompt_for(inp, D.compute_state(inp))[1]["content"]
     assert "YOUR PLAN" in user and "'playbook'" not in user and "first_action" not in user
 
 
 def test_replay_is_deterministic(tmp_path, monkeypatch):
     views = [sim_view(aid=f"a_{i}", trigger=t, tick=10 + i, smoke=i % 2 == 0)
-             for i, t in enumerate(["periodic", "heard", "door_reached", "hazard_seen"])]
+             for i, t in enumerate(["periodic", "rumor_heard", "door_reached", "hazard_seen"])]
     first = [hybrid.decide(v)["record"] for v in views]
     log = tmp_path / "decisions.jsonl"
     log.write_text("".join(json.dumps(r) + "\n" for r in first))

@@ -6,8 +6,9 @@ Routine triggers (periodic, door_reached, level_reached, premove_done, the alarm
 sweep bookkeeping) use the sim's persona rule driven by this person's playbook traits, unless
 something changed since their last LLM call: their route or exit is blocked or smoky, a new cue
 arrived (fire, smoke, an urgent or official message, a blocked exit), or they lost their group.
-Surprises (hazard_seen, heard, rumor_heard, path_blocked, stair_smoke, elevator_recalled,
-help_request, waiting at a refuge) get one LLM deliberation as in cognition.decide. Routine
+Surprises (hazard_seen, rumor_heard, path_blocked, stair_smoke, elevator_recalled, help_request,
+waiting at a refuge, and heard when the speech is news: staff/PA, a blocked-exit claim, or the first
+report of a hazard) get one LLM deliberation as in cognition.decide. Routine
 records keep the DecisionRecord format with source "playbook".
 
 The alarm is deliberately routine: the playbook was written for exactly that cue, and calling the
@@ -24,14 +25,14 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from . import llm
+from .appraisal import parse_claims
 from .decide import (CONFIG, MINDS, REPLAY, _ENV_DONE, _record, _remember, _result, build_inputs, compute_state,
                      configure, deliberate)
 
 MODEL = "google/gemini-2.5-flash-lite"
 ROUTINE = {"periodic", "door_reached", "level_reached", "premove_done", "group_moving", "sweep_next",
            "reached_person", "picked_up", "route_changed"}
-SURPRISE = {"hazard_seen", "heard", "rumor_heard", "path_blocked", "stair_smoke", "elevator_recalled",
-            "help_request"}
+SURPRISE = {"hazard_seen", "rumor_heard", "path_blocked", "stair_smoke", "elevator_recalled", "help_request"}
 CUE_KINDS = {"fire", "smoke", "exit_blocked", "blocked", "intruder", "gunshot"}
 STATS = {"playbook": 0, "llm": 0, "capped": 0, "replay": 0, "why": {}}
 
@@ -46,12 +47,25 @@ def cue_signature(view: dict) -> list[str]:
     for p in view.get("percepts") or []:
         if p["kind"] in CUE_KINDS or (p["kind"] == "stair" and (p.get("smoke") or p.get("blocked"))):
             out.add(f"{p['kind']}:{p.get('ref') or p.get('where')}")
-        elif p["kind"] == "message" and (p.get("urgent") or p.get("official")):
+        elif p["kind"] == "message" and _news(p, view):
             out.add(f"message:{' '.join(str(p.get('text') or '').lower().split())[:60]}")  # same words, one cue
     for b in view.get("beliefs") or []:
         if b["key"].startswith(("exit_open:", "stair_ok:")) and b["value"] is False:
             out.add(b["key"])
     return sorted(out)
+
+
+def _news(p: dict, view: dict) -> bool:
+    """Speech worth an LLM call: staff or PA, a blocked-exit claim, or the first word of a hazard.
+    Plain "let's go" chatter is not (in Tepper v1 it drove 1034 of 2191 calls)."""
+    if p.get("official"):
+        return True
+    claims = parse_claims(p.get("text", ""))
+    if claims.get("exit_blocked"):
+        return True
+    knows = any(b["key"].startswith("hazard:") and b["value"] for b in view.get("beliefs") or []) or any(
+        q["kind"] in ("fire", "smoke") for q in view.get("percepts") or [])
+    return bool(claims.get("hazard")) and not knows
 
 
 def route_in_trouble(view: dict) -> str | None:
@@ -74,6 +88,8 @@ def escalate(view: dict) -> str | None:
     traits = view["agent"].get("traits") or {}
     if trig in SURPRISE:
         return trig
+    if trig == "heard" and any(p["kind"] == "message" and _news(p, view) for p in view.get("percepts") or []):
+        return "heard"
     if trig == "cue_noticed" and (view.get("trigger") or {}).get("ref") != "alarm":
         return "cue_noticed"
     if traits.get("state") == "waiting_at_refuge":
