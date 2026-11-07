@@ -28,29 +28,32 @@ Walkable IoU / room count delta / door recall / exit recall / validator errors. 
 
 | plan | before | after |
 |---|---|---|
-| office_raster | 0.83 / 0 / 0.86 / 0.50 / 2 | 0.93 / 0 / 0.86 / 0.50 / 0 |
-| curved | 0.49 / -2 / 0.14 / 0.33 / 0 | 0.83 / -1 / 0.29 / 1.00 / 0 |
-| syn_01 | 0.83 / 0 / 0.71 / 0.50 / 2 | 0.93 / 0 / 0.86 / 0.50 / 1 |
-| syn_02 | 0.87 / 0 / 0.67 / 0.00 / 9 | 0.94 / 0 / 0.67 / 0.00 / 7 |
-| syn_03 | 0.24 / +2 / 0.14 / 0.00 / 0 | 0.70 / +1 / 0.14 / 0.50 / 6 |
-| syn_04 | 0.96 / 0 / 0.67 / 0.00 / 1 | 0.95 / 0 / 1.00 / 0.67 / 0 |
-| syn_05 | 0.82 / 0 / 0.78 / 0.50 / 5 | 0.93 / 0 / 1.00 / 1.00 / 1 |
-| syn_06 | 0.18 / +3 / 0.33 / 0.00 / 1 | 0.68 / +1 / 0.33 / 0.50 / 4 |
-| swiss_3135 | 0.03 / -14 / 0.00 / 0.00 / 19 | 0.49 / +2 / 0.17 / 0.00 / 21 |
-| swiss_45313 | 0.08 / -8 / 0.00 / 0.00 / 4 | 0.75 / +3 / 0.56 / 0.00 / 2 |
-| swiss_43726 | 0.08 / 0 / 0.00 / 0.00 / 15 | 0.43 / -4 / 0.08 / 0.00 / 7 |
+| office_raster | 0.83 / 0 / 0.86 / 0.50 / 2 | 0.92 / 0 / 0.86 / 0.50 / 0 |
+| curved | 0.49 / -2 / 0.14 / 0.33 / 0 | 0.84 / -1 / 0.29 / 1.00 / 0 |
+| syn_01 | 0.83 / 0 / 0.71 / 0.50 / 2 | 0.92 / 0 / 0.86 / 0.50 / 0 |
+| syn_02 | 0.87 / 0 / 0.67 / 0.00 / 9 | 0.93 / 0 / 0.67 / 0.00 / 7 |
+| syn_03 | 0.24 / +2 / 0.14 / 0.00 / 0 | 0.71 / +1 / 0.29 / 0.50 / 5 |
+| syn_04 | 0.96 / 0 / 0.67 / 0.00 / 1 | 0.93 / 0 / 1.00 / 0.67 / 0 |
+| syn_05 | 0.82 / 0 / 0.78 / 0.50 / 5 | 0.93 / 0 / 1.00 / 1.00 / 0 |
+| syn_06 | 0.18 / +3 / 0.33 / 0.00 / 1 | 0.71 / +1 / 0.33 / 0.50 / 4 |
+| swiss_3135 | 0.03 / -14 / 0.00 / 0.00 / 19 | 0.50 / +2 / 0.14 / 0.00 / 18 |
+| swiss_45313 | 0.08 / -8 / 0.00 / 0.00 / 4 | 0.78 / +3 / 0.50 / 0.00 / 0 |
+| swiss_43726 | 0.08 / 0 / 0.00 / 0.00 / 15 | 0.43 / -4 / 0.08 / 0.00 / 6 |
 | swiss_42197 | 0.05 / -10 / 0.07 / 0.50 / 1 | 0.35 / -2 / 0.07 / 0.50 / 8 |
-| swiss_10111 | 0.11 / -3 / 0.00 / 0.00 / 13 | 0.27 / -5 / 0.06 / 0.00 / 5 |
+| swiss_10111 | 0.11 / -3 / 0.00 / 0.00 / 13 | 0.28 / -5 / 0.13 / 0.00 / 4 |
 | swiss_13804 | crash (TypeError) | 0.22 / -5 / 0.00 / 0.00 / 12 |
 
-Tepper CAD sheets:
+Tepper CAD sheets (floors 1-5). Before is 911ba08 (CMU agent's run, FAILURES_CMU #3). After is the latest commit, with no Tepper-specific code.
 
-| sheet | before | after |
+| sheet | before | after: rooms / doors (inferred) / exits / rooms reaching an exit / validator errors / runtime |
 |---|---|---|
-| TSB-3 (offices, 54k paths) | 0 rooms, 0 doors, NO_EXITS, scale 88 px/m (true ~13.7), 28 s | 131 rooms named by number, 117 doors (63 from A-DOOR swings and envelope seams, 54 inferred), 42 exits, 108 of 131 rooms reach an exit, scale from sf tags, 20 s |
-| TSB-1 (ground, 82k paths) | 0 rooms, 0 doors, NO_EXITS, 55 s | 123 rooms, 108 doors (104 inferred), 4 exits, 105 of 123 rooms reach an exit, 9 s |
+| TSB-1 (ground, 82k paths) | 0 rooms, NO_EXITS, 55 s | 126 / 131 (96) / 8 / 107 of 126 / 59 / 9 s |
+| TSB-2 | 0 rooms, NO_EXITS, scale 88 px/m (true 16.0) | 114 / 137 (51) / 24 / 112 of 114 / 20 / 22 s |
+| TSB-3 (offices, 54k paths) | 0 rooms, NO_EXITS, 28 s | 125 / 134 (56) / 7 / 116 of 125 / 42 / 20 s |
+| TSB-4 | 0 rooms, NO_EXITS | 44 / 88 (5) / 66 / 41 of 44 / 11 / 21 s |
+| TSB-5 | 0 rooms, NO_EXITS | 46 / 126 (9) / 99 / 46 of 46 / 19 / 16 s |
 
-Both Tepper sheets still fail the validator. Most errors are NAVMESH_ISLAND: walkable pieces inside rooms that the 0.25 m agent erosion cuts off.
+Rooms are named by number ("3404"), and the scale comes from the sf tags on every floor. Every floor still fails the validator. Most errors are NAVMESH_ISLAND (walkable pieces cut off by the 0.25 m agent erosion) or ROOM_UNREACHABLE. On TSB-4 and TSB-5 the exit counts (66, 99) are inflated: many door swings face spaces that are not room faces, and the room count is low. Those two floors need a look at their A-AREA coverage.
 
 ## What works
 
@@ -105,11 +108,14 @@ Each entry gives an example, the root cause at 911ba08, and the status.
 - Swiss plans: door recall is 0.06-0.22. These plans use 0.8-1.0 m openings with no leaf, plus virtual (dashed) area boundaries the truth counts as rooms. Seams through a wide opening are longer than the seal and get merged.
 - The 1.2 m link on `curved` is swallowed by the seal, so the hall, link and rotunda merge. Curved door recall fell from 0.57 to 0.29 after thin-line walls were added. I have not traced why.
 - Exit recall on the synthetic rasters is 0-0.67. An exit gap opens onto the page margin, and when the closing footprint seals it there is no seam with the exterior label.
-- Tepper: 23 of 131 (TSB-3) and 18 of 123 (TSB-1) rooms still do not reach an exit.
+- Tepper: some rooms still do not reach an exit (see the table).
   - Some rooms touch only spaces that are not faces.
-  - Some inferred doors land on walls that the 0.25 m agent erosion then closes.
-  - NAVMESH_ISLAND errors remain inside rooms with narrow necks.
-  - Open-to-below areas (`OTB3-*`) are rooms. They should be voids.
+  - Some doors land where the 0.25 m agent erosion closes the passage.
+  - NAVMESH_ISLAND errors remain where a room has narrow necks.
+  - Rooms enclosed by a curved wall with no detected swing (the oval 3808) stay cut off.
+  - An open-to-below void that the seal merged into a circulation face (OTB3-4 inside 3000) stays walkable. Separate void faces are dropped.
+  - Forbes Beeler (FAILURES_CMU #1): the page is now read upright, but the drawing is partial, with hairline walls broken by many gaps, so only 9 rooms form.
+  - Cohon wayfinding map (FAILURES_CMU #2): rooms are filled polygons with no stroked walls. A filled-polygon room path is not built.
 - On the plain vector path (fewer than 3000 strokes, no layers), room numbers can still produce a dimension-text scale. Area-tag scale runs only on the raster and CAD branch.
 - Exit doors on raster plans can sit tilted across the wall: the room flood and the exterior flood meet off the wall line, so the jamb contacts are uneven. The door still connects; its lintel in display.glb is skewed.
 - No OCR. Raster pages without a text layer get no room names and no scale bar reading.
@@ -146,7 +152,7 @@ Next, ranked by value for effort:
 
 1. rapidocr for room labels, area tags and dimension strings on raster pages. With OCR the area-tag scale and room names would work on scans too.
 2. Use the `A-DOOR` swings for every door on layered sheets, and drop door inference there.
-3. Treat `OTB` and "open to below" faces as voids.
+3. A filled-polygon room path for wayfinding maps such as Cohon.
 4. Optionally test the RF-DETR door detector as a second vote on raster door gaps.
 
 ## Changes for Henry
@@ -168,6 +174,9 @@ All changes are in `blueprint/`. Nothing in `contract/` or `viewer/` was edited.
   - The contract has no "area_labels" scale method. The scene says `dimension_text` and sets `extensions.scale_source = "area_labels"`.
 - `geometry/rooms.label_faces`: room numbers lead the name, and area tags are never names.
 - `pipeline._boundary_walls` takes a thickness and the doors, and cuts walls at doorways. Raster wall thickness is measured, capped at 0.2 m because `assemble_scene` sizes door bridges for 0.2 m.
+- `export/assemble.py` reads an optional `door_depth_m` per level for the door bridge depth (default 0.2 m). Raster levels set 0.9 m, because neighbouring raster faces can sit a wall gap apart.
+- Faces tagged open-to-below (`OTB...`, "OPEN TO BELOW") with no room number are dropped (`extensions.void_faces_dropped`).
+- `loader._strokes` and `_texts` map PDF coordinates through `page.rotation_matrix`, so /Rotate pages line up with the raster.
 - `segment.deskew` only rotates when 60% of lines agree within 1 degree and the angle is under 10 degrees.
 - `segment.detect_raster` is fixed for the `HoughLinesP` output shape.
 - `geometry/vectorize.split_gaps` sorts on numeric fields.
