@@ -68,6 +68,7 @@ class DoorState:
     connects: list[str]
     bucket: Bucket
     lv: int = 0
+    blocked: bool = False
 
 
 @dataclass
@@ -343,6 +344,7 @@ class World:
     def block_door(self, door_id: str) -> None:
         d = next((d for d in self.doors if d.id == door_id), None)
         if d is not None:
+            d.blocked = True
             self.set_cost(d.tris, INF)
 
     def block_stair(self, stair_id: str) -> None:

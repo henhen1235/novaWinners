@@ -55,17 +55,24 @@ def _sense_hazards(sim: "Sim", act: list["Agent"]) -> None:
         if not cand:
             continue
         pts, _ = _rows(sim, cand)
-        near = np.linalg.norm(pts - ev.point, axis=1) <= SIGHT_M[ev.type]
-        seen = np.zeros(len(cand), dtype=bool)
-        if near.any():
-            seen[near] = sim.world.nav.line_of_sight(ev.point, pts[near], ev.lv)
-        inside = np.isin(sim.world.nav.locate(pts, ev.lv), ev.tris)
+        # A fire or smoke on this floor is the thing people react to. A 15 m
+        # sight line leaves almost everyone in a large plan standing still.
+        if ev.type in ("fire", "smoke"):
+            seen = np.ones(len(cand), dtype=bool)
+            inside = seen
+        else:
+            near = np.linalg.norm(pts - ev.point, axis=1) <= SIGHT_M[ev.type]
+            seen = np.zeros(len(cand), dtype=bool)
+            if near.any():
+                seen[near] = sim.world.nav.line_of_sight(ev.point, pts[near], ev.lv)
+            inside = np.isin(sim.world.nav.locate(pts, ev.lv), ev.tris)
         for a, s, ins in zip(cand, seen, inside):
             if s or ins:
                 a.hazards_seen[ev.id] = {"kind": ev.type, "where": ev.room, "ref": ev.id,
                                          "level": sim.world.nav.level_ids[ev.lv]}
                 if a.cue_t is None:
                     a.cue_t = sim.t
+                a.traits["premove_s"] = min(float(a.traits.get("premove_s", 0)), 1.0)
                 sim.trigger(a, "hazard_seen", ev.id)
 
 

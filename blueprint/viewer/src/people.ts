@@ -52,22 +52,38 @@ function personTexture() {
   canvas.width = canvas.height = 64;
   const g = canvas.getContext("2d")!;
   g.clearRect(0, 0, 64, 64);
+  g.lineWidth = 6;
+  g.strokeStyle = "#0b1622";
   g.fillStyle = "#fff";
+  const blob = () => {
+    g.fill();
+    g.stroke();
+  };
   g.beginPath();
-  g.arc(32, 12, 8, 0, Math.PI * 2);
-  g.fill();
-  g.fillRect(27, 21, 10, 16);
-  g.fillRect(16, 23, 10, 5);
-  g.fillRect(38, 23, 10, 5);
-  g.fillRect(27, 37, 4, 18);
-  g.fillRect(33, 37, 4, 18);
+  g.arc(32, 12, 9, 0, Math.PI * 2);
+  blob();
+  g.beginPath();
+  g.roundRect(24, 20, 16, 18, 3);
+  blob();
+  g.beginPath();
+  g.roundRect(12, 22, 12, 6, 2);
+  blob();
+  g.beginPath();
+  g.roundRect(40, 22, 12, 6, 2);
+  blob();
+  g.beginPath();
+  g.roundRect(25, 36, 6, 20, 2);
+  blob();
+  g.beginPath();
+  g.roundRect(33, 36, 6, 20, 2);
+  blob();
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
 function personPlane() {
-  return new THREE.PlaneGeometry(0.7, 1.6).translate(0, 0.8, 0);
+  return new THREE.PlaneGeometry(1.15, 2.5).translate(0, 1.25, 0);
 }
 
 function bodyGeometry() {
@@ -197,7 +213,9 @@ export class People {
     mesh.frustumCulled = false;
     mesh.raycast = () => {};
     mesh.renderOrder = 30;
-    material.depthTest = false;
+    // The body is tested against the walls so it cannot draw through them.
+    // Rings stay on top of the floor plate.
+    material.depthTest = name === "figure";
     material.depthWrite = false;
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     for (let k = 0; k < this.count; k += 1) mesh.setMatrixAt(k, this.hidden);
@@ -234,7 +252,9 @@ export class People {
   }
 
   setOnTop(onTop: boolean) {
-    for (const material of this.materials) material.depthTest = !onTop;
+    for (const [name, mesh] of Object.entries(this.meshes)) {
+      (mesh.material as THREE.Material).depthTest = name === "figure" ? true : !onTop;
+    }
     for (const mesh of Object.values(this.meshes)) mesh.renderOrder = onTop ? 20 : 2;
     this.links.renderOrder = onTop ? 20 : 2;
   }
@@ -285,13 +305,14 @@ export class People {
     }
     this.q.setFromAxisAngle(this.up, a.heading);
     const isFly = persona === "fruit_fly" || persona === "fruit_fly_scrambled" || persona === "fly";
-    // A person is about 1.7 m tall. Grow the figure when the camera is far so it stays clickable,
-    // and stand it just above the slab so a floor plate cannot cover the feet.
-    const figure = Math.max(0.9, Math.min(2.2, 26 / Math.max(px, 0.6) / 1.6));
+    // Tall enough to read from above, narrow enough that the body stays inside the corridor.
+    // The plane is 1.15 m wide and 2.5 m tall before this scale.
+    const height = Math.max(3.2, Math.min(5.2, 64 / Math.max(px, 0.45)));
+    const width = Math.min(1.7, height * 0.42);
     this.p.copy(a.world);
     this.p.y += 0.35;
     this.p.toArray(this.worldPositions, k * 3);
-    const size = 0.55 * figure;
+    const size = 0.62;
     const pulse = a.state === "deciding" ? 1 + 0.25 * Math.sin(now / 130) : 1;
     this.s.setScalar(size * pulse);
     this.m.compose(this.p, this.q, this.s);
@@ -302,11 +323,11 @@ export class People {
     }
     // Face the camera so a top-down plan still shows a person, not a dot.
     const pace = Math.max(0.4, a.speed || 1.2);
-    const bob = a.moving ? Math.abs(Math.sin(now / (200 / pace) + a.phase)) * 0.08 * figure : 0;
+    const bob = a.moving ? Math.abs(Math.sin(now / (200 / pace) + a.phase)) * 0.12 : 0;
     this.p.y += bob;
     this.q.copy(this.context.camera.quaternion);
     const tall = persona === "child" ? 0.62 : persona === "mobility_impaired" ? 0.72 : 1;
-    this.s.set(figure * (isFly ? 0.45 : 1), figure * tall, 1);
+    this.s.set((width / 1.15) * (isFly ? 0.45 : 1), (height / 2.5) * tall, 1);
     this.m.compose(this.p, this.q, this.s);
     this.meshes.figure.setMatrixAt(k, this.m);
     this.meshes.figure.setColorAt(k, a.fill);
@@ -390,7 +411,7 @@ export class People {
 
   /** Agent nearest the ray within ~14 px, or -1. */
   pick(raycaster: THREE.Raycaster) {
-    const reach = Math.max(0.6, 14 / this.pxPerMeter);
+    const reach = Math.max(1.2, 28 / this.pxPerMeter);
     let best = -1;
     let bestD = reach * reach;
     for (let k = 0; k < this.count; k += 1) {

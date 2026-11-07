@@ -717,7 +717,7 @@ ready.then((data) => {
     },
   };
   startAnalysis(context, params.get("analysis"));
-  startReplay(context, params.get("replay"), params.get("compare"));
   startEdit(context);
+  startReplay(context, params.get("replay"), params.get("compare"));
   if (!params.get("replay")) startLive(context, params.get("live") ?? "");
 });
