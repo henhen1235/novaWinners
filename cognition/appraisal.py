@@ -16,8 +16,10 @@ CLAIM_WEIGHT = {"hazard": 0.7, "told_to_leave": 0.6, "exit_blocked": 0.3}
 ALARM_WEIGHT, PA_WEIGHT, SOCIAL_WEIGHT = 0.6, 0.8, 0.6
 COPING_T_S = 90.0  # time scale for "an exit this far away still works"; ours, calibrate
 CONTAGION_WINDOW_S = 2.0  # ponytail: neighbours sampled only at decision time; integrate over 2 s, not the gap
-EVAC_ACTIONS = {"EVACUATE", "FOLLOW", "TURN_BACK"}
-PROTECTIVE = EVAC_ACTIONS | {"HIDE", "SHELTER"}
+EVAC_ACTIONS = {"EVACUATE", "FOLLOW", "TURN_BACK", "TAKE_STAIRS", "USE_ELEVATOR"}
+PROTECTIVE = EVAC_ACTIONS | {"HIDE", "SHELTER", "WAIT_REFUGE"}
+STAIR_KINDS = {"stair", "stairwell", "stairs"}
+CANNOT_STAIRS = {"mobility_impaired"}
 OBSERVED = {"sight", "smell", "observation"}  # "observation" is the sim's own-eyes source kind
 
 
@@ -76,6 +78,12 @@ def _evidence(p: dict, persona_name: str) -> list[tuple[str, bool, float, dict]]
         return [(f"exit_open:{ref}", False, 1.0, direct)]
     if kind == "exit" and ref and ch == "sight" and "blocked" in p:
         return [(f"exit_open:{ref}", not p["blocked"], 1.0, direct)]
+    if kind in STAIR_KINDS and ref:
+        bad = bool(p.get("smoke") or p.get("blocked"))
+        out = [(f"stair_ok:{ref}", not bad, 1.0, direct)]
+        if p.get("smoke"):
+            out.append((f"hazard:{p.get('where') or ref}", True, 1.0, direct))
+        return out
     if kind == "alarm":
         return [("alarm", True, credibility(persona_name, "alarm"), {"kind": "alarm", "ref": p["id"]})]
     if kind in ("pa", "utterance", "said", "shout", "message"):
@@ -153,8 +161,31 @@ def exit_open_prob(beliefs: list[dict], exit_id: str | None) -> float:
     return 1.0 - b["conf"] if b["value"] is False else 1.0
 
 
-def option_success(o: dict, beliefs: list[dict]) -> float:
+def stair_ok_prob(beliefs: list[dict], o: dict) -> float:
+    """Chance a stair option is usable: 0 if the sim marks it blocked, discounted by a belief it is smoky/blocked."""
+    if o.get("blocked") or o.get("smoke"):
+        return 0.0
+    b = next((b for b in beliefs if b["key"] == f"stair_ok:{o.get('stair')}"), None)
+    return 1.0 - b["conf"] if b is not None and b["value"] is False else 1.0
+
+
+def stair_crowd_s(o: dict) -> float:
+    c = o.get("crowding")
+    return {"low": 0.0, "medium": 15.0, "high": 40.0}.get(c, float(c) * 40 if isinstance(c, (int, float)) else 0.0)
+
+
+def option_success(o: dict, beliefs: list[dict], persona_name: str = "", hazard: bool = False) -> float:
     a = o.get("action")
+    if a == "TAKE_STAIRS":
+        if persona(persona_name)[0] in CANNOT_STAIRS:
+            return 0.05
+        t = float(o.get("route_m") or 20.0) / 1.0 + float(o.get("queue_s") or 0.0) + stair_crowd_s(o)
+        return math.exp(-t / COPING_T_S) * stair_ok_prob(beliefs, o) * (1.0 if o.get("direction", "down") == "down"
+                                                                       else 0.6)
+    if a == "USE_ELEVATOR":
+        return 0.5 if (o.get("usable_in_fire") or not hazard) and not o.get("blocked") else 0.05
+    if a == "WAIT_REFUGE":
+        return 0.45
     if a == "EVACUATE":
         t = float(o.get("route_m") or 20.0) / 1.3 + float(o.get("queue_s") or 0.0)
         return math.exp(-t / COPING_T_S) * exit_open_prob(beliefs, o.get("exit"))
@@ -188,8 +219,14 @@ def appraise(percepts: list[dict], beliefs: list[dict], options: list[dict], per
         r, u = (0.5 if s > 0 else 0.2), (0.3 if s > 0 else 0.1)
     r = clip(r + 0.3 * resp)
 
-    c = max((option_success(o, beliefs) for o in options if o.get("action") in PROTECTIVE), default=0.1)
+    hazard = any(b["value"] and b["key"].startswith("hazard:") for b in beliefs)
+    c = max((option_success(o, beliefs, persona_name, hazard) for o in options if o.get("action") in PROTECTIVE),
+            default=0.1)
     blocked = 1.0 if trigger.get("kind") in ("path_blocked", "blocked") else 0.0
+    stairs = [o for o in options if o.get("action") == "TAKE_STAIRS" and o.get("direction", "down") == "down"]
+    if stairs:  # a smoke-filled or blocked stairwell obstructs the way out (Scherer goal obstruction)
+        bad = [1.0 - stair_ok_prob(beliefs, o) for o in stairs]
+        blocked = max(blocked, min(bad), 0.5 * max(bad))
     target = traits.get("target_exit")
     if target:
         blocked = max(blocked, 1.0 - exit_open_prob(beliefs, target))

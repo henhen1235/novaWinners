@@ -203,3 +203,92 @@ def test_interview_cites_only_existing_records(tmp_path):
     assert ans["llm_calls"] <= 40
     cf = interview(run, "a_01", "What if you had not seen the smoke?")
     assert cf["counterfactual"]["counterfactual"] == {"o4": cf["counterfactual"]["n"]}
+
+
+def stair_view(persona="regular_employee", smoky_east=False, aid="a_50", fire=True):
+    """Hand-built 2-level view: agent on L2, exits on L1, east and west stairs plus a lift."""
+    ps = [{"id": "p1", "kind": "alarm", "channel": "sound"},
+          {"id": "p2", "kind": "stair", "ref": "st_east", "channel": "sight", "dist_m": 6.0,
+           "smoke": smoky_east, "crowding": "low"},
+          {"id": "p3", "kind": "stair", "ref": "st_west", "channel": "sight", "dist_m": 20.0, "crowding": "low"}]
+    if fire:
+        ps.append({"id": "p4", "kind": "smoke", "where": "L2_corridor", "dist_m": 8.0, "channel": "sight"})
+    return {"run_id": "t", "t_s": 30.0, "tick": 60, "trigger": {"kind": "hazard_seen", "ref": "p4"},
+            "agent": {"id": aid, "persona": persona, "room": "L2_office", "level": "L2", "known_exits": ["exit_01"],
+                      "traits": {"t_since_cue_s": 30, "premove_s": 20}},
+            "percepts": ps, "beliefs": [],
+            "options": [{"id": "o1", "action": "TAKE_STAIRS", "stair": "st_east", "label": "East Stair",
+                         "direction": "down", "route_m": 6.0, "queue_s": 2, "leads_to_level": "L1", "blocked": False},
+                        {"id": "o2", "action": "TAKE_STAIRS", "stair": "st_west", "label": "West Stair",
+                         "direction": "down", "route_m": 20.0, "queue_s": 0, "leads_to_level": "L1", "blocked": False},
+                        {"id": "o3", "action": "TAKE_STAIRS", "stair": "st_up", "direction": "up", "route_m": 3.0,
+                         "queue_s": 0, "leads_to_level": "L3", "blocked": False},
+                        {"id": "o4", "action": "USE_ELEVATOR", "elevator": "el_1", "usable_in_fire": False},
+                        {"id": "o5", "action": "WAIT_REFUGE", "ref": "st_east"},
+                        {"id": "o6", "action": "SEEK_INFO"}]}
+
+
+def test_fallback_takes_nearest_clear_stair_down():
+    D.configure(offline=True)
+    assert D.decide(stair_view())["choice"] == "o1"
+    assert D.decide(stair_view(smoky_east=True, aid="a_51"))["choice"] == "o2"
+
+
+def test_mobility_impaired_waits_at_refuge_and_asks_for_help():
+    D.configure(offline=True)
+    r = D.decide(stair_view(persona="mobility_impaired"))
+    assert r["choice"] == "o5" and "help" in (r["say"] or "")
+
+
+def test_validator_enforces_stair_and_elevator_rules():
+    v = stair_view()
+    ids = {"p1", "p2", "p3", "p4", "o1", "o2", "o3", "o4", "o5", "o6"}
+
+    def pick(choice):
+        return raw(choice=choice, options_considered=[choice], threat_evidence=["p4"], need_evidence=["p4"],
+                   choice_evidence=["p4"])
+    assert D.validate(pick("o1"), ids, v["options"], "regular_employee", True)[0] is not None
+    assert D.validate(pick("o4"), ids, v["options"], "regular_employee", True)[0] is None  # lift in a fire
+    assert D.validate(pick("o1"), ids, v["options"], "mobility_impaired", True)[0] is None
+
+
+def test_smoky_stairwell_blocks_goal_and_raises_fear():
+    st = lambda v: D.compute_state(D.build_inputs(v))  # noqa: E731
+    clear, smoky = st(stair_view(fire=False)), st(stair_view(fire=False, smoky_east=True, aid="a_52"))
+    assert smoky["appraisal"]["goal_blocked"] > clear["appraisal"]["goal_blocked"]
+    assert smoky["emotion"]["fear"] > clear["emotion"]["fear"]
+    assert any(b["key"] == "stair_ok:st_east" and b["value"] is False for b in smoky["beliefs_after"])
+
+
+def test_prompt_explains_stairs_and_floor():
+    inp = D.build_inputs(stair_view())
+    msgs = D.prompt_for(inp, D.compute_state(inp))
+    assert "TAKE_STAIRS" in msgs[0]["content"] and "usable_in_fire" in msgs[0]["content"]
+    assert "on floor L2" in msgs[1]["content"] and "leads_to_level=L1" in msgs[1]["content"]
+
+
+def test_interview_grounds_stair_names(tmp_path, monkeypatch):
+    def stair_llm(messages, **kw):
+        if messages[0]["content"] == COMPOSE_SYSTEM:
+            tags = re.findall(r"\[t=[^\]]+\]", messages[1]["content"])
+            return json.dumps({"sentences": [f"I took the east stairs. {tags[0]}"]}), \
+                {"cached": False, "latency_ms": 1, "cost_usd": 0.0}
+        user = messages[1]["content"]
+        choice = "o2" if re.search(r"stair \(ref=st_east[^)]*smoke=True", user) else "o1"
+        ev = ["p2"] if "- p2 " in user else ["p1"]
+        return json.dumps({"padm": {"threat_real": "yes", "threat_evidence": ev, "need_action": "yes",
+                                    "need_evidence": ev, "options_considered": ["o1", "o2"], "choice": choice,
+                                    "why": "nearest stair down", "choice_evidence": ev, "when": "now"},
+                           "say": None, "feel": "afraid", "confidence": 0.7}), \
+            {"cached": False, "latency_ms": 1, "cost_usd": 0.0}
+    monkeypatch.setattr(llm, "chat", stair_llm)
+    rec = D.decide(stair_view())["record"]
+    assert rec["source"] == "llm" and rec["decision"]["padm"]["choice"] == "o1"
+    run = tmp_path / "r"
+    run.mkdir()
+    (run / "decisions.jsonl").write_text(json.dumps(rec) + "\n")
+    ans = interview(run, "a_50", "Why did you take the east stairs?")
+    assert ans["record_id"] == rec["record_id"] and ans["intent"] == "why"
+    assert "east stairs" in ans["answer"]
+    cf = interview(run, "a_50", "What if the east stairs had smoke in them?")
+    assert cf["counterfactual"]["change"].startswith("you saw st_east")

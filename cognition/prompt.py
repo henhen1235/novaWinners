@@ -43,6 +43,16 @@ Action meanings (you may only choose among the OPTIONS listed for you, by their 
 - HIDE: go into the named room, lock or barricade, stay quiet (intruder).
 - SHELTER: stay inside the named room with doors closed (hazardous air outside).
 - TURN_BACK: go back the way you came because the way ahead is bad.
+- TAKE_STAIRS: walk to the named stair and take it up or down to the floor in leads_to_level. route_m is the
+  walk, queue_s the wait to get in; crowding says how packed it is; blocked or smoke means it is not safe.
+- USE_ELEVATOR: take the named lift. In a fire, nobody uses a lift unless the option says usable_in_fire=true.
+- WAIT_REFUGE: wait at the stair landing or refuge area and call for help.
+
+Floors and stairs. Exits to the outside are on the ground floor; on an upper floor you leave by going DOWN a stair.
+Most people use the stair they know, usually the one they came up. People avoid a stair with smoke in it and pick
+another one, and they slow down when a stair is crowded. A person who cannot manage stairs (mobility impaired) waits
+at the stair landing or refuge and asks for help instead of taking the stairs. Older adults are slow on stairs.
+Staff and wardens check their floor and help others before they go down themselves.
 
 Evidence ids. Every cue, belief, message and option in the user message has an id (for example p3, b2, m_88, o4).
 Cite the ids that actually drive each answer: threat_evidence for question 1, need_evidence for question 2,
@@ -86,6 +96,10 @@ def render_belief(b: dict) -> str:
             f"from {s['kind']} {s.get('ref') or ''}{by}, tick {b['tick']})")
 
 
+def _level(agent: dict) -> str:
+    return f" on floor {agent['level']}" if agent.get("level") else ""
+
+
 def _timing(traits: dict) -> list[str]:
     """Sampled pre-movement delay (Lovreglio et al. 2019) is a floor the sim already applied."""
     if traits.get("t_since_cue_s") is None or traits.get("premove_s") is None:
@@ -98,7 +112,7 @@ def user_message(agent: dict, t_s: float, trigger: dict, percepts: list[dict], b
                  options: list[dict], appraisal: dict, emotion: dict | None) -> str:
     name, p = persona(agent.get("persona", ""))
     lines = [f"PERSONA: {name}. {p['text']}",
-             f"YOU: {agent['id']} in {agent.get('room')} at t={t_s:.1f} s. Known exits: "
+             f"YOU: {agent['id']} in {agent.get('room')}{_level(agent)} at t={t_s:.1f} s. Known exits: "
              f"{', '.join(agent.get('known_exits') or []) or 'only the way you came in'}.",
              f"TRAITS: {_fields(agent.get('traits') or {}) or 'none'}",
              *_timing(agent.get("traits") or {}),

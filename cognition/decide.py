@@ -16,21 +16,22 @@ from pathlib import Path
 
 from . import llm
 from .appraisal import EVAC_ACTIONS, PROTECTIVE, HAZARD_KINDS, appraise, dominant, emotions, exit_open_prob
-from .appraisal import _next_id, parse_claims, update_beliefs
+from .appraisal import CANNOT_STAIRS, STAIR_KINDS, _next_id, parse_claims, stair_crowd_s, stair_ok_prob
+from .appraisal import update_beliefs
 from .personas import contagion_traits, persona
 from .prompt import messages, user_message
 from .schemas import Decision, DecisionRecord
 
 _ENV_DONE = [False]
 CONFIG = {"offline": os.environ.get("NOVA_NO_LLM") == "1", "run_id": "run", "model": llm.DEFAULT_MODEL,
-          "temperature": 0.7, "include_emotion": True, "workers": 32, "timeout_s": 6.0}
+          "temperature": 0.7, "include_emotion": True, "workers": 16, "timeout_s": 6.0}
 MINDS: dict[str, dict] = {}
 REPLAY: dict[tuple[int, str], dict] = {}
 ATTN_K, ATTN_THETA = 0.5, 1.0  # COGNITION_SOURCES.md: k ~0.5 (ours); theta so a calm agent sees a static sign 38%
 SALIENCE = {"exit_sign": 0.38, "person": 0.8, "exit": 0.9, "object": 0.5}
 SPEECH = {"utterance", "said", "shout", "message"}
 PRIORITY_KINDS = set(HAZARD_KINDS) | SPEECH | {"alarm", "pa", "exit", "exit_sign", "exit_blocked", "blocked",
-                                              "people_moving"}
+                                              "people_moving"} | STAIR_KINDS
 NEIGHBOUR_M, NEIGHBOUR_STALE_S, MAX_NEIGHBOURS = 6.0, 10.0, 8
 FEEL_MAP = {"afraid": "fear", "scared": "fear", "terrified": "fear", "panicked": "fear", "frightened": "fear",
             "anxious": "anxiety", "worried": "anxiety", "nervous": "anxiety", "uneasy": "anxiety", "unsure": "anxiety",
@@ -61,7 +62,7 @@ def configure(offline: bool | None = None, replay: str | Path | None = None, run
         for line in Path(replay).read_text().splitlines():
             if line.strip():
                 r = json.loads(line)
-                REPLAY[(r["run_id"], int(r["tick"]), r["agent_id"])] = r
+                REPLAY[(int(r["tick"]), r["agent_id"])] = r  # one log = one run, so run_id is not part of the key
 
 
 def stats() -> dict:
@@ -203,7 +204,8 @@ def check_say(say: str | None) -> list[str]:
     return errs
 
 
-def validate(raw: str, ids: set, options: list[dict]) -> tuple[dict | None, list[str]]:
+def validate(raw: str, ids: set, options: list[dict], persona_name: str = "", hazard: bool = False
+             ) -> tuple[dict | None, list[str]]:
     try:
         d = Decision.model_validate(llm.parse_json(raw))
     except Exception as e:  # bad JSON or schema: report, caller repairs once
@@ -224,6 +226,13 @@ def validate(raw: str, ids: set, options: list[dict]) -> tuple[dict | None, list
     action = offered.get(pd.choice, {}).get("action")
     if pd.need_action == "no" and action in PROTECTIVE:
         errs.append(f"need_action is 'no' but choice is {action}")
+    opt = offered.get(pd.choice, {})
+    if action == "USE_ELEVATOR" and hazard and not opt.get("usable_in_fire"):
+        errs.append("elevators are not used in a fire unless usable_in_fire is true")
+    if action == "TAKE_STAIRS" and persona_name in CANNOT_STAIRS:
+        errs.append("this person cannot use stairs; wait at the refuge or ask for help")
+    if action == "TAKE_STAIRS" and opt.get("blocked"):
+        errs.append("that stair is blocked")
     if action == "CONTINUE_TASK" and pd.when == "now":
         errs.append("CONTINUE_TASK needs when = after_task or after_info")
     errs += check_say(d.say)
@@ -239,6 +248,13 @@ def _evac_cost(o: dict, beliefs: list[dict], traits: dict) -> float:
     familiar = o.get("exit") in {traits.get("entry_exit"), traits.get("familiar_exit")} - {None}
     return (float(o.get("route_m") or 20) / 1.3 + float(o.get("queue_s") or 0) - (30 if familiar else 0)
             + 300 * (1 - exit_open_prob(beliefs, o.get("exit"))))
+
+
+def stair_choice(opts: list[dict], beliefs: list[dict]) -> list[dict]:
+    """Usable stairs, nearest first, going down before up (exits are on the ground floor)."""
+    ok = [o for o in opts if o.get("action") == "TAKE_STAIRS" and stair_ok_prob(beliefs, o) > 0.5]
+    return sorted(ok, key=lambda o: (o.get("direction", "down") != "down",
+                                     float(o.get("route_m") or 20) + float(o.get("queue_s") or 0) + stair_crowd_s(o)))
 
 
 def fallback(inp: dict, st: dict) -> dict:
@@ -263,15 +279,19 @@ def fallback(inp: dict, st: dict) -> dict:
     else:
         need, when = "yes", "now"
         evac = sorted(by("EVACUATE"), key=lambda o: _evac_cost(o, beliefs, traits))
-        if name == "parent_with_child" and by("GATHER"):
+        hazard = any(b["value"] and b["key"].startswith("hazard:") for b in beliefs)
+        lifts = [o for o in by("USE_ELEVATOR") if (o.get("usable_in_fire") or not hazard) and not o.get("blocked")]
+        if name in CANNOT_STAIRS and not evac:
+            pick = (by("WAIT_REFUGE") or lifts or by("SEEK_INFO") or by("CONTINUE_TASK") or opts)[0]
+        elif name == "parent_with_child" and by("GATHER"):
             pick = by("GATHER")[0]
         elif name == "warden" and by("HELP") and st["emotion"]["fear"] < 0.7:
             pick = by("HELP")[0]
         elif name in ("visitor", "older_adult") and by("FOLLOW") and a["social_proof"] > 0.3:
             pick = by("FOLLOW")[0]
         else:
-            pick = (evac or by("FOLLOW") or by("HIDE") or by("SHELTER") or by("TURN_BACK") or by("SEEK_INFO")
-                    or opts)[0]
+            pick = (evac or stair_choice(opts, beliefs) or by("FOLLOW") or by("HIDE") or by("SHELTER") or lifts
+                    or by("TURN_BACK") or by("WAIT_REFUGE") or by("SEEK_INFO") or opts)[0]
     threat = seen + cues
     ev = (threat[:3] or [pick["id"]]) + ([pick["id"]] if threat else [])
     return {"padm": {"threat_real": "yes" if a["certainty"] >= 0.6 else ("unsure" if a["certainty"] > 0.1 else "no"),
@@ -280,11 +300,18 @@ def fallback(inp: dict, st: dict) -> dict:
                      [pick["id"]] + [o["id"] for o in opts[:3]],
                      "choice": pick["id"], "why": f"Rule-based {name} policy: certainty {a['certainty']:.2f}.",
                      "choice_evidence": ev, "when": when},
-            "say": p.get("say") if act and name == "warden" else None,
+            "say": (p.get("say") if act and name == "warden" else
+                    "I can't use the stairs, please help me" if act and name in CANNOT_STAIRS and not evac else None),
             "feel": dominant(st["emotion"]), "confidence": round(a["coping"], 2)}
 
 
 # ---------- 5 deliberate ----------
+
+def validate_ctx(inp: dict, st: dict) -> tuple[str, bool]:
+    """Persona and whether a fire/smoke hazard is believed: the persona rules the validator enforces."""
+    return (persona(inp["agent"].get("persona", ""))[0],
+            any(b["value"] and b["key"].startswith("hazard:") for b in st["beliefs_after"]))
+
 
 def model_for(agent: dict) -> str:
     """The agent's OpenRouter model id, or the default when the sim gives a placeholder like 'rule-based'."""
@@ -313,7 +340,7 @@ def deliberate(inp: dict, st: dict, tag: str = "", temperature: float | None = N
         out["latency_ms"] += meta["latency_ms"]
         out["cost_usd"] += meta["cost_usd"]
         out["raw_output"] = raw
-        dec, errs = validate(raw, st["ids"], inp["options"])
+        dec, errs = validate(raw, st["ids"], inp["options"], *validate_ctx(inp, st))
         if dec:
             return {**out, "decision": dec, "source": "llm",
                     "validation": {"status": "repaired" if attempt else "ok", "errors": errors}}
@@ -368,7 +395,7 @@ def decide_batch(views: list[dict]) -> list[dict]:
     out: list[dict | None] = [None] * len(views)
     jobs = []
     for i, v in enumerate(views):
-        hit = REPLAY.get((v.get("run_id") or CONFIG["run_id"], int(v["tick"]), v["agent"]["id"]))
+        hit = REPLAY.get((int(v["tick"]), v["agent"]["id"]))
         if hit:
             out[i] = _result(hit)
             continue

@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from . import llm
-from .decide import CONFIG, compute_state, fallback, inputs_from_record, prompt_for, validate
+from .decide import CONFIG, compute_state, fallback, inputs_from_record, prompt_for, validate, validate_ctx
 from .personas import persona
 from .schemas import InterviewAnswer
 
@@ -73,15 +73,20 @@ def route(q: str) -> str:
     return "why"
 
 
-def ground(q: str, scene: dict) -> dict:
+def ground(q: str, scene: dict, options: list[dict] | None = None) -> dict:
     """Scene labels and ids mentioned in the question, and a time if one is given."""
     ql = q.lower()
     ents = []
-    for kind in ("exits", "rooms", "doors"):
+    for kind in ("exits", "rooms", "doors", "stairs", "elevators"):
         for e in scene.get(kind, []):
             names = {e["id"].lower(), str(e.get("label") or "").lower(), str(e.get("name") or "").lower()} - {""}
-            if any(re.search(rf"\b{re.escape(n)}\b", ql) for n in names):
-                ents.append({"kind": kind[:-1], "id": e["id"]})
+            if any(re.search(rf"\b{re.escape(n)}", ql) for n in names):  # prefix: "east stair" matches "stairs"
+                ents.append({"kind": kind.rstrip("s"), "id": e["id"]})
+    for o in options or []:  # option labels from the log ground names the scene file lacks
+        ref = o.get("stair") or o.get("exit") or o.get("elevator")
+        label = str(o.get("label") or "").lower()
+        if ref and label and re.search(rf"\b{re.escape(label)}", ql) and all(x["id"] != ref for x in ents):
+            ents.append({"kind": "stair" if o.get("stair") else "exit", "id": ref})
     for m in re.finditer(r"\bexit\s*(\d+)\b|\be_0*(\d+)\b", ql):  # works without a scene too
         eid = f"e_{int(m.group(1) or m.group(2)):03d}"
         if not any(x["id"] == eid for x in ents):
@@ -192,7 +197,7 @@ def _sample(inp: dict, st: dict, i: int, rec: dict, b: Budget) -> str | None:
         return None
     b.calls += 0 if meta["cached"] else 1
     b.cost += meta["cost_usd"]
-    dec, _ = validate(raw, st["ids"], inp["options"])
+    dec, _ = validate(raw, st["ids"], inp["options"], *validate_ctx(inp, st))
     return dec["padm"]["choice"] if dec else None
 
 
@@ -281,6 +286,12 @@ def parse_change(q: str, rec: dict, g: dict) -> tuple[dict, str]:
     ql, neg = q.lower(), bool(NEGATION.search(q))
     exits = [e["id"] for e in g["entities"] if e["kind"] == "exit"]
     room = rec["inputs"]["agent"].get("room")
+    stairs = [e["id"] for e in g["entities"] if e["kind"] == "stair"]
+    if stairs and re.search(r"block|smok|closed|full|crowd", ql) and not neg:
+        bad = {"smoke": True} if "smok" in ql else {"crowding": "high"} if re.search("full|crowd", ql) else \
+            {"blocked": True}
+        return {"add_percepts": ({"id": "cf1", "kind": "stair", "ref": stairs[0], "channel": "sight", **bad},)}, \
+            f"you saw {stairs[0]} {next(iter(bad))}"
     if exits and re.search(r"block|lock|closed|shut", ql) and not neg:
         return {"add_percepts": ({"id": "cf1", "kind": "exit_blocked", "ref": exits[0], "channel": "sight"},)}, \
             f"you saw {exits[0]} blocked"
@@ -354,7 +365,8 @@ def interview(run_dir: Path, agent_id: str, question: str, max_calls: int = MAX_
     if not recs:
         raise KeyError(f"no decisions for agent {agent_id}")
     events = [e for e in run["events"] if e.get("agent") == agent_id]
-    intent, g = route(question), ground(question, run["scene"])
+    intent = route(question)
+    g = ground(question, run["scene"], [o for r in recs for o in r["options"]])
     rec = pick_record(recs, g, intent)
     b = Budget(max_calls - 1)  # one call kept for composing
     reasons, base, cf, extra = [], None, None, []
