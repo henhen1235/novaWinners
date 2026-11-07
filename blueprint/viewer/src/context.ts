@@ -10,7 +10,7 @@ export type SceneDoc = {
   levels: { id: string; name?: string; elevation_m: number; ceiling_height_m?: number }[];
   rooms: { id: string; level: string; name: string; type?: string; polygon: number[][]; centroid: number[]; area_m2?: number }[];
   doors: { id: string; level: string; segment: number[][]; is_exit: boolean; width_m?: number }[];
-  exits: { id: string; level: string; position: number[]; label: string; door_id?: string }[];
+  exits: { id: string; level: string; position: number[]; label: string; door_id?: string; leads_to?: string }[];
   warnings: { code: string; message: string; severity: string }[];
   stairs?: { id: string; from_level: string; to_level: string; polygon: number[][]; bottom?: number[]; top?: number[] }[];
   links?: { id: string; type: string; from: { level: string; position: number[] }; to: { level: string; position: number[] }; cost_multiplier?: number }[];

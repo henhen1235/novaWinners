@@ -227,6 +227,7 @@ export interface Leg {
   level: string;
   points: Vec2[];
   via?: string; // link id taken at the end of this leg
+  climb?: boolean; // that link goes up a floor
 }
 
 // Binary min-heap keyed by cost; the triangle graph of a 5-floor building is ~20k nodes.
@@ -263,16 +264,44 @@ class Heap {
   }
 }
 
+export interface LevelLike {
+  id: string;
+  elevation_m: number;
+}
+
+export interface EvacExit extends ExitLike {
+  label?: string;
+  leads_to?: string;
+}
+
 /**
- * Shortest route from `start` on `level` to any exit on any level, walking the navmesh and taking
- * stair links (cost = cost_multiplier x link length). Dijkstra over triangle centroids, then the
- * funnel per floor. Returns one leg per floor visited.
+ * Exits a person can evacuate through, matching the sim (sim/ commit 665fafa): it leads outside or
+ * to an assembly point, its label does not mention a roof, and it is not on the top floor of a
+ * multi-storey scene.
  */
-export function nearestExitAcross<T extends ExitLike>(nav: Nav, start: Vec2, level: string, exits: T[], links: LinkLike[]) {
+export function evacuationExits<T extends EvacExit>(exits: T[], levels: LevelLike[]): T[] {
+  const top = levels.length > 1 ? levels.reduce((a, b) => (b.elevation_m > a.elevation_m ? b : a)).id : null;
+  return exits.filter(
+    (exit) => ["outside", "assembly"].includes(exit.leads_to ?? "outside") && !/roof/i.test(exit.label ?? "") && exit.level !== top,
+  );
+}
+
+/**
+ * Shortest route from `start` on `level` to an evacuation exit, walking the navmesh and taking
+ * stair links (cost = cost_multiplier x link length). Like the sim it never climbs while a
+ * descending (or level) route exists; only when none does may it go up a stair, and then only into
+ * a level that has an exit, so no route heads for the roof. Dijkstra over triangle centroids, then
+ * the funnel per floor. Returns one leg per floor visited; `climb` marks a leg that ends going up.
+ */
+export function nearestExitAcross<T extends EvacExit>(nav: Nav, start: Vec2, level: string, allExits: T[], links: LinkLike[], levels: LevelLike[]) {
   const from = locate(nav, start, level);
   if (from < 0) return null;
-  type Jump = { tri: number; cost: number; link: LinkLike; at: Vec2; land: Vec2 };
+  const exits = evacuationExits(allExits, levels);
+  const elevation = new Map(levels.map((item) => [item.id, item.elevation_m]));
+  const exitLevels = new Set(exits.map((exit) => exit.level));
+  type Jump = { tri: number; cost: number; link: LinkLike; at: Vec2; land: Vec2; up: boolean; toLevel: string };
   const jumps = new Map<number, Jump[]>();
+  const addJump = (fromTri: number, jump: Jump) => jumps.set(fromTri, [...(jumps.get(fromTri) ?? []), jump]);
   for (const link of links) {
     const a: Vec2 = [link.from.position[0], link.from.position[1]];
     const b: Vec2 = [link.to.position[0], link.to.position[1]];
@@ -281,45 +310,51 @@ export function nearestExitAcross<T extends ExitLike>(nav: Nav, start: Vec2, lev
     if (ta < 0 || tb < 0) continue;
     // Stairs are climbed, not jumped: count the rise of one storey (~4 m) on top of the run.
     const cost = (link.cost_multiplier ?? 1) * Math.hypot(dist(a, b), 4);
-    jumps.set(ta, [...(jumps.get(ta) ?? []), { tri: tb, cost, link, at: a, land: b }]);
-    jumps.set(tb, [...(jumps.get(tb) ?? []), { tri: ta, cost, link, at: b, land: a }]);
+    const ea = elevation.get(link.from.level) ?? 0;
+    const eb = elevation.get(link.to.level) ?? 0;
+    addJump(ta, { tri: tb, cost, link, at: a, land: b, up: eb > ea, toLevel: link.to.level });
+    addJump(tb, { tri: ta, cost, link, at: b, land: a, up: ea > eb, toLevel: link.from.level });
   }
   const goals = new Map<number, T>();
   for (const exit of exits) {
     const tri = locate(nav, [exit.position[0], exit.position[1]], exit.level);
     if (tri >= 0) goals.set(tri, exit);
   }
-  const g = new Float64Array(nav.centroids.length).fill(Infinity);
-  const previous = new Map<number, { tri: number; jump?: Jump }>();
-  const heap = new Heap();
-  g[from] = 0;
-  heap.push(0, from);
-  let goal = -1;
-  for (let top = heap.pop(); top; top = heap.pop()) {
-    const [cost, tri] = top;
-    if (cost > g[tri]) continue;
-    if (goals.has(tri)) {
-      goal = tri;
-      break;
-    }
-    for (const { tri: next } of nav.neighbours[tri]) {
-      const c = cost + dist(nav.centroids[tri], nav.centroids[next]);
-      if (c < g[next]) {
-        g[next] = c;
-        previous.set(next, { tri });
-        heap.push(c, next);
+
+  function search(allowUp: boolean) {
+    const g = new Float64Array(nav.centroids.length).fill(Infinity);
+    const previous = new Map<number, { tri: number; jump?: Jump }>();
+    const heap = new Heap();
+    g[from] = 0;
+    heap.push(0, from);
+    for (let top = heap.pop(); top; top = heap.pop()) {
+      const [cost, tri] = top;
+      if (cost > g[tri]) continue;
+      if (goals.has(tri)) return { goal: tri, previous };
+      for (const { tri: next } of nav.neighbours[tri]) {
+        const c = cost + dist(nav.centroids[tri], nav.centroids[next]);
+        if (c < g[next]) {
+          g[next] = c;
+          previous.set(next, { tri });
+          heap.push(c, next);
+        }
+      }
+      for (const jump of jumps.get(tri) ?? []) {
+        if (jump.up && !(allowUp && exitLevels.has(jump.toLevel))) continue; // never up toward a floor with no way out
+        const c = cost + dist(nav.centroids[tri], jump.at) + jump.cost + dist(jump.land, nav.centroids[jump.tri]);
+        if (c < g[jump.tri]) {
+          g[jump.tri] = c;
+          previous.set(jump.tri, { tri, jump });
+          heap.push(c, jump.tri);
+        }
       }
     }
-    for (const jump of jumps.get(tri) ?? []) {
-      const c = cost + dist(nav.centroids[tri], jump.at) + jump.cost + dist(jump.land, nav.centroids[jump.tri]);
-      if (c < g[jump.tri]) {
-        g[jump.tri] = c;
-        previous.set(jump.tri, { tri, jump });
-        heap.push(c, jump.tri);
-      }
-    }
+    return null;
   }
-  if (goal < 0) return null;
+
+  const found = search(false) ?? search(true);
+  if (!found) return null;
+  const { goal, previous } = found;
   // Walk back, cutting the corridor into one run of triangles per floor.
   const runs: { tris: number[]; jump?: Jump }[] = [{ tris: [goal] }];
   for (let tri = goal; tri !== from; ) {
@@ -337,7 +372,7 @@ export function nearestExitAcross<T extends ExitLike>(nav: Nav, start: Vec2, lev
     const end: Vec2 = run.jump ? run.jump.at : [exit.position[0], exit.position[1]];
     const points = stringPull(portals(nav, run.tris, begin, end));
     meters += pathLength(points);
-    legs.push({ level: runLevel, points, via: run.jump?.link.id });
+    legs.push({ level: runLevel, points, via: run.jump?.link.id, climb: run.jump?.up });
     if (run.jump) {
       meters += Math.hypot(dist(run.jump.at, run.jump.land), 4);
       begin = run.jump.land;

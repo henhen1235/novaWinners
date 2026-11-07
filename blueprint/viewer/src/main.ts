@@ -376,13 +376,14 @@ function routeFrom(point: THREE.Vector3, level: string) {
   let from: Vec2 = [point.x, point.z];
   // A click on furniture or a wall top starts from the nearest walkable triangle instead.
   if (!onMesh(nav, from, level, 0.05)) from = nav.centroids[locate(nav, from, level)];
-  const best = nearestExitAcross(nav, from, level, doc.exits, (doc.links ?? []).filter((link) => link.type === "stairs"));
+  const best = nearestExitAcross(nav, from, level, doc.exits, (doc.links ?? []).filter((link) => link.type === "stairs"), doc.levels);
   if (!best) {
     readout.textContent = "No walkable route from here to an exit.";
     readout.className = "";
     return;
   }
-  const via = [...new Set(best.legs.filter((leg) => leg.via).map((leg) => shaftLetter(leg.via!)))];
+  // Upward legs only ever lead to a floor with an exit (nearestExitAcross), so "up" is never toward the roof.
+  const via = [...new Set(best.legs.filter((leg) => leg.via).map((leg) => `${leg.climb ? "up" : "down"} ${shaftLetter(leg.via!)}`))];
   lastRoute = { legs: best.legs, meters: best.meters, exit: best.exit.label, via };
   drawRoute(best.legs, true);
   showRoute(best.meters, best.exit.label, via);
@@ -429,7 +430,7 @@ function figure(value: string, unit: string) {
 }
 
 function showRoute(meters: number, exitLabel: string, via: string[]) {
-  const note = text("span", `to ${exitLabel}${via.length ? `, down ${via.join(" and ")}` : ""}, walking at ${WALK_SPEED} m/s`);
+  const note = text("span", `to ${exitLabel}${via.length ? `, ${via.join(", then ")}` : ""}, walking at ${WALK_SPEED} m/s`);
   note.className = "route-note";
   readout.replaceChildren(figure(meters.toFixed(1), "m"), figure((meters / WALK_SPEED).toFixed(1), "s"), note);
   readout.className = "has-route";
