@@ -30,7 +30,7 @@ TOOLS = [
     tool("pa_announcement", "Official PA message at time t_s (s); can state that an exit is open to counter a rumor.",
          {"t_s": {"type": "number", "minimum": 0}, "text": _S,
           "exit_open": {"type": "string", "description": "id of the exit the message says is open; occupants who hear it believe that exit is open"},
-          **_WHY}, ["t_s", "text", "why"]),
+          **_WHY}, ["t_s", "text", "exit_open", "why"]),
     tool("unlock_exit", "Give a key holder the job of opening a locked, chained or obstructed exit (open 30 s after it is blocked).",
          {"exit": _S, **_WHY}, ["exit", "why"]),
     tool("assign_familiar_exit", "Drill a room's occupants to use one exit (it becomes their familiar exit).",
@@ -55,6 +55,14 @@ def digest(summaries: list[dict]) -> dict:
                                      for e in summaries[0]["max_near_exit"]} if summaries else {},
             "exit_by_room_first_seed": summaries[0].get("exit_by_room") if summaries else {},
             "decision_samples": summaries[0].get("why_samples", []) if summaries else []}
+
+
+def _false_rumors(sc: dict) -> list[dict]:
+    """Rumors whose claimed-blocked exit is not actually blocked: the PA should name that exit as open."""
+    blocked = {e["at"].get("exit") for e in sc.get("events", []) if e["type"] == "blocked_exit"}
+    return [{"rumor": e["id"], "t_start_s": e["t_start_s"], "claims_blocked": c, "actually_blocked": False}
+            for e in sc.get("events", []) if e["type"] == "rumor"
+            and (c := (e.get("params") or {}).get("claim", {}).get("exit_blocked")) and c not in blocked]
 
 
 def _system(round_no: int) -> str:
@@ -128,7 +136,7 @@ def fix(scene: dict, scenario: dict, analysis: dict, summaries: list[dict], metr
     if not no_llm:
         user = json.dumps({"brief": json.loads(building_brief(scene, analysis, scenario, metrics)),
                            "adversary_injections": [{"event": i["event"], "why": i["why"]} for i in injections],
-                           "attacked_run_digest": dig}, separators=(",", ":"))
+                           "false_rumors": _false_rumors(scenario), "attacked_run_digest": dig}, separators=(",", ":"))
         try:
             res = tool_loop(_system(round_no), user, TOOLS, h, llm, model)
             source = "llm"
