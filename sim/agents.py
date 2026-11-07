@@ -50,6 +50,8 @@ class Agent:
     going_to: str | None = None  # GO_TO_PERSON / SWEEP target id
     warden: bool = False
     swept: bool = False
+    target_elevator: str | None = None
+    elevator_recalled_seen: bool = False
     cue_t: float | None = None
     first_move_t: float | None = None
     exit_t: float | None = None

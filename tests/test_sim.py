@@ -337,3 +337,30 @@ def test_warden_sweep_gets_sitters_moving() -> None:
     sim.run()
     swept = [a for a in sim.agents if a.persona == "skeptic" and a.swept]
     assert swept and all(a.exit_t is not None for a in swept)
+
+
+def _school_scen(occ: list[dict], **extra) -> dict:
+    ev = [{"id": "f", "type": "fire", "t_start_s": 0, "at": {"room": "L1_class_s3"}}]
+    return {"duration_s": 300, "events": ev, "occupants": occ, **extra}
+
+
+def test_elevator_attempts_find_recall_signage_stops_them() -> None:
+    occ = [{"where": {"room": "L2_class_n2"}, "count": 6, "personas": {"older_adult": 1.0}}]
+    sim = Sim(SCHOOL, _school_scen(occ), 2)
+    for a in sim.agents:
+        a.traits.update(tries_elevator=True, premove_s=5.0)
+    sim.run()
+    kinds = [e["kind"] for e in sim.replay_events]
+    assert "elevator_recalled" in kinds and "elevator_ride" not in kinds
+    sim = Sim(SCHOOL, _school_scen(occ, interventions=[{"type": "elevator_lobby_signage", "level": "L2"}]), 2)
+    assert not any(a.traits["tries_elevator"] for a in sim.agents)
+
+
+def test_occupant_evacuation_elevators_carry_wheelchair_users() -> None:
+    occ = [{"where": {"room": "L2_class_s1"}, "count": 2, "personas": {"mobility_impaired": 1.0}}]
+    sim = Sim(SCHOOL, _school_scen(occ, params={"occupant_evacuation_elevators": True}), 2)
+    for a in sim.agents:
+        a.traits["premove_s"] = 5.0
+    sim.run()
+    assert sum(e["kind"] == "elevator_ride" for e in sim.replay_events) == 2
+    assert all(a.exit_t is not None for a in sim.agents)

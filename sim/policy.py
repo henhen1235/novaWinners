@@ -16,7 +16,7 @@ import hashlib
 
 FAMILIAR_BONUS_S = 15.0
 SKEPTIC_PEOPLE_LEAVING = 2
-MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP")  # how much longer a route to the entry exit may be and still win
+MOVING = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP", "USE_ELEVATOR")  # how much longer a route to the entry exit may be and still win
 
 
 def _blocked_beliefs(view: dict) -> set[str]:
@@ -182,6 +182,10 @@ def decide(view: dict) -> dict:
         return _result(view, follow, "Others around me are leaving, so I follow them.", evidence, True, None, pace)
     if follow and follow.get("exit") in blocked:
         follow = None
+    lift = opts.get("USE_ELEVATOR")
+    tr = view["agent"]["traits"]
+    if lift and (tr.get("tries_elevator") or (lift.get("in_service") and not tr.get("uses_stairs", True))):
+        return _result(view, lift, "The elevator is the easiest way down for me.", evidence, True, None, "brisk")
     opt = _pick_exit(view, blocked) or _pick_stair(view)
     if opt is None and _nearest(view, "GO_TO_REFUGE"):
         opt = _nearest(view, "GO_TO_REFUGE")

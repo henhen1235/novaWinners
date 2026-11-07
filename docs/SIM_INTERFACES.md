@@ -138,6 +138,16 @@ GO_TO_PERSON {target, persona, level, route_m} (parent away from its child) and 
 floor have not started to leave; on arrival the warden gives an official urgent instruction).
 Triggers reached_person, group_moving, sweep_next; events reached_person, said (sweep).
 
+Elevators (sim/elevators.py): in a fire they are recalled (elevators[].usable_in_fire false).
+Some people walk to the lobby first (assumption, not a published rate: older adults 30 percent,
+mobility impaired 50 percent, visitors 10 percent; trait tries_elevator), find it out of service
+(state at_elevator_lobby, event and percept elevator_recalled, trigger elevator_recalled) and
+decide again. Option USE_ELEVATOR {elevator, route_m, in_service} on floors without an exit.
+`interventions: [{"type": "elevator_lobby_signage", "level": id}]` (no level = every floor) removes
+the attempt there. `params.occupant_evacuation_elevators: true` lets elevators that reach an exit
+level carry up to 10 people every 60 s to the lowest exit level (events elevator_queue,
+elevator_ride); the rule policy then sends people who cannot use stairs to them.
+
 ## Live mode (sim/live.py, sim/serve.py; design in docs/LIVE_MODE.md)
 
 Branch: `sim.live.branch(scene, scenario, seed, records, t, events, occupants, decider, history=...)`
@@ -208,6 +218,7 @@ to the model for repair. Each round writes `out/loop/<name>/rN/interventions.jso
 | unlock_exit | exit | events += open_exit at (blocked_exit t_start_s + 30 s) | exit must have a blocked_exit with cause locked, chained or obstructed |
 | assign_familiar_exit | room, exit | occupants in room get familiar_exit = exit | |
 | assisted_evacuation_plan | (none) | interventions += {type: assisted_evacuation_plan} | once; trained staff carry people who cannot use stairs |
+| elevator_lobby_signage | level? | interventions += {type: elevator_lobby_signage, level} | removes elevator attempts on that floor (all floors without level) |
 | widen_door | door, width_m | scene doors[].width_m (and the exit's width_m) | > current, <= min(1.5x, 2.4 m) |
 
 Adversary injections are plain scenario events with ids `advN_k`: blocked_exit

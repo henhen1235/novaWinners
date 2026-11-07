@@ -13,7 +13,7 @@ from typing import Callable
 
 import numpy as np
 
-from sim import groups, perception, stairs
+from sim import elevators, groups, perception, stairs
 from sim.agents import Agent, spawn
 from sim.movement import resolve_moves
 from sim.navmesh import INF, Waypoint
@@ -35,8 +35,9 @@ STAIR_ENTRY_M = 0.6
 PRIORITY = {"hazard_seen": 5, "path_blocked": 5, "rumor_heard": 4, "heard": 4, "cue_noticed": 3,
             "premove_done": 3, "level_reached": 4, "picked_up": 5, "stair_smoke": 5, "stair_crowded": 4,
             "route_changed": 4, "help_request": 4, "group_moving": 4, "reached_person": 5,
-            "sweep_next": 4, "door_reached": 2, "periodic": 1}
-MOVING_ACTIONS = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP")
+            "sweep_next": 4, "elevator_recalled": 5, "door_reached": 2, "periodic": 1}
+MOVING_ACTIONS = ("EVACUATE", "FOLLOW", "TAKE_STAIRS", "GO_TO_REFUGE", "HELP", "GO_TO_PERSON", "SWEEP",
+                  "USE_ELEVATOR")
 
 Decider = Callable[[dict], dict]
 
@@ -84,6 +85,7 @@ class Sim:
         self.replay_divergence = 0  # replayed decisions that no longer matched the options offered
         self.async_dec = None  # sim.live.AsyncDecisions when decisions must not block the clock
         self.n_ticks = int(round(self.duration / DT))
+        elevators.setup(self, scene)
 
     def _apply_interventions(self, items: list[dict]) -> None:
         """Static interventions known before the run (signage). Others are events or occupants."""
@@ -146,6 +148,7 @@ class Sim:
         for a in new:
             a.spawn_t = t0
         groups.form(self, new)
+        elevators.assign(self, new)
         self.agents += new
         self.pos = np.vstack([self.pos, pos]) if len(pos) else self.pos
         self.lv = np.concatenate([self.lv, lv]) if len(lv) else self.lv
@@ -422,6 +425,9 @@ class Sim:
         elif act == "HELP" and opt.get("target"):
             a.action = act
             self._go_help(a, opt["target"])
+        elif act == "USE_ELEVATOR" and opt.get("elevator") in self.elevators:
+            a.action = act
+            elevators.go(self, a, opt["elevator"])
         elif act in ("GO_TO_PERSON", "SWEEP") and opt.get("target"):
             a.action = act
             self._go_person(a, opt["target"])
@@ -542,6 +548,7 @@ class Sim:
             self._walk(act)
         stairs.update_helpers(self)
         groups.update(self)
+        elevators.update(self)
         self._exits([a for a in self.active() if a.state != "carried"])
 
     def _walk(self, act: list[Agent]) -> None:
@@ -592,6 +599,8 @@ class Sim:
         if not a.waypoints:
             if a.action == "GO_TO_REFUGE" and a.state != "waiting_at_refuge":
                 stairs.refuge_reached(self, a)
+            elif a.action == "USE_ELEVATOR" and a.state != "at_elevator_lobby" and a.target_elevator:
+                elevators.arrive(self, a)
             elif a.action == "TAKE_STAIRS":
                 a.state = "waiting"
                 self.trigger(a, "level_reached", self.world.nav.level_ids[int(self.lv[a.row])])
@@ -614,7 +623,7 @@ class Sim:
         return STAIR_ENTRY_M if (last or before_stair) else WAYPOINT_EPS_M
 
     def _after_step(self, a: Agent, moved: float, wanted: float, denied: bool) -> None:
-        if a.state in ("waiting", "waiting_at_refuge"):
+        if a.state in ("waiting", "waiting_at_refuge", "at_elevator_lobby"):
             return
         a.state = "queued" if denied or (wanted > 0 and moved < 0.3 * wanted) else (
             "helping" if a.carrying else "moving")
