@@ -1,4 +1,4 @@
-"""Local interview API for the viewer: python -m cognition.serve --runs out/sim [--port 8765].
+"""Local interview API for the viewer: python -m cognition.serve --runs out/sim [--port 8770].
 
 POST /interview {run, agent_id, question} -> InterviewAnswer JSON. GET /health. CORS for localhost.
 """
@@ -14,8 +14,21 @@ from pathlib import Path
 
 from .interview import interview
 
-ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,79}$")  # no leading dot: blocks ".." traversal
 MAX_Q = 500
+
+
+def resolve_run(root: Path, run: str) -> Path | None:
+    """A run is a subdirectory name or the meta.run_id in its replay.json (what the viewer sends)."""
+    if (root / run / "decisions.jsonl").exists():
+        return root / run
+    for f in sorted(root.glob("*/replay.json")):
+        try:
+            if json.loads(f.read_text()).get("meta", {}).get("run_id") == run:
+                return f.parent
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -54,9 +67,9 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"error": "body must be JSON {run, agent_id, question}"})
         if not ID_RE.match(run) or not ID_RE.match(agent) or not q or len(q) > MAX_Q:
             return self._send(400, {"error": f"need run and agent_id ids and a question of 1-{MAX_Q} chars"})
-        run_dir = (self.runs / run).resolve()
-        if self.runs.resolve() not in run_dir.parents and run_dir != self.runs.resolve():
-            return self._send(400, {"error": "bad run"})
+        run_dir = resolve_run(self.runs, run)
+        if run_dir is None:
+            return self._send(404, {"error": f"run {run} not found under {self.runs}"})
         try:
             self._send(200, interview(run_dir, agent, q))
         except (FileNotFoundError, KeyError) as e:
@@ -69,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--runs", default="out/sim", help="directory whose subdirs hold decisions.jsonl")
-    ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--port", type=int, default=8770)
     ap.add_argument("--host", default="127.0.0.1")
     a = ap.parse_args()
     Handler.runs = Path(a.runs)

@@ -45,7 +45,8 @@ def _load(run_dir: str, mtime: float) -> dict:
         if cand and cand.exists():
             scene = json.loads(cand.read_text())
             break
-    return {"records": recs, "events": replay.get("events", []), "scene": scene}
+    return {"records": recs, "events": replay.get("events", []), "scene": scene,
+            "dt": float((replay.get("meta") or {}).get("dt") or 0.5)}
 
 
 def load_run(run_dir: Path) -> dict:
@@ -101,7 +102,7 @@ def chosen(rec: dict) -> dict:
     return next((o for o in rec["options"] if o["id"] == c), {"id": c, "action": "?"})
 
 
-def pick_record(recs: list[dict], g: dict) -> dict:
+def pick_record(recs: list[dict], g: dict, intent: str = "why") -> dict:
     if g["t_s"] is not None:
         before = [r for r in recs if r["t_s"] <= g["t_s"] + 0.5]
         return before[-1] if before else recs[0]
@@ -111,6 +112,13 @@ def pick_record(recs: list[dict], g: dict) -> dict:
             return hit[0]
     if g["when"] == "first":
         return recs[0]
+    if intent == "who_told":
+        told = [r for r in recs if any(p["kind"] in ("message", "utterance", "said", "shout", "pa")
+                                       for p in r["percepts"])]
+        if told:
+            return told[0]
+    if intent == "felt":
+        return max(recs, key=lambda r: r["emotion"]["fear"] + r["emotion"]["anxiety"])
     if g["when"] == "last":
         return recs[-1]
     acted = [r for r in recs if chosen(r).get("action") not in ("CONTINUE_TASK", "SEEK_INFO", "?")]
@@ -120,7 +128,8 @@ def pick_record(recs: list[dict], g: dict) -> dict:
 # ---------- facts with citations ----------
 
 def tag(rec: dict, item: str | None = None) -> str:
-    return f"[t={rec['t_s']:g}, {rec['record_id']}{':' + item if item else ''}]"
+    """Inline citation; t is the tick (the viewer and the design doc read it that way)."""
+    return f"[t={rec['tick']}, {rec['record_id']}{':' + item if item else ''}]"
 
 
 def describe_option(o: dict) -> str:
@@ -128,7 +137,7 @@ def describe_option(o: dict) -> str:
     return f"{o['action']} ({extra})" if extra else o["action"]
 
 
-def facts_for(rec: dict, recs: list[dict], events: list[dict], intent: str) -> list[tuple[str, str]]:
+def facts_for(rec: dict, recs: list[dict], events: list[dict], intent: str, dt: float = 0.5) -> list[tuple[str, str]]:
     """(fact text, citation tag). The composer may only use these."""
     out = [(f"At t={rec['t_s']:g} s ({rec['trigger'].get('kind')}) I chose {describe_option(chosen(rec))}.", tag(rec)),
            (f"My stated reason at the time: \"{rec['decision']['padm']['why']}\"", tag(rec))]
@@ -155,7 +164,7 @@ def facts_for(rec: dict, recs: list[dict], events: list[dict], intent: str) -> l
         out.append((f"At t={r['t_s']:g} s I chose {describe_option(chosen(r))}.", tag(r)))
     for ev in events[:12]:
         out.append((f"Event at t={ev.get('t')}: {ev.get('kind')} {ev.get('text') or ev.get('ref') or ''}".strip(),
-                    f"[t={ev.get('t')}, event:{ev.get('kind')}]"))
+                    f"[t={round(float(ev.get('t') or 0) / dt)}, {ev.get('ref') or 'event'}:{ev.get('kind')}]"))
     return out
 
 
@@ -296,18 +305,24 @@ def parse_change(q: str, rec: dict, g: dict) -> tuple[dict, str]:
 COMPOSE_SYSTEM = """You are a person who was inside a building during an emergency, now answering an investigator.
 Speak in the first person, in plain everyday words, as the person described. Use ONLY the FACTS given; do not add
 events, places, people or numbers that are not in them. Every sentence must end with one or more citation tags
-copied exactly from the facts, like [t=78, d_00156_a_17:p3]. Write 2 to 5 short sentences that answer the question.
+copied exactly from the facts, like [t=156, d_000123:p3]. Copy each tag whole, one tag per pair of brackets; never merge
+two tags into one bracket and never write a sentence without a tag. Write 2 to 5 short sentences that answer the question.
 Return JSON only: {"sentences": ["...", "..."]}"""
 
 
 def _parse_tag(t: str) -> dict:
     m = re.match(r"\[t=([^,]+), ([^:\]]+)(?::([^\]]+))?\]", t)
-    return {"t": m.group(1), "record_id": m.group(2), "item": m.group(3)} if m else {}
+    return {"tick": int(m.group(1)), "record_id": m.group(2), "item": m.group(3)} if m else {}
+
+
+def _split_merged(s: str) -> str:
+    """"[t=4, d_1:p2, t=4, d_1:p1]" -> "[t=4, d_1:p2] [t=4, d_1:p1]"; each part is still checked."""
+    return TAG_RE.sub(lambda m: " ".join(f"[{x.strip()}]" for x in re.split(r",\s*(?=t=)", m.group(0)[1:-1])), s)
 
 
 def verify(sentences: list[str], allowed: set[str]) -> tuple[list[str], list[str]]:
     keep, drop = [], []
-    for s in sentences:
+    for s in map(_split_merged, sentences):
         tags = TAG_RE.findall(s)
         (keep if tags and all(t in allowed for t in tags) else drop).append(s.strip())
     return keep, drop
@@ -340,16 +355,17 @@ def interview(run_dir: Path, agent_id: str, question: str, max_calls: int = MAX_
         raise KeyError(f"no decisions for agent {agent_id}")
     events = [e for e in run["events"] if e.get("agent") == agent_id]
     intent, g = route(question), ground(question, run["scene"])
-    rec = pick_record(recs, g)
+    rec = pick_record(recs, g, intent)
     b = Budget(max_calls - 1)  # one call kept for composing
     reasons, base, cf, extra = [], None, None, []
     choice = rec["decision"]["padm"]["choice"]
     if intent == "why":
         reasons, base = attribute(rec, b)
+        k0 = round((base["keep_rate"] or 0) * base["n"])
         for r in reasons:
-            extra.append(f"- Without {r['id']} ({r['text']}) I kept my choice in {r['keep_rate_removed']} of re-runs "
-                         f"(n={r['n']}); unchanged: {base['keep_rate']} (n={base['n']}); label: {r['label']} "
-                         f"{tag(rec, r['id'])}")
+            k1 = round((r["keep_rate_removed"] or 0) * r["n"])
+            extra.append(f"- Re-run without {r['id']} ({r['text']}), I made the same choice {k1} of {r['n']} times, "
+                         f"against {k0} of {base['n']} with nothing removed: {r['label']}. {tag(rec, r['id'])}")
     elif intent == "what_if":
         kw, desc = parse_change(question, rec, g)
         n = min(N_SAMPLES, max(3, b.left // 2))
@@ -361,12 +377,17 @@ def interview(run_dir: Path, agent_id: str, question: str, max_calls: int = MAX_
         extra.append(f"- Re-run {len(s['cf'])} times if {desc}: " +
                      ", ".join(f"{names.get(k, k)} {v}x" for k, v in sorted(dist.items(), key=lambda x: -x[1])) +
                      f" (as recorded: {names.get(choice, choice)}) {tag(rec)}")
-    facts = facts_for(rec, recs, events, intent)
+    facts = facts_for(rec, recs, events, intent, run["dt"])
     allowed = {c for _, c in facts} | {tag(rec, r["id"]) for r in reasons}
     sentences = compose(question, rec, facts, extra, b)
     keep, drop = verify(sentences, allowed)
+    if not keep:  # the composer cited nothing usable: say only what the record states, in code
+        keep = [f"{text} {c}" for text, c in facts[:2] + [f for f in facts if intent == "who_told" and
+                                                           ("from" in f[0] or "said" in f[0])][:3]]
     keep += [e[2:] for e in extra if e[2:] not in keep]  # code-made test results are true by construction
-    cites = [{"tag": t, **_parse_tag(t)} for t in sorted({t for s in keep for t in TAG_RE.findall(s)})]
+    t_of = {r["record_id"]: r["t_s"] for r in recs}
+    cites = [{"tag": t, **c, "t_s": t_of.get(c.get("record_id"), c.get("tick", 0) * run["dt"])}
+             for t in sorted({t for s in keep for t in TAG_RE.findall(s)}) for c in [_parse_tag(t)]]
     ans = InterviewAnswer(answer=" ".join(keep), citations=cites, reasons=reasons,
                           verified=not drop and bool(keep), intent=intent, record_id=rec["record_id"],
                           dropped_sentences=drop, baseline=base, counterfactual=cf, llm_calls=b.calls,
