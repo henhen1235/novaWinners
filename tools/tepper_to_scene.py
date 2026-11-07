@@ -300,6 +300,7 @@ def open_connections(spaces: dict[str, Polygon], doors: list[dict]) -> list[dict
             shared = spaces[a].buffer(OPEN_GAP_M).intersection(spaces[b].buffer(OPEN_GAP_M))
             if shared.is_empty or shared.area / (2 * OPEN_GAP_M) < 0.8:
                 continue
+            seam = shared  # the whole wall-less strip; it bridges the walkable, not just the door box
             shared = max(getattr(shared, "geoms", [shared]), key=lambda p: p.area)
             rect = shared.minimum_rotated_rectangle
             c = np.asarray(rect.exterior.coords)[:4]
@@ -311,25 +312,61 @@ def open_connections(spaces: dict[str, Polygon], doors: list[dict]) -> list[dict
             width = min(length, 3.0)
             seg = [(mid - u * width / 2).tolist(), (mid + u * width / 2).tolist()]
             out.append({"segment": seg, "width": width, "connects": [a, b], "thick": 0.1, "kind": "opening",
-                        "shared_m": length})
+                        "shared_m": length, "bridge": seam})
             have.add(frozenset((a, b)))
     return out
 
 
 def _reach(per: dict, stairs: list) -> set:
-    """(floor, space) nodes with a door/stair path to outside."""
-    g = nx.Graph()
+    """(floor, space) nodes with a path to outside through doors (either way) and stairs taken
+    downward only: evacuees do not climb to get out."""
+    g = nx.DiGraph()
     g.add_node("outside")
     for f, pf in per.items():
         g.add_nodes_from((f, r) for r in pf["spaces"])
         for d in pf["doors"]:
-            a, b = d["connects"]
-            g.add_edge((f, a) if a != "outside" else "outside", (f, b) if b != "outside" else "outside")
+            a, b = ((f, x) if x != "outside" else "outside" for x in d["connects"])
+            g.add_edges_from([(a, b), (b, a)])
     for st in stairs:
         lo, hi = st["from_level"][1:], st["to_level"][1:]
         suf = st["id"].rsplit("_", 1)[1]
-        g.add_edge((lo, f"r_{lo}{suf}"), (hi, f"r_{hi}{suf}"))
-    return nx.node_connected_component(g, "outside")
+        g.add_edge((hi, f"r_{hi}{suf}"), (lo, f"r_{lo}{suf}"))
+    return nx.ancestors(g, "outside") | {"outside"}
+
+
+def fill_stair_cores(per: dict) -> None:
+    """Give every floor between a stair core's lowest and highest appearance its core room.
+
+    Stair shafts are vertical, but a floor's core label sometimes fails to match its A-AREA face
+    (e.g. 2903, 3903, 4902), which left floors without a way down. Take the core outline from the
+    nearest floor that has it; reuse the space there if one covers it, else add it as a room.
+    """
+    for suf in STAIR_SUFFIX:
+        have = [f for f in FLOORS if f"r_{f}{suf}" in per[f]["spaces"]]
+        if len(have) < 2:
+            continue
+        for f in FLOORS[FLOORS.index(have[0]):FLOORS.index(have[-1]) + 1]:
+            rid = f"r_{f}{suf}"
+            if rid in per[f]["spaces"]:
+                continue
+            src = min(have, key=lambda h: abs(int(h) - int(f)))
+            core = per[src]["spaces"][f"r_{src}{suf}"]
+            spaces, info = per[f]["spaces"], per[f]["info"]
+            over = [(spaces[k].intersection(core).area, k) for k in spaces if spaces[k].intersects(core)]
+            area, k = max(over) if over else (0.0, None)
+            if k and area > 0.5 * core.area and spaces[k].area < 2 * core.area and k[0] in "cu":
+                spaces[rid], info[rid] = spaces.pop(k), {**info.pop(k), "number": f"{f}{suf}", "type": "stairwell",
+                                                          "inferred": f"stair core copied from floor {src}"}
+                per[f]["doors"] = [{**d, "connects": [rid if c == k else c for c in d["connects"]]} for d in per[f]["doors"]]
+                continue
+            others = unary_union([spaces[x] for x in spaces if spaces[x].intersects(core)]) if over else Polygon()
+            piece = core.difference(others.buffer(0.05))
+            piece = max(getattr(piece, "geoms", [piece]), key=lambda p: p.area) if not piece.is_empty else piece
+            if piece.is_empty or piece.area < 0.5 * core.area:
+                continue
+            spaces[rid] = piece
+            info[rid] = {"number": f"{f}{suf}", "type": "stairwell", "sf": None, "ficm": [], "color": None,
+                         "inferred": f"stair core copied from floor {src}"}
 
 
 def infer_door(rid: str, pf: dict, reachable: set[str]) -> dict | None:
@@ -469,6 +506,7 @@ def build(raw: Path) -> tuple[dict, dict]:
                               "labeled_rooms": len(fd["rooms"]), "door_symbols": len(fd["doors"]),
                               "doors": len(doors), "exits": sum("outside" in d["connects"] for d in doors)}
 
+    fill_stair_cores(per)
     # Stairs: the same stair core (x901-x903) on consecutive floors.
     stairs, links = [], []
     for lo, hi in zip(FLOORS, FLOORS[1:]):
@@ -523,7 +561,8 @@ def build(raw: Path) -> tuple[dict, dict]:
                                 "connects": d["connects"], "is_exit": is_exit,
                                 "kind": d.get("kind") or ("double" if d["width"] >= 1.5 else "swing"), "fire_rated": None,
                                 "opens_toward": "outside" if is_exit else None})
-            gaps.append(door_gap_box(d["segment"], d["thick"] + GAP_OVERLAP_M))  # reach well into both rooms
+            box_ = door_gap_box(d["segment"], d["thick"] + GAP_OVERLAP_M)  # reach well into both rooms
+            gaps.append(box_.union(d["bridge"]) if d.get("bridge") is not None else box_)
             if d.get("inferred"):
                 inferred.append({"door": did, "reason": d["inferred"]})
             if is_exit:
@@ -548,6 +587,15 @@ def build(raw: Path) -> tuple[dict, dict]:
         walkable[L] = walkable_from_parts([walk], [], 1e-9)
 
     walkable = _reachable_walkable(walkable, exits, links)
+    # A room the walkable never reaches (door box missed, room eroded to nothing) would strand
+    # anyone placed in it: drop it, its doors and their exits, and say so.
+    stranded = {r["id"] for r in scene_rooms
+                if not walkable[r["level"]].intersects(Polygon(r["polygon"]).buffer(-0.05))}
+    unreachable += sorted(stranded)
+    scene_rooms = [r for r in scene_rooms if r["id"] not in stranded]
+    scene_doors = [d for d in scene_doors if not stranded & set(d["connects"])]
+    kept_doors = {d["id"] for d in scene_doors}
+    exits = [e for e in exits if e["door_id"] in kept_doors]
     scene = {
         "schema_version": "1.0",
         "meta": {"name": "tepper_building", "source": "blueprint",
@@ -570,7 +618,8 @@ def build(raw: Path) -> tuple[dict, dict]:
             "rooms": {rid: {"ficm_candidates": inf["ficm"], "sf": inf["sf"], "hatch_rgb": inf["color"],
                             **({"merged_open_members": inf["members"]} if inf.get("members") else {})}
                       for f in FLOORS for rid, inf in per[f]["info"].items()},
-            "scale_method": "room_area_labels", "unreachable": unreachable, "inferred_doors": inferred, "floor_to_floor_m": FLOOR_TO_FLOOR_M,
+            "scale_method": "room_area_labels", "unreachable": unreachable,
+            "inferred_stair_cores": [inf["number"] for f in FLOORS for inf in per[f]["info"].values() if inf.get("inferred")], "inferred_doors": inferred, "floor_to_floor_m": FLOOR_TO_FLOOR_M,
             "scale": {f: stats["floors"][f]["m_per_pt"] for f in FLOORS},
             "alignment_shift_m": {f: stats["floors"][f]["shift_m"] for f in FLOORS}}},
     }

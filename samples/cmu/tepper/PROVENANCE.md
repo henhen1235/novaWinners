@@ -47,8 +47,13 @@ No CMU drawing, raster or PDF is in this folder or anywhere in the repo.
   `rooms` and listed in extensions.tepper.unreachable.
 - Exits: exterior doors on floors 1 (Forbes Ave grade) and 2 (quad main entrance). Exterior doors on
   3-5 are treated as terraces, not exits.
-- Stairs: the x901/x902/x903 stair cores that overlap on consecutive floors, linked with cost 2.0.
-  Elevators x912-x914 are listed with usable_in_fire false.
+- Stairs: the x901/x902/x903 stair cores, linked on every pair of consecutive floors they span
+  (12 links, cost 2.0). Where a floor's core label did not match its area polygon (2903, 3903,
+  4902) the core outline is copied from the nearest floor that has it
+  (extensions.tepper.inferred_stair_cores). Elevators x912-x914 are listed with usable_in_fire false.
+- Reachability: a room is kept only if it reaches an exit through doors and stairs taken downward,
+  and only if the walkable area actually reaches it; wall-less seams between area polygons are
+  filled in the walkable so open boundaries do not split floors.
 
 ## Known limits
 
