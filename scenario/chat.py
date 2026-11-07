@@ -30,6 +30,18 @@ ONE_SHOT_ANSWER = ("No user is available (one-shot mode). Pick the most likely c
                    "choice into assumptions, and call submit_scenario.")
 
 
+class NeedUser(Exception):
+    """Raised by a non-interactive ask(): the HTTP caller returns the question to the client."""
+
+    def __init__(self, question: str, options: list[str]):
+        super().__init__(question)
+        self.question, self.options, self.cost = question, options, 0.0
+
+
+def raise_need_user(question: str, options: list[str]) -> str:
+    raise NeedUser(question, list(options or []))
+
+
 def one_shot_answer(question: str, options: list[str]) -> str:
     """ask_user stand-in for one-shot mode: take the first (best ranked) option, deterministically."""
     if not options:
@@ -171,22 +183,36 @@ def build(args: dict, scene: dict, scene_path: str, seed: int = 42) -> dict:
             "assumptions": args.get("assumptions", [])}
 
 
-def run(scene: dict, scene_path: str, request: str, ask: Callable[[str, list[str]], str],
-        llm: Callable = call_llm, log: Callable[[str], None] = lambda s: None,
-        tool_choice: str = "auto") -> tuple[dict | None, float, list]:
+def run(scene: dict, scene_path: str, request: str | None, ask: Callable[[str, list[str]], str],
+        llm: Callable | None = None, log: Callable[[str], None] = lambda s: None,
+        tool_choice: str = "auto", *, system: str | None = None, tools: list[dict] = TOOLS,
+        history: list[dict] | None = None, overrides: dict | None = None) -> tuple[dict | None, float, list]:
     """Drive the tool loop until a valid scenario is submitted. Returns (scenario or None, cost, messages).
 
     tool_choice="required" (one-shot mode) stops weak models from answering in prose.
+    system/tools/history/overrides let scenario/parse.py reuse the loop for click-and-type edits:
+    history is prior user/assistant turns, overrides replace submitted fields (e.g. duration_s).
+    ask may raise NeedUser to stop the loop and hand the question to an HTTP client.
     """
-    messages = [{"role": "system", "content": _system(scene)}, {"role": "user", "content": request}]
+    messages = [{"role": "system", "content": system or _system(scene)}, *(history or []),
+                *([{"role": "user", "content": request}] if request else [])]
+    llm = llm or call_llm  # looked up at call time so tests can patch scenario.chat.call_llm
     cost = 0.0
+
+    def ask_(question: str, options: list[str]) -> str:
+        try:
+            return ask(question, options)
+        except NeedUser as e:  # the HTTP caller still reports what this turn cost
+            e.cost = cost
+            raise
+
     for _ in range(MAX_TURNS):
-        msg, c = llm(messages, TOOLS, tool_choice)
+        msg, c = llm(messages, tools, tool_choice)
         cost += c
         messages.append(msg)
         calls = msg.get("tool_calls") or []
         if not calls:  # the model asked in prose instead of using ask_user
-            messages.append({"role": "user", "content": ask(msg.get("content") or "", [])})
+            messages.append({"role": "user", "content": ask_(msg.get("content") or "", [])})
             continue
         for call in calls:
             name = call["function"]["name"]
@@ -199,15 +225,15 @@ def run(scene: dict, scene_path: str, request: str, ask: Callable[[str, list[str
             elif name == "resolve_location":
                 result = _resolve(scene, args)
             elif name == "ask_user":
-                result = {"answer": ask(args.get("question", ""), args.get("options", []))}
-            elif name == "submit_scenario":
+                result = {"answer": ask_(args.get("question", ""), args.get("options", []))}
+            elif name in ("submit_scenario", "submit_edit"):
                 try:
-                    scenario = build(args, scene, scene_path)
+                    scenario = build({**args, **(overrides or {})}, scene, scene_path)
                     errors = validate(scenario, scene)
                 except (AttributeError, TypeError, ValueError) as e:  # malformed shapes from the model
                     errors = [f"malformed scenario: {type(e).__name__}: {e}"]
                 if not errors:
-                    log("submit_scenario -> ok")
+                    log(f"{name} -> ok")
                     return normalize(scenario), cost, messages
                 result = {"ok": False, "errors": errors}
             else:
