@@ -64,7 +64,9 @@ def load_scan(path: Path) -> Scan:
     if path.suffix.lower() in (".usd", ".usda", ".usdc", ".usdz"):
         geom = _load_usd(path)
     else:
-        geom = trimesh.load(path, force="mesh", process=False)
+        geom = trimesh.load(path, process=False)
+        if not isinstance(geom, trimesh.PointCloud):  # force="mesh" turns a face-less PLY into 0 vertices
+            geom = trimesh.load(path, force="mesh", process=False)
     if isinstance(geom, trimesh.PointCloud) or len(getattr(geom, "faces", [])) == 0:
         pts = np.asarray(geom.vertices, dtype=np.float64)
         colors = None

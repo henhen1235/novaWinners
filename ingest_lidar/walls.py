@@ -29,7 +29,7 @@ TALL_MIN_H = 2.15
 def tall_mask(g: Grid) -> np.ndarray:
     """Cells that look like full-height wall (D9), body-only fallback on poor ceilings."""
     occ = g.body >= 2
-    tall = occ & (g.upper >= 1) & (g.maxh >= TALL_MIN_H)
+    tall = occ & (g.upper >= 1) & (g.maxh >= min(TALL_MIN_H, g.ceiling_m - 0.15))
     return tall if tall.sum() >= 0.2 * max(1, occ.sum()) else occ
 
 

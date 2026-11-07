@@ -37,6 +37,7 @@ class Grid:
     upper: np.ndarray
     maxh: np.ndarray  # float32, max height above local floor below 2.6 m (0 if none)
     noise_sigma: float = 0.0  # robust std of floor heights (m): scan noise estimate
+    ceiling_m: float = 3.0  # floor-to-ceiling height the bands were scaled to (D20)
 
     @property
     def shape(self) -> tuple[int, int]:
@@ -84,7 +85,13 @@ def _local_floor(pts: np.ndarray, rows: np.ndarray, cols: np.ndarray, shape: tup
     return up[: shape[0], : shape[1]]
 
 
-def build_grid(pts: np.ndarray, res: float = RES) -> Grid:
+def upper_band(ceiling_m: float) -> tuple[float, float]:
+    """UPPER_BAND for a 3 m ceiling; lower ceilings shift it down so the ceiling slab
+    itself (at ceiling_m +- noise) never lands in it (D20)."""
+    return min(UPPER_BAND[0], ceiling_m - 0.55), min(UPPER_BAND[1], ceiling_m - 0.12)
+
+
+def build_grid(pts: np.ndarray, res: float = RES, ceiling_m: float = 3.0) -> Grid:
     """Rasterize scene-frame points; points outside plausible heights are ignored."""
     p = pts[(pts[:, 1] > -0.5) & (pts[:, 1] < 3.0)]
     lo = np.floor(p[:, [0, 2]].min(0) / res) * res - 0.5
@@ -100,12 +107,12 @@ def build_grid(pts: np.ndarray, res: float = RES) -> Grid:
         return np.bincount(flat[m], minlength=nz * nx).reshape(nz, nx).astype(np.int32)
 
     maxh = np.zeros(nz * nx, np.float32)
-    m = (h > 0.05) & (h < 2.6)
+    m = (h > 0.05) & (h < min(2.6, ceiling_m - 0.1))  # below the ceiling slab
     np.maximum.at(maxh, flat[m], h[m].astype(np.float32))
     fh = h[np.abs(h) < 0.1]
     sigma = float(1.4826 * np.median(np.abs(fh - np.median(fh)))) if len(fh) > 100 else 0.0
-    return Grid(float(lo[0]), float(lo[1]), res, band(FLOOR_BAND), band(BODY_BAND), band(UPPER_BAND),
-                maxh.reshape(nz, nx), sigma)
+    return Grid(float(lo[0]), float(lo[1]), res, band(FLOOR_BAND), band(BODY_BAND), band(upper_band(ceiling_m)),
+                maxh.reshape(nz, nx), sigma, ceiling_m)
 
 
 def components(mask: np.ndarray, conn: int = 4) -> tuple[int, np.ndarray, np.ndarray]:

@@ -72,8 +72,9 @@ def _wall_thickness(scene: dict) -> float:
     """Median short side (m) of the wall rectangles; 0.15 when there are no walls."""
     sides = []
     for wall in scene["walls"]:
-        x0, z0, x1, z1 = Polygon(wall["polygon"]).bounds
-        sides.append(min(x1 - x0, z1 - z0))
+        # rotated rectangle, not bbox: diagonal walls have a wide bbox
+        rect = np.asarray(Polygon(wall["polygon"]).minimum_rotated_rectangle.exterior.coords)
+        sides.append(min(np.linalg.norm(rect[1] - rect[0]), np.linalg.norm(rect[2] - rect[1])))
     return float(np.median(sides)) if sides else 0.15
 
 

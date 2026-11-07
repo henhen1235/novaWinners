@@ -117,3 +117,27 @@ Each entry: decision, why, date (2026-11-07 unless noted).
   calls use `certifi`.
 - D15. Levels and stairs modules are folded into orient/export until the
   multi-level stretch goal (spec says one level per scan by default).
+
+## Generalization (stress set, research/GENERALIZATION.md)
+
+- D20. Height bands follow the measured ceiling: upper band =
+  (min(2.0, H - 0.55), min(2.4, H - 0.12)), max-height cap min(2.6, H - 0.1),
+  wall "tall" threshold min(2.15, H - 0.15). With fixed bands a 2.3 m ceiling
+  put the ceiling slab in the upper band of every cell, so all furniture
+  became walls (+12 rooms, door precision 0.38). For H >= 2.95 m nothing changes.
+- D21. Manhattan-axis refinement averages normals within 25 deg (was 10),
+  5 iterations. A 10 deg cone truncates noisy normals around the current
+  estimate and cannot move it: 5 cm vertex noise left up 6.4 deg off. 25 deg
+  stays far from the 90 deg neighbour axes and the 45 deg diagonal walls.
+- D22. No --scale and a floor-to-ceiling outside [1, 10] m: stop with
+  SCALE_LOW_CONFIDENCE and a unit hint (mm, cm, inches, feet, from the
+  smallest axis extent) instead of rasterizing. A cm file needed a 10^4 x
+  larger grid and hung. input_to_scene now includes --scale, so it is the true
+  file-to-scene map (scored IoU with --scale 0.01 was 0.0 before).
+- D23. Walkable gets a 1 cm mitre opening and is snapped to 1 mm before the
+  navmesh, then navmesh components (shared-vertex rule, D5) farther than 1 m
+  from every exit are dropped with a warning. Earcut leaves T-junctions where
+  a ring runs collinear with itself (common on axis-aligned scans), which the
+  validator reads as NAVMESH_ISLAND.
+- D24. Face-less PLY files load as point clouds (trimesh force="mesh" returned
+  0 vertices and crashed).

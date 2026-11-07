@@ -13,7 +13,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from shapely.geometry import Point, Polygon
+import shapely
+from shapely.geometry import MultiPolygon, Point, Polygon
 
 from contract.validate_scene import validate
 
@@ -24,6 +25,9 @@ from .load import Scan, load_scan
 from .orient import orient
 
 LEVEL = "L1"
+PLAUSIBLE_CEILING_M = (1.0, 10.0)  # outside this the units are wrong, not the building (D22)
+UNIT_SCALES = {0.001: "mm", 0.01: "cm", 0.0254: "inches", 0.3048: "feet"}
+SLIVER_M = 0.01  # walkable necks < 2 cm become degenerate navmesh triangles (D23)
 
 
 def _git_sha() -> str:
@@ -101,6 +105,35 @@ def _exits(openings: list[dict], rooms: list[dict], tags: list, start: int) -> t
     return doors, exits
 
 
+def _drop_navmesh_islands(nav: dict, exit_xz: list[list[float]], tol_m: float = 1.0) -> tuple[dict, float]:
+    """Remove triangle components (joined by shared vertices, the validator's D5 rule) with no
+    triangle within tol_m of an exit. Earcut leaves T-junctions where a ring runs collinear
+    with itself, so one walkable polygon can triangulate into vertex-disjoint pieces.
+    Returns (navmesh, dropped area m^2)."""
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    tri = np.asarray(nav["triangles"], np.int64).reshape(-1, 3)
+    if not len(tri) or not exit_xz:
+        return nav, 0.0
+    v = np.asarray(nav["vertices"], float)[:, [0, 2]]
+    rows = np.repeat(np.arange(len(tri)), 3)
+    adj = coo_matrix((np.ones(len(rows)), (rows, tri.ravel())), shape=(len(tri), len(v))).tocsr()
+    _, comp = connected_components(adj @ adj.T, directed=False)
+    p = v[tri]
+    a, b = p[:, 1] - p[:, 0], p[:, 2] - p[:, 0]
+    area = 0.5 * np.abs(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0])
+    polys = shapely.polygons(p)
+    near = np.zeros(len(tri), bool)
+    for e in exit_xz:
+        near |= shapely.distance(polys, Point(e)) <= tol_m
+    keep = np.isin(comp, np.unique(comp[near]))
+    if keep.all() or not keep.any():
+        return nav, 0.0
+    return {**nav, "triangles": tri[keep].tolist(),
+            "triangle_level": [lv for lv, k in zip(nav["triangle_level"], keep) if k]}, float(area[~keep].sum())
+
+
 def _debug(out: Path, g: G.Grid, m: G.Masks, scene: dict) -> None:
     d = out / "debug"
     d.mkdir(parents=True, exist_ok=True)
@@ -158,11 +191,18 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     if scale:
         scan = Scan(scan.vertices * scale, scan.faces, scan.colors, scan.info)
     o = orient(scan, up_override=up or corr.get("up"))
+    if not scale and not PLAUSIBLE_CEILING_M[0] <= o.ceiling_height_m <= PLAUSIBLE_CEILING_M[1]:
+        # a 5 cm grid over a scan in cm would need ~10^4 x more cells; stop with a hint instead
+        # up detection itself uses metric gates and may be wrong here; a storey's smallest extent is its height
+        ext = min(c["ext"] for c in o.report["cues"] if c["ext"] > 0)
+        f = min(UNIT_SCALES, key=lambda k: abs(np.log(ext * k / 2.7)))
+        raise ValueError(f"SCALE_LOW_CONFIDENCE: floor-to-ceiling {ext:.2f} file units is not a "
+                         f"room height in meters; if the file is in {UNIT_SCALES[f]}, pass --scale {f}")
     warnings = []
     if not 2.2 <= o.ceiling_height_m <= 4.5:
         warnings.append(_warn("SCALE_LOW_CONFIDENCE", f"floor-to-ceiling {o.ceiling_height_m:.2f} m outside "
                               "[2.2, 4.5]; check units or pass --scale"))
-    g = G.build_grid(G.sample_points(scan, o.matrix))
+    g = G.build_grid(G.sample_points(scan, o.matrix), ceiling_m=o.ceiling_height_m)
     m = G.build_masks(g)
     walls, rooms, doors, obstacles = _segment(g, m, o.ceiling_height_m)
     openings, wide = G.exit_openings(g, m)
@@ -171,11 +211,22 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
     exit_doors, exits = _exits(openings, rooms, tags, len(doors) + 1)
     doors = doors + exit_doors
     walk = G.vectorize(m.walkable, g)
+    # vectorize's simplify can pinch a narrow neck to zero width; its collinear triangles are
+    # dropped as degenerate and the navmesh splits (NAVMESH_ISLAND). A mitre opening removes
+    # necks < 2 cm without adding arc vertices that round onto each other.
+    walk = shapely.set_precision(walk.buffer(-SLIVER_M, join_style="mitre").buffer(SLIVER_M, join_style="mitre"),
+                                 0.001)
+    walk = MultiPolygon([p for p in getattr(walk, "geoms", [walk]) if isinstance(p, Polygon) and p.area > 0.01])
     kept = exit_reachable_parts(walk, [e["position"] for e in exits]) if exits else walk
     if kept.area < walk.area - 0.05:
         warnings.append(_warn("ROOM_UNREACHABLE", f"dropped {walk.area - kept.area:.2f} m^2 of walkable "
                               "area that cannot reach an exit"))
-    navmesh = navmesh_from_walkable({LEVEL: kept}, {LEVEL: 0.0})
+    navmesh, dropped = _drop_navmesh_islands(navmesh_from_walkable({LEVEL: kept}, {LEVEL: 0.0}),
+                                             [e["position"] for e in exits])
+    if dropped:
+        warnings.append(_warn("ROOM_UNREACHABLE", f"dropped {dropped:.2f} m^2 of navmesh triangles that only "
+                              "touch the rest at T-junctions"))
+    i2s = o.matrix @ np.diag([scale or 1.0] * 3 + [1.0])  # true file -> scene map, including --scale
     scene = {
         "schema_version": "1.0",
         "meta": {"name": input_path.stem, "source": "lidar", "source_file": input_path.name, "units": "meters",
@@ -191,7 +242,7 @@ def run(input_path: Path, out_dir: Path, no_llm: bool = True, corrections: Path 
         "assets": {"display_model": "display.glb", "floorplan_overlay": "debug/overview.png",
                    "navmesh_debug": "navmesh_debug.glb"},
         "warnings": warnings,
-        "extensions": {"lidar": {"input_to_scene": np.round(o.matrix, 6).tolist(), "load": scan.info,
+        "extensions": {"lidar": {"input_to_scene": np.round(i2s, 6).tolist(), "load": scan.info,
                                  "orient": {k: v for k, v in o.report.items() if k != "cues"},
                                  "orient_cues": o.report["cues"],
                                  "grid": {"x0": g.x0, "z0": g.z0, "res": g.res,

@@ -16,6 +16,7 @@ from .load import Scan
 
 COS10 = np.cos(np.radians(10.0))
 SIN10 = np.sin(np.radians(10.0))
+COS25 = np.cos(np.radians(25.0))  # refine cone: wide enough to be unbiased at 5 cm noise (D21)
 ALIGNED = 0.95  # |n . a| above this: face counts as perpendicular to axis a
 BIN = 0.05
 
@@ -54,9 +55,9 @@ def _support(cands: np.ndarray, sample: np.ndarray) -> np.ndarray:
 
 
 def _refine(a: np.ndarray, sample: np.ndarray) -> np.ndarray:
-    for _ in range(3):
+    for _ in range(5):
         d = sample @ a
-        al = np.abs(d) > COS10
+        al = np.abs(d) > COS25
         a = (sample[al] * np.sign(d[al])[:, None]).sum(0)
         a = a / np.linalg.norm(a)
     return a

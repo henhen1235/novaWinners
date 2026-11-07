@@ -19,8 +19,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--up", help="force the input file's up axis, e.g. +y or -z")
     ap.add_argument("--scale", type=float, help="multiply input coordinates by this factor")
     a = ap.parse_args(argv)
-    scene = run(a.input, a.out, no_llm=a.no_llm, corrections=a.corrections, exit_tags=a.exit_tags,
-                up=a.up, scale=a.scale)
+    try:
+        scene = run(a.input, a.out, no_llm=a.no_llm, corrections=a.corrections, exit_tags=a.exit_tags,
+                    up=a.up, scale=a.scale)
+    except ValueError as exc:
+        print(f"ERROR {exc}", file=sys.stderr)
+        return 2
     errors = [i for i in scene["extensions"]["lidar"]["validation"] if i["severity"] == "error"]
     print(f"wrote {a.out / 'scene.json'}: {len(scene['rooms'])} rooms, {len(scene['doors'])} doors, "
           f"{len(scene['exits'])} exits, validator errors: {len(errors)}")
