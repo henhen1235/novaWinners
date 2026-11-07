@@ -137,3 +137,29 @@ Commit `docs: ...`.
 
 Append "Andrew's agent: <task> done" lines to `STATUS.md`. If anything blocks you, write it
 in `docs/REQUESTS.md` and push.
+
+## 5. Added task A3 (do after A1, before A2): highest-ROI items from IDEAS.md
+
+Karthik's agents are building live mode (docs/LIVE_MODE.md) and better people rendering;
+do NOT touch sim/, cognition/, scenario/, blueprint/viewer/. Your package: `insights/`
+(new, you own it) that turns any run directory (replay.json + decisions.jsonl +
+metrics.json) into the evidence judges ask for:
+1. RSET breakdown per occupant and per persona: time deciding (alarm to first move, plus
+   later waits), walking, queuing (state queued), on stairs, waiting at refuge; stacked
+   bar SVG. This is how fire engineers report egress (research/EVAC_PSYCHOLOGY.md).
+2. Influence graph: who told whom (decision records cite messages `m_*` with `from`
+   agent; rumor events), as a node-link SVG; highlight the rumor spread tree and how many
+   it misled (metrics.misled_by_rumor).
+3. Emotion timelines: fear/anxiety per agent over time from decision records (emotion
+   field), building-level average curve, and the 5 most afraid occupants with their
+   quoted `say` lines.
+4. Per-persona outcomes table (out, median exit time, stragglers) and exit usage over
+   time.
+5. Faithfulness summary if interview results are cached (`cognition` interview outputs):
+   share of stated reasons that were necessary / jointly sufficient / not decisive.
+Output: `python -m insights <run_dir> [--compare <run_dir2>] -o <dir>` writing
+insights.json + insights.html (single page, design/tokens.css). Run it on the recorded
+demo runs (blueprint/viewer/public/replays/loop_hall_*, loop_tepper_*, tepper_fire_noplan,
+tepper_fire_plan) and use the best charts in the deck (A2). Tests on a tiny fixture run.
+Elevators: in fires they are recalled and not used; occupants may walk to an elevator
+lobby and turn back. Mention this honestly in the deck as a modelling choice.
