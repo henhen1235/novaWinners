@@ -1,0 +1,17 @@
+[project]
+name = "rehearsal"
+version = "0.1.0"
+description = "Blueprint and LiDAR plans to a traversable evacuation scene"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not slow'"
+markers = [
+    "slow: multi-plan end-to-end scores",
+]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["contract*", "ingest_blueprint*", "geometry*", "nav*", "render*", "export*", "editor*"]

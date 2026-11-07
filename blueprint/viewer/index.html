@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Scene viewer</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <header>
+    <button id="orbit" type="button">Orbit</button>
+    <button id="top" type="button">Top</button>
+    <label>Level <select id="level"></select></label>
+    <label><input id="show-nav" type="checkbox" checked /> Navmesh</label>
+    <label><input id="show-rooms" type="checkbox" checked /> Rooms</label>
+    <label><input id="show-doors" type="checkbox" checked /> Doors</label>
+    <label><input id="show-exits" type="checkbox" checked /> Exits</label>
+    <label><input id="show-warnings" type="checkbox" /> Warnings</label>
+    <span id="readout">Load display.glb and scene.json</span>
+  </header>
+  <div id="stage"></div>
+  <aside id="warnings"></aside>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

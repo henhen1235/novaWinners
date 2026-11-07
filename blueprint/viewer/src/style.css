@@ -1,0 +1,7 @@
+html, body { margin: 0; height: 100%; background: #121212; color: #f4f4f4; font: 13px/1.4 system-ui, sans-serif; }
+header { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: #1c1c1c; flex-wrap: wrap; }
+button, select { font: inherit; background: #2a2a2a; color: inherit; border: 1px solid #444; padding: 4px 8px; }
+#stage { position: absolute; inset: 42px 220px 0 0; }
+aside { position: absolute; top: 42px; right: 0; bottom: 0; width: 220px; overflow: auto; padding: 8px; background: #181818; }
+aside button { display: block; width: 100%; text-align: left; margin: 0 0 6px; }
+#readout { margin-left: auto; }
