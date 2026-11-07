@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Annotated, Any, Literal, Optional
 
 import shapely
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 from shapely.geometry import Point, Polygon
 
 EVENT_TYPES = ("fire", "smoke", "alarm_only", "active_intruder", "blocked_exit", "rumor", "pa_announcement",
@@ -89,7 +89,19 @@ class WidenDoor(_Model):
     width_m: float = Field(gt=0, le=MAX_WIDTH_M)
 
 
-Intervention = Annotated[Signage | Warden | WidenDoor, Field(discriminator="type")]
+class AssistedEvacuationPlan(_Model):
+    """Trained staff carry people who cannot use stairs (sim reads it; docs/SIM_INTERFACES.md)."""
+    type: Literal["assisted_evacuation_plan"]
+    staff_per_person: Optional[int] = Field(default=None, ge=1, le=2)
+
+
+Intervention = Annotated[Signage | Warden | WidenDoor | AssistedEvacuationPlan, Field(discriminator="type")]
+
+
+class ScenarioParams(BaseModel):
+    """Run-wide switches; unknown keys pass through for the sim to read."""
+    model_config = ConfigDict(extra="allow")
+    assisted_evacuation: Optional[StrictBool] = None
 
 
 class Scenario(_Model):
@@ -101,6 +113,7 @@ class Scenario(_Model):
     occupants: list[Occupants] = []
     assumptions: list[str] = []
     interventions: list[Intervention] = []
+    params: ScenarioParams = Field(default_factory=ScenarioParams)
 
 
 def _known(items: dict, n: int = 12) -> str:

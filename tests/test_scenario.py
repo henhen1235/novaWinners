@@ -188,3 +188,14 @@ def test_stair_targets_validate_on_school():
 def test_sim_extras_errors(change, expected):
     errors = validate(_with(**change), SCENE)
     assert any(expected in e for e in errors), errors
+
+
+def test_assisted_evacuation_plan_and_param():
+    plain = _with(interventions=[{"type": "assisted_evacuation_plan"}], params={"assisted_evacuation": True})
+    assert validate(plain, SCENE) == []
+    # loop/patch.py compares entries to this exact dict, so normalize must not add keys.
+    assert normalize(plain)["interventions"] == [{"type": "assisted_evacuation_plan"}]
+    assert validate(_with(interventions=[{"type": "assisted_evacuation_plan", "staff_per_person": 2}]), SCENE) == []
+    bad = validate(_with(interventions=[{"type": "assisted_evacuation_plan", "staff_per_person": 3}],
+                         params={"assisted_evacuation": "yes"}), SCENE)
+    assert any("staff_per_person" in e for e in bad) and any("params.assisted_evacuation" in e for e in bad), bad
