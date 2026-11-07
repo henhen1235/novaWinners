@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Blueprint corrections</title>
+  <style>
+    body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: #161616; color: #f2f2f2; }
+    header { display: flex; gap: 8px; align-items: center; padding: 10px 12px; background: #222; flex-wrap: wrap; }
+    button, input { font: inherit; }
+    button { background: #2e2e2e; color: inherit; border: 1px solid #444; padding: 6px 10px; }
+    button.active { background: #d7ff4a; color: #111; }
+    canvas { background: #fff; cursor: crosshair; max-width: 100%; }
+    #log { padding: 8px 12px; color: #c8c8c8; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <input id="plan" placeholder="path to plan.pdf" size="42" value="samples/blueprints/office_vector/plan.pdf" />
+    <button data-op="add_wall_line">Wall</button>
+    <button data-op="add_door">Door</button>
+    <button data-op="remove_door_at">Remove door</button>
+    <button data-op="remove_wall_at">Remove wall</button>
+    <button data-op="set_exit">Exit</button>
+    <button data-op="label_room">Label</button>
+    <button data-op="set_scale">Scale</button>
+    <button id="rerun">Re-run</button>
+  </header>
+  <canvas id="sheet" width="900" height="700"></canvas>
+  <div id="log">Load a plan, pick a tool, click the page. Re-run writes corrections.json and a new scene.</div>
+  <script type="module" src="./editor.js"></script>
+</body>
+</html>

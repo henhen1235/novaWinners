@@ -11,6 +11,7 @@ out/
 node_modules/
 dist/
 viewer/dist/
+viewer/public/
 editor/web/dist/
 *.glb
 !fixtures/**/*.glb
