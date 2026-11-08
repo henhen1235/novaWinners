@@ -1,141 +1,136 @@
 # Rehearsal
 
-Rehearsal turns an iPhone LiDAR scan or a building's floor plans into a validated 3D
-model and runs an evacuation drill in it with LLM-driven occupants, so facility
-managers, schools and offices can see where people hesitate, who gets left behind,
-and which fix helps, before a real alarm.
+Point an iPhone at a hallway, or drop in a floor plan, and Rehearsal builds a measured 3D building and fills it with people who decide for themselves. They wait, follow the way they came in, believe a rumor, or head for a stair they cannot use. An adversary then breaks the plan on purpose. An optimizer proposes a fix. The simulator runs it again and keeps the number.
 
-An adversary agent attacks the building (locks an exit, starts a fire, plants a
-rumor), an optimizer agent proposes fixes from a fixed menu, and the simulator
-measures before and after. The goal is a realistic picture of what would happen
-and a set of tested alternatives, not a run where everyone survives: stragglers are
-findings. It is a planning tool; it does not certify a building.
+This is a fire drill you can rewind. Facility teams see who is still inside, where the crowd bunches, and which single change is worth making. It is a planning tool. It does not certify a building.
 
-## Pipeline
+## Nine models, one building
 
-```
-iPhone RoomScanner app (RoomPlan or LiDAR Mesh mode)  --+
-CAD/PDF floor plans (blueprint pipeline, ingest_plans)  +--> scene.json + display.glb
-CMU Tepper ESIM sheets (tools/tepper_to_scene.py)     --+        (contract/, validated)
-        |
-        v
-analysis/   single points of failure, pinch points, smoke clock, occupant load
-scenario/   plain-language scenario chatbot (LLM tool calling) -> scenario.json
-sim/        navmesh crowd sim, multi-floor stairs, decide() hook, replay.json
-cognition/  LLM occupants: computed perception/beliefs/emotion, PADM decision with
-            evidence ids, validator, decision log; interview server with verified reasons
-loop/       adversary vs optimizer: baseline -> attack -> fixes -> re-run, report.html
-flyagent/   (extra) fruit-fly connectome occupant + scrambled-wiring control
-blueprint/viewer  Three.js viewer: replay, side-by-side/stacked/exploded floors,
-            cutaway walls, interview panel, analysis overlay, compare runs
-```
+Nobody in the building is stuck on a single model. A full-LLM occupant is assigned **at random** from three models, so one model's habits cannot decide the outcome for the whole floor:
 
-## Quickstart
+| Model | What it does |
+|---|---|
+| **gpt-oss-120b** | Full-LLM occupants, and the interview answers when you click a person |
+| **Claude Sonnet 5.5** | Full-LLM occupant |
+| **ChatGPT Luna 6** | Full-LLM occupant |
 
-Needs Python 3.11 and Node 20+.
+Around them, specialist models do the jobs they are fast at:
+
+| Model | What it does |
+|---|---|
+| **Gemini 2.5 Flash-Lite** | Hybrid occupants: a playbook for the ordinary moment, a real model call when the situation breaks the script. Also Populate, and click-and-type edits on the plan |
+| **Gemini 2.5 Flash** | The adversary and the optimizer. One attacks the building. The other picks a fix and the sim measures it |
+| **Claude Opus 5.5** | The review after a run: how the building did, the single highest-value change, and a grade |
+| **Claude Haiku 5.5** | The scenario chatbot, and room labels on a LiDAR scan |
+| **OWLv2** | Vision. Finds exit signs in the scan and removes the people who were standing in the room |
+| **Fruit-fly connectome** | An occupant whose choices come from a simulated fly brain. Scrambled wiring is the control. It is in the product because it is a real decide() path, and because it is fun |
+
+Geometry never goes through a model. Walls, doors, the walkable mesh, routes, walking speed, queues, and door flow are computed and checked. Models choose. Code moves people.
+
+## What you can do with it
+
+Open the viewer, pick a building, and either play a recorded drill or start from an empty plan and put people in yourself.
+
+- **Scan or plan in, building out.** RoomPlan, a LiDAR mesh, or a PDF floor plan becomes `scene.json` plus a `display.glb`, in meters, validated before anyone walks.
+- **Hundreds of people, each with a mind.** Perception, beliefs, and fear are computed. The protective-action decision cites evidence the code can check. A bad answer is repaired once, then a persona rule takes over so the drill never freezes.
+- **Click a person.** Ask why they moved. The answer comes only from their own decision log, and a stated reason is tested by running the decision again without it.
+- **Attack, then repair.** The adversary locks the exit people are actually using, or starts the fire where it hurts. The optimizer answers from a fixed menu: warden, signage, a PA message, unlock, a familiar exit, an assisted-evacuation plan, a wider door. Every patch is validated, re-run, and scored.
+- **Evaluate.** After the run, Claude Opus 5.5 reads the building and writes the sheet: the account of what happened, the one change that matters most, and a grade.
+
+## Run it
+
+Python 3.11 and Node 20+.
 
 ```bash
-scripts/demo/setup.sh     # .venv, requirements, npm ci, builds demo scenes, analyses, replays
-scripts/demo/start.sh     # interview API on :8771, viewer on :5173; prints and opens demo URLs
+scripts/demo/setup.sh     # venv, dependencies, demo buildings, analyses, replays. No model calls.
+scripts/demo/start.sh     # interview API on :8771, viewer on :5173
 scripts/demo/stop.sh
 ```
 
-`setup.sh` makes no LLM calls. The demo walkthrough, URLs and fallback plan are in
-[docs/DEMO.md](docs/DEMO.md). LLM features read `OPENROUTER_API_KEY` from the
-environment or `.env`.
+Model features read `OPENROUTER_API_KEY` from the environment or from `.env`. The key stays there.
 
-Single steps:
+One building, end to end:
 
 ```bash
-.venv/bin/python -m ingest_lidar scan.ply -o out/hall            # mesh, RoomPlan JSON, OBJ/GLB/USDZ
-.venv/bin/python -m ingest_plans <floor PDFs or folder> -o out/b  # CAD-exported floor-plan PDFs, multi-floor
+.venv/bin/python -m ingest_lidar scan.ply -o out/hall
+.venv/bin/python -m ingest_plans <floor PDFs or a folder> -o out/b
 .venv/bin/python -m contract.validate_scene out/hall/scene.json
 .venv/bin/python -m analysis out/hall/scene.json -o out/hall/analysis.json
-.venv/bin/python -m sim run --scenario sim/examples/tiny_office_fire.json -o out/sim/x --seed 42 [--decide cognition] [--no-llm]
-.venv/bin/python -m loop run --scene S --scenario SC -o out/loop/x [--decide cognition] [--no-llm]
-.venv/bin/python -m cognition.serve --runs out/sim --port 8771     # interview API for the viewer
+.venv/bin/python -m sim run --scenario sim/examples/tiny_office_fire.json -o out/sim/x --seed 42 --decide cognition
+.venv/bin/python -m loop run --scene S --scenario SC -o out/loop/x --decide cognition
+.venv/bin/python -m cognition.serve --runs out/sim --port 8771
 .venv/bin/python -m pytest -q tests
 ```
 
-## Results so far
+`--no-llm` runs the same drill on the built-in rules. Replays of those runs are free to scrub.
 
-All single runs with seed 42 unless noted.
+The demo script, URLs, and the fallback if a scan is missing are in [docs/DEMO.md](docs/DEMO.md).
 
-- LiDAR ingest, 30 synthetic scans: up axis within 2 degrees on 100 percent, walkable IoU
-  0.958 / 0.914, door recall 0.996 / precision 0.982, room count within +-1 on 100 percent,
-  median wall error 6 mm, about 2 to 8 s per scan. A 1.67M-triangle real mesh ingests in 4.8 s.
-- Real scan of a 14 x 14 m hall (iPhone Mesh mode): valid scene, curved walls traced, 19
-  people removed from the scan by OWLv2 plus LiDAR, 4 real exit signs detected.
-- Tepper (CMU), floors 1 to 5 from floor plans: 576 rooms, 915 doors (28 inferred and
-  flagged), 29 exits, 12 stair links, validator 0 errors.
-- Tepper fire, 170 rule-based occupants: without an assisted-evacuation plan 166/170 get
-  out and 3 wheelchair users wait at stair refuges on floor 4; with the plan 169/170, all 3
-  carried out by staff.
-- Hall, adversary vs optimizer, 36 LLM occupants (gemini-2.5-flash-lite): baseline 34/36
-  out; adversary locked exit e_001 (used by 23, 38.8 percent of exit width): 15/36; optimizer
-  unlocked it, posted 2 wardens, added signage: 33/36. 400 decisions cost $0.086, about 0.94 s
-  per decision; replays are free.
-- LLM pre-movement median 63.8 s against a research target of about 60 s.
-- Interviews: removing the fire percept flips the cited choice in 7 of 7 re-runs; removing a
-  stated belief flips it in 0 of 7. The answer reports which reasons were decisive.
+## Already measured
 
-## Where AI is used
+Seed 42 unless noted.
 
-- Occupants: an LLM makes the protective-action decision (PADM questions) at discrete
-  decision points, citing evidence ids that code checks; invalid output is repaired once,
-  then falls back to a persona rule. Personas and timing come from evacuation research.
-- Interviews: answers come only from the occupant's decision log, and each stated reason
-  is tested by re-running the decision without it.
-- Scenario chatbot: plain language to a validated scenario.json by tool calling.
-- Adversary and optimizer: the adversary picks failures with a number-backed reason; the
-  optimizer picks fixes from a fixed menu (warden, signage, PA, unlock, familiar exit,
-  assisted-evacuation plan, widen door), and each patch is validated before it runs.
-- Capture: LLM room labeling, occupancy seeding, OWLv2 exit-sign detection and people
-  removal on scan keyframes, Claude-assisted reading of the Tepper plan legend.
+- **30 synthetic LiDAR scans.** Up-axis within 2 degrees on every scan. Walkable overlap 0.958 / 0.914. Door recall 0.996, precision 0.982. Room count within one on every scan. Median wall error 6 mm. About 2 to 8 seconds a scan.
+- **A real hall.** 14 by 14 meters, iPhone mesh, 1.67 million triangles ingested in 4.8 seconds. Curved walls kept. 19 people removed from the scan by OWLv2. 4 real exit signs found.
+- **Tepper, CMU, floors 1 to 5.** 576 rooms, 915 doors, 29 exits, 12 stair links. Validator: 0 errors.
+- **Tepper fire, 170 people.** No assisted-evacuation plan: 166 of 170 out, and 3 wheelchair users waiting at stair refuges on floor 4. With the plan: 169 of 170 out, and all 3 carried down by staff.
+- **Hall, attacked.** 36 LLM occupants. Baseline 34 of 36 out. The adversary locks the exit 23 of them were using, 38.8 percent of the exit width: 15 of 36 get out. The optimizer unlocks it, posts 2 wardens, and adds signs: 33 of 36. 400 decisions, $0.086, about 0.94 seconds each.
+- **Pre-movement.** Median 63.8 seconds, against a research target of about 60.
+- **Interviews that can be wrong, and say so.** Removing the fire percept flips the cited choice in 7 of 7 re-runs. Removing a stated belief flips it in 0 of 7.
 
-Where it is deliberately not used: geometry. Walls, rooms, doors, the walkable navmesh,
-routes, walking, queuing and door flow are computed and validated in code. LLMs never
-output coordinates.
+## How the pieces connect
 
-## Modelling choices and limits
+```
+iPhone RoomScanner (RoomPlan or LiDAR mesh)  --+
+PDF floor plans (blueprint/, ingest_plans/)    +--> scene.json + display.glb
+CMU Tepper sheets (tools/tepper_to_scene.py) --+        validated in contract/
+        |
+        v
+analysis/     single points of failure, pinch points, smoke clock, occupant load
+scenario/     plain language in, a checked scenario.json out
+sim/          multi-floor crowd sim, stairs, refuges, replay
+cognition/    the decision, the evidence check, the interview
+loop/         adversary, then optimizer, then the measured report
+flyagent/     the fruit-fly occupant, and the scrambled-wiring control
+blueprint/viewer   the plan: replay, live drill, floors side by side, cutaway, interview
+```
 
-- No "panic" behavior: the evacuation literature treats mass panic as rare; delays come
-  from noticing, interpreting and preparing.
-- Fire and smoke are events that block rooms and doors on a schedule; there is no fire or
-  smoke physics. The smoke clock is a closed-form estimate.
-- Elevators are recalled in fires and not used; occupants may walk to an elevator lobby
-  and turn back.
-- Movement follows standard door-flow and walking-speed limits; occupant decisions are not
-  validated against real evacuations.
+## Limits, stated plainly
+
+- There is no mass-panic behavior. The evacuation literature treats it as rare. Delay comes from noticing, deciding, and getting ready to move.
+- Fire and smoke block rooms and doors on a clock. There is no fire simulation. The smoke time is a closed-form estimate.
+- Elevators are recalled in a fire. Someone may walk to the lobby and turn around.
+- Walking speed and door flow follow standard limits. The decisions themselves are not a claim about a recorded evacuation of that building.
+- Stragglers are a result. A run where everyone escapes is not the goal.
 
 ## Repo map
 
 | Path | What |
 |---|---|
-| `contract/` | Frozen scene format (models, JSON schema, validator), fixtures |
-| `ingest_lidar/` | Scan (mesh or RoomPlan) to scene.json, display.glb, debug images |
-| `ingest_plans/` | Floor-plan PDFs to a validated multi-floor scene |
-| `blueprint/` | Blueprint pipeline (vector and raster PDFs) and the Three.js viewer (`blueprint/viewer`) |
-| `ios/RoomScanner` | iPhone capture app (RoomPlan and LiDAR Mesh modes) |
-| `analysis/` | Single points of failure, pinch points, smoke clock, occupant load |
-| `scenario/` | Scenario schema, resolver and chatbot |
-| `sim/` | Crowd simulator, stairs, refuges, assisted evacuation, replay output |
-| `cognition/` | LLM occupant decisions, validator, decision log, interview server |
-| `loop/` | Adversary vs optimizer rounds, scoreboard, report.html |
-| `flyagent/` | Fruit-fly connectome occupant (extra) |
-| `tools/` | Synthetic scans, benchmark scoring, plan rendering, exit tagging, Tepper converter |
-| `samples/`, `fixtures/` | Sample buildings (Tepper model, RoomPlan samples) and test scenes |
-| `scripts/demo/` | Demo setup, start and stop |
-| `design/` | Design tokens and visual system |
-| `docs/`, `research/` | Interfaces, cognition design, demo script, research notes |
+| `contract/` | The scene format. Models, JSON Schema, validator, fixtures |
+| `ingest_lidar/` | A scan to `scene.json`, `display.glb`, and debug images |
+| `ingest_plans/` | Floor-plan PDFs to a multi-floor scene |
+| `blueprint/` | Vector and raster plans, and the Three.js viewer |
+| `ios/RoomScanner` | The iPhone app. RoomPlan and LiDAR mesh |
+| `analysis/` | Failure points, pinch points, smoke clock, occupant load |
+| `scenario/` | Scenario schema, resolver, chatbot |
+| `sim/` | The crowd simulator, stairs, assisted evacuation, replay |
+| `cognition/` | Decisions, the validator, the decision log, the interview server |
+| `loop/` | Adversary and optimizer, scoreboard, `report.html` |
+| `flyagent/` | Fruit-fly connectome occupant |
+| `tools/` | Synthetic scans, scoring, plan rendering, the Tepper converter |
+| `samples/`, `fixtures/` | Tepper, RoomPlan samples, test scenes |
+| `scripts/demo/` | Setup, start, stop |
+| `design/` | Tokens and the visual system |
+| `docs/`, `research/` | Interfaces, cognition, the demo script, the research notes |
 
 ## Docs
 
-- [docs/DEMO.md](docs/DEMO.md): 3-minute demo, URLs, fallback
-- [docs/SIM_INTERFACES.md](docs/SIM_INTERFACES.md): scenario.json, decide() hook, replay.json, interventions
-- [docs/AGENT_COGNITION.md](docs/AGENT_COGNITION.md): occupant cognition, decision records, interviews
-- [docs/LIVE_MODE.md](docs/LIVE_MODE.md): interactive what-if design
-- [docs/pitch/](docs/pitch/): pitch deck and submission writeup
-- [research/](research/): evacuation psychology, scenarios and models, competitive analysis, LLM latency
-- [docs/SCAN_GUIDE.md](docs/SCAN_GUIDE.md): scanning a room with the iPhone app
-- [docs/DATA.md](docs/DATA.md): data sources, licenses and provenance
+- [docs/DEMO.md](docs/DEMO.md) — the three-minute demo
+- [docs/SIM_INTERFACES.md](docs/SIM_INTERFACES.md) — scenario.json, decide(), replay.json
+- [docs/AGENT_COGNITION.md](docs/AGENT_COGNITION.md) — how an occupant decides, and how an interview is checked
+- [docs/LIVE_MODE.md](docs/LIVE_MODE.md) — the interactive drill
+- [docs/pitch/](docs/pitch/) — the pitch and the writeup
+- [research/](research/) — evacuation psychology, model comparisons, latency
+- [docs/SCAN_GUIDE.md](docs/SCAN_GUIDE.md) — scanning a room
+- [docs/DATA.md](docs/DATA.md) — sources, licenses, provenance
